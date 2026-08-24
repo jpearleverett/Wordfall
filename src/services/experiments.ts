@@ -39,6 +39,15 @@ export interface Experiment {
   variants: ExperimentVariant[];
   /** Optional segment filter — if set, only users in these segments are enrolled */
   targetSegments?: string[];
+  /**
+   * Variant served to users who are NOT enrolled (experiment disabled, outside
+   * its date window, or filtered out by `targetSegments`). Defaults to
+   * `variants[0]`, which is only correct when the first variant is the control.
+   * Set this explicitly whenever `variants[0]` is a treatment — e.g.
+   * `first_purchase_offer`, where variants[0] shows a discount and the real
+   * control is the no-offer variant.
+   */
+  controlVariantId?: string;
   /** ISO date string — experiment not active before this date */
   startDate?: string;
   /** ISO date string — experiment not active after this date */
@@ -146,6 +155,9 @@ const EXPERIMENTS: Experiment[] = [
     description: 'Test first-purchase offer price/type for initial conversion',
     enabled: true,
     targetSegments: ['non_payer'],
+    // variants[0] is a paid offer — the real control is 'C' (no offer). Without
+    // this, a segment-excluded payer would be served the deepest discount.
+    controlVariantId: 'C',
     variants: [
       {
         id: 'A',
@@ -251,6 +263,21 @@ const experimentMap = new Map<string, Experiment>(
 // ── Core functions ─────────────────────────────────────────────────────────────
 
 /**
+ * The variant served to a user who is not enrolled in the experiment.
+ * `controlVariantId` when the experiment declares one, otherwise the first
+ * variant (the historical behavior, correct only when variants[0] is control).
+ */
+function getControlVariant(experiment: Experiment): ExperimentVariant {
+  if (experiment.controlVariantId) {
+    const control = experiment.variants.find(
+      (v) => v.id === experiment.controlVariantId,
+    );
+    if (control) return control;
+  }
+  return experiment.variants[0];
+}
+
+/**
  * Look up an experiment definition by ID.
  *
  * @param experimentId - The experiment's unique identifier
@@ -309,13 +336,13 @@ export function getAssignedVariant(
   // Check if experiment is active
   const now = new Date().toISOString();
   if (!experiment.enabled) {
-    return experiment.variants[0];
+    return getControlVariant(experiment);
   }
   if (experiment.startDate && now < experiment.startDate) {
-    return experiment.variants[0];
+    return getControlVariant(experiment);
   }
   if (experiment.endDate && now > experiment.endDate) {
-    return experiment.variants[0];
+    return getControlVariant(experiment);
   }
 
   // M3 in launch_blockers.md: respect `targetSegments` filter. Previously
@@ -323,7 +350,8 @@ export function getAssignedVariant(
   // so every user was enrolled regardless of segment membership. If the
   // experiment specifies segments and the caller supplies the player's
   // current segments, users outside the target segments get the control
-  // variant (no enrollment).
+  // variant (no enrollment) — `controlVariantId` when declared, since
+  // variants[0] can itself be a treatment.
   if (
     experiment.targetSegments &&
     experiment.targetSegments.length > 0 &&
@@ -333,7 +361,7 @@ export function getAssignedVariant(
       segmentsForTargeting.includes(seg),
     );
     if (!matched) {
-      return experiment.variants[0];
+      return getControlVariant(experiment);
     }
   }
   // Note: when segmentsForTargeting is omitted (legacy call sites), the
@@ -417,12 +445,16 @@ export function isInExperiment(
  *
  * @param experimentId - The experiment's unique identifier
  * @param userId - The user's unique identifier
+ * @param segmentsForTargeting - The SAME flattened segment list used when the
+ *   variant was assigned. Omitting it re-runs assignment without the segment
+ *   filter, which logs a variant the user was never served.
  */
 export function trackExperimentExposure(
   experimentId: string,
   userId: string,
+  segmentsForTargeting?: readonly string[],
 ): void {
-  const variant = getAssignedVariant(experimentId, userId);
+  const variant = getAssignedVariant(experimentId, userId, segmentsForTargeting);
   const experiment = experimentMap.get(experimentId);
 
   analytics.logEvent('experiment_exposure' as any, {

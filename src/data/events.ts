@@ -3,6 +3,13 @@ import { GameEvent, EventType, EventExclusiveReward } from '../types';
 /**
  * 12-week rotating event calendar.
  * Events repeat on a seasonal basis with different themes.
+ *
+ * Tier rewards may only carry keys the claim path actually delivers:
+ * coins / gems / hintTokens (credited by EventScreen's claim handler) and
+ * `decoration` (granted via unlockDecoration). Gold tiers used to also list
+ * a `badge`, but the client has no badge ledger, so every one was silently
+ * dropped at claim time — they were removed rather than left as an empty
+ * promise. Re-add badges only together with a store that records them.
  */
 export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | 'active'>[] = [
   {
@@ -15,7 +22,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 200, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 500, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1000, gems: 30, hintTokens: 10, badge: 'speed_demon' } },
+      { tier: 'gold', threshold: 3000, rewards: { coins: 1000, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 5000, rewards: { coins: 2000, gems: 50, hintTokens: 20, decoration: 'speed_trophy' } },
     ],
   },
@@ -29,7 +36,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 3, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 7, rewards: { coins: 600, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 15, rewards: { coins: 1200, gems: 30, hintTokens: 10, badge: 'perfectionist' } },
+      { tier: 'gold', threshold: 15, rewards: { coins: 1200, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 25, rewards: { coins: 2500, gems: 50, hintTokens: 20, decoration: 'diamond_plaque' } },
     ],
   },
@@ -43,7 +50,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 5000, rewards: { coins: 500, gems: 10, hintTokens: 5 } },
       { tier: 'silver', threshold: 15000, rewards: { coins: 1000, gems: 25, hintTokens: 10 } },
-      { tier: 'gold', threshold: 30000, rewards: { coins: 2000, gems: 50, hintTokens: 15, badge: 'rally_hero' } },
+      { tier: 'gold', threshold: 30000, rewards: { coins: 2000, gems: 50, hintTokens: 15 } },
       { tier: 'diamond', threshold: 50000, rewards: { coins: 4000, gems: 100, hintTokens: 25, decoration: 'rally_banner' } },
     ],
   },
@@ -57,7 +64,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 1000, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 3000, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 6000, rewards: { coins: 1500, gems: 30, hintTokens: 10, badge: 'chain_master' } },
+      { tier: 'gold', threshold: 6000, rewards: { coins: 1500, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 10000, rewards: { coins: 3000, gems: 50, hintTokens: 20, decoration: 'gravity_flip_crystal' } },
     ],
   },
@@ -71,7 +78,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 10, rewards: { coins: 400, gems: 10, hintTokens: 5 } },
       { tier: 'silver', threshold: 25, rewards: { coins: 800, gems: 20, hintTokens: 10 } },
-      { tier: 'gold', threshold: 50, rewards: { coins: 1500, gems: 40, hintTokens: 15, badge: 'mystery_solver' } },
+      { tier: 'gold', threshold: 50, rewards: { coins: 1500, gems: 40, hintTokens: 15 } },
       { tier: 'diamond', threshold: 75, rewards: { coins: 3000, gems: 75, hintTokens: 25, decoration: 'mystery_orb' } },
     ],
   },
@@ -85,7 +92,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 250, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 600, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3500, rewards: { coins: 1200, gems: 30, hintTokens: 10, badge: 'retro_fan' } },
+      { tier: 'gold', threshold: 3500, rewards: { coins: 1200, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 6000, rewards: { coins: 2500, gems: 50, hintTokens: 20, decoration: 'retro_arcade' } },
     ],
   },
@@ -99,7 +106,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10, badge: 'nature_expert' } },
+      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 5000, rewards: { coins: 2800, gems: 50, hintTokens: 20, decoration: 'nature_painting' } },
     ],
   },
@@ -113,7 +120,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 1000, rewards: { coins: 500, gems: 10, hintTokens: 5 } },
       { tier: 'silver', threshold: 3000, rewards: { coins: 1000, gems: 25, hintTokens: 10 } },
-      { tier: 'gold', threshold: 7000, rewards: { coins: 2000, gems: 50, hintTokens: 15, badge: 'gauntlet_survivor' } },
+      { tier: 'gold', threshold: 7000, rewards: { coins: 2000, gems: 50, hintTokens: 15 } },
       { tier: 'diamond', threshold: 12000, rewards: { coins: 4000, gems: 100, hintTokens: 30, decoration: 'gauntlet_shield' } },
     ],
   },
@@ -129,7 +136,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 250000, rewards: { coins: 200, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 500000, rewards: { coins: 500, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 750000, rewards: { coins: 1000, gems: 30, hintTokens: 10, badge: 'community_hero' } },
+      { tier: 'gold', threshold: 750000, rewards: { coins: 1000, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 1000000, rewards: { coins: 2000, gems: 50, hintTokens: 20, decoration: 'community_statue' } },
     ],
   },
@@ -143,7 +150,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 2000, rewards: { coins: 500, gems: 15, hintTokens: 5 } },
       { tier: 'silver', threshold: 5000, rewards: { coins: 1000, gems: 30, hintTokens: 10 } },
-      { tier: 'gold', threshold: 10000, rewards: { coins: 2500, gems: 60, hintTokens: 20, badge: 'season_champion' } },
+      { tier: 'gold', threshold: 10000, rewards: { coins: 2500, gems: 60, hintTokens: 20 } },
       { tier: 'diamond', threshold: 20000, rewards: { coins: 5000, gems: 100, hintTokens: 30, decoration: 'season_throne' } },
     ],
   },
@@ -157,7 +164,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1500, gems: 30, hintTokens: 10, badge: 'blitz_warrior' } },
+      { tier: 'gold', threshold: 3000, rewards: { coins: 1500, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 5000, rewards: { coins: 3000, gems: 50, hintTokens: 20, decoration: 'blitz_trophy' } },
     ],
   },
@@ -171,7 +178,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10, badge: 'science_expert' } },
+      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 5000, rewards: { coins: 2800, gems: 50, hintTokens: 20, decoration: 'lab_equipment' } },
     ],
   },
@@ -185,7 +192,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10, badge: 'ocean_explorer' } },
+      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10 } },
       { tier: 'diamond', threshold: 5000, rewards: { coins: 2800, gems: 50, hintTokens: 20, decoration: 'ship_wheel' } },
     ],
   },
@@ -198,18 +205,23 @@ export function getEventForWeek(weekNumber: number): GameEvent {
   const templateIndex = weekNumber % 12; // 12-week rotation cycle
   const template = EVENT_TEMPLATES[templateIndex];
 
-  // Calculate start/end dates based on week number relative to a reference date
-  const referenceDate = new Date('2026-01-05'); // First Monday of 2026
-  const startDate = new Date(referenceDate);
-  startDate.setDate(startDate.getDate() + weekNumber * 7);
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 6);
+  // Calculate start/end dates in pure UTC epoch math, matching how
+  // getCurrentEvent selects the week (Monday 00:00 UTC rollover) and how
+  // eventManager parses endDate (`endDate + 'T23:59:59.999Z'`). The old code
+  // advanced weeks with LOCAL setDate on a UTC-midnight reference and then
+  // re-serialized via toISOString() — in any zone whose DST-summer offset
+  // exceeds its Jan 5 offset (US / EU / UK), that emitted both dates one UTC
+  // day early, so the event vanished from the active list a full day before
+  // the rotation advanced, stranding reached-but-unclaimed tiers.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const startMs = Date.UTC(2026, 0, 5) + weekNumber * 7 * DAY_MS; // First Monday of 2026
+  const endMs = startMs + 6 * DAY_MS;
 
   return {
     ...template,
     id: `event_w${weekNumber}_${template.type}`,
-    startDate: startDate.toISOString().split('T')[0],
-    endDate: endDate.toISOString().split('T')[0],
+    startDate: new Date(startMs).toISOString().split('T')[0],
+    endDate: new Date(endMs).toISOString().split('T')[0],
     active: true,
   };
 }
@@ -225,8 +237,8 @@ export function getEventForWeek(weekNumber: number): GameEvent {
  */
 export function getCurrentEvent(): GameEvent | null {
   const now = new Date();
-  const referenceDate = new Date('2026-01-05');
-  const diffMs = now.getTime() - referenceDate.getTime();
+  // Same UTC anchor as getEventForWeek — first Monday of 2026, 00:00 UTC.
+  const diffMs = now.getTime() - Date.UTC(2026, 0, 5);
   const diffWeeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
 
   if (diffWeeks < 0) return null;

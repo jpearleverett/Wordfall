@@ -89,10 +89,25 @@ export function trySolveWithOrder(
 /**
  * Budget tracker for solve attempts to prevent hangs.
  */
-interface SolveBudget {
+export interface SolveBudget {
   remaining: number;
   startTime?: number;
   timeoutMs?: number;
+}
+
+/**
+ * True when a budgeted solve stopped because it ran out of nodes or wall
+ * clock rather than because it finished its search. A null result from an
+ * exhausted budget is INCONCLUSIVE — it must never be read as a proof of
+ * unsolvability (see choiceAvoidedDeadEnd, which set this standard).
+ */
+function solveBudgetExhausted(budget: SolveBudget): boolean {
+  if (budget.remaining <= 0) return true;
+  return (
+    budget.startTime !== undefined &&
+    budget.timeoutMs !== undefined &&
+    Date.now() - budget.startTime >= budget.timeoutMs
+  );
 }
 
 /**
@@ -382,8 +397,19 @@ export function getHint(
 /**
  * Check if the current state is a dead end (no valid ordering from here).
  * Uses heuristic orderings first for speed, then budgeted full solve.
+ *
+ * Only a FINISHED search may answer "dead". solve() returns null both when
+ * it has proven no ordering exists and when it merely ran out of budget
+ * mid-search; a false "stuck" fires the fail banner, records an
+ * adaptive-difficulty failure, and surfaces rescue offers on a board that
+ * is still winnable — so an exhausted budget is treated as inconclusive
+ * and reports NOT stuck. `budget` is injectable for tests.
  */
-export function isDeadEnd(grid: Grid, remainingWords: string[]): boolean {
+export function isDeadEnd(
+  grid: Grid,
+  remainingWords: string[],
+  budget?: SolveBudget
+): boolean {
   if (remainingWords.length === 0) return false;
 
   // Try heuristic orderings first (O(n) each)
@@ -396,9 +422,13 @@ export function isDeadEnd(grid: Grid, remainingWords: string[]): boolean {
     }
   }
 
-  // No heuristic worked — try budgeted full solve
-  const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
-  return solve(cloneGrid(grid), remainingWords, budget) === null;
+  // No heuristic worked — try budgeted full solve. null is only trusted as
+  // "dead end" when the solver finished INSIDE its budget; exhaustion is
+  // inconclusive, not a proof (same standard as choiceAvoidedDeadEnd).
+  const solveBudget: SolveBudget =
+    budget ?? { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
+  const proven = solve(cloneGrid(grid), remainingWords, solveBudget) === null;
+  return proven && !solveBudgetExhausted(solveBudget);
 }
 
 // ============ GRAVITY FLIP MODE ============
@@ -440,6 +470,7 @@ export function solveWithRotatingGravity(
   if (remainingWords.length === 0) return [];
   if (budget && budget.remaining <= 0) return null;
   if (budget) budget.remaining--;
+  if (budget?.startTime && budget.timeoutMs && Date.now() - budget.startTime > budget.timeoutMs) return null;
 
   const dir = GRAVITY_CYCLE[(GRAVITY_CYCLE.indexOf(startDirection) + wordsCleared) % 4];
 
@@ -497,7 +528,10 @@ export function isSolvableGravityFlip(
 export function isDeadEndGravityFlip(
   grid: Grid,
   remainingWords: string[],
-  currentDirection: GravityDirection
+  currentDirection: GravityDirection,
+  // Injectable for tests. Defaulted (not `?:`) so Function.length stays 3 —
+  // the phase-bug arity guard in gravityFlipPhase.test.ts pins that.
+  budget: SolveBudget | undefined = undefined
 ): boolean {
   if (remainingWords.length === 0) return false;
 
@@ -523,8 +557,14 @@ export function isDeadEndGravityFlip(
   // cheap heuristic orderings above failed and execution reached here — that
   // is, on exactly the hard boards where the answer matters. The parameter is
   // removed rather than ignored so it cannot be reintroduced by a caller.
-  const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
-  return solveWithRotatingGravity(cloneGrid(grid), remainingWords, currentDirection, 0, budget) === null;
+  //
+  // As in isDeadEnd: null from an exhausted budget is inconclusive, not a
+  // proof of a dead board, and must not report stuck.
+  const solveBudget: SolveBudget =
+    budget ?? { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
+  const proven =
+    solveWithRotatingGravity(cloneGrid(grid), remainingWords, currentDirection, 0, solveBudget) === null;
+  return proven && !solveBudgetExhausted(solveBudget);
 }
 
 // ============ NO GRAVITY MODE ============
@@ -535,7 +575,13 @@ export function isDeadEndGravityFlip(
  * so if two words share a grid cell, clearing one makes the other unsolvable.
  * Uses backtracking to find an assignment of paths where no two words share cells.
  */
-export function areAllWordsIndependentlyFindable(grid: Grid, words: string[]): boolean {
+export function areAllWordsIndependentlyFindable(
+  grid: Grid,
+  words: string[],
+  // Optional caller-owned budget: dead-end checks inspect `remaining` after
+  // the call to tell "proven impossible" from "search ran out of budget".
+  budget?: { remaining: number }
+): boolean {
   if (words.length === 0) return true;
 
   // Find all possible paths for each word
@@ -550,8 +596,8 @@ export function areAllWordsIndependentlyFindable(grid: Grid, words: string[]): b
   // Sort by fewest paths first (most constrained → better pruning)
   wordPaths.sort((a, b) => a.paths.length - b.paths.length);
 
-  const budget = { remaining: 10000 };
-  return findNonOverlappingAssignment(wordPaths, 0, new Set<string>(), budget);
+  const searchBudget = budget ?? { remaining: 10000 };
+  return findNonOverlappingAssignment(wordPaths, 0, new Set<string>(), searchBudget);
 }
 
 /**
@@ -588,9 +634,15 @@ function findNonOverlappingAssignment(
 /**
  * Check if the grid still has all remaining words after some removals (noGravity).
  * Words must use non-overlapping cells since cleared cells leave permanent holes.
+ *
+ * Same rule as isDeadEnd: only a finished assignment search may answer
+ * "dead" — an exhausted budget is inconclusive and reports NOT stuck.
  */
 export function isDeadEndNoGravity(grid: Grid, remainingWords: string[]): boolean {
-  return !areAllWordsIndependentlyFindable(grid, remainingWords);
+  const budget = { remaining: 10000 };
+  const findable = areAllWordsIndependentlyFindable(grid, remainingWords, budget);
+  if (findable) return false;
+  return !solveBudgetExhausted(budget);
 }
 
 /**
@@ -976,14 +1028,53 @@ export function getHintShrinkingBoard(
 /**
  * Dead-end detection for shrinking board mode.
  * Checks if there's any valid ordering that survives all future shrinks.
+ *
+ * Deliberately NOT `!isSolvableShrinkingBoard`: that helper treats a solver
+ * timeout as "unsolvable", which is the right trade for the generator
+ * (discard the candidate, reseed) but the wrong one here — telling a player
+ * they are stuck needs a finished proof. Mirrors the same fast paths, then
+ * applies the isDeadEnd rule: an exhausted budget is inconclusive, not stuck.
  */
 export function isDeadEndShrinkingBoard(
   grid: Grid,
   remainingWords: string[],
-  wordsUntilShrink: number = 2
+  wordsUntilShrink: number = 2,
+  budget?: SolveBudget
 ): boolean {
   if (remainingWords.length === 0) return false;
-  return !isSolvableShrinkingBoard(grid, remainingWords, wordsUntilShrink);
+
+  // Necessary condition whatever the order: cleared cells never refill in
+  // this mode, so every remaining word needs its own non-overlapping path.
+  // Conclusive "dead" unless the assignment search itself ran out of budget.
+  const assignBudget = { remaining: 10000 };
+  if (!areAllWordsIndependentlyFindable(grid, remainingWords, assignBudget)) {
+    return !solveBudgetExhausted(assignBudget);
+  }
+
+  // No shrink can happen before the last word — the assignment above is the
+  // whole answer.
+  if (remainingWords.length <= wordsUntilShrink) return false;
+
+  // Heuristic orderings (conclusive "not dead" when one completes) — the
+  // same set isSolvableShrinkingBoard tries, outermost-first included.
+  const shortFirst = [...remainingWords].sort((a, b) => a.length - b.length);
+  const longFirst = [...shortFirst].reverse();
+  const outermostFirst = orderWordsByPerimeterDistance(grid, remainingWords);
+  const orderings = outermostFirst
+    ? [outermostFirst, remainingWords, shortFirst, longFirst]
+    : [remainingWords, shortFirst, longFirst];
+  for (const ordering of orderings) {
+    if (trySolveWithOrderShrinking(cloneGrid(grid), ordering, wordsUntilShrink)) {
+      return false;
+    }
+  }
+
+  // Budgeted backtracking — null from an exhausted budget must not report stuck.
+  const solveBudget: SolveBudget =
+    budget ?? { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
+  const proven =
+    solveShrinkingBoard(cloneGrid(grid), remainingWords, wordsUntilShrink, solveBudget) === null;
+  return proven && !solveBudgetExhausted(solveBudget);
 }
 
 // ============ KEPT-IT-OPEN DETECTION (J11) ============

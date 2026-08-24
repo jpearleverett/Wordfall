@@ -17,18 +17,12 @@ import { CeremonyItem } from '../types';
 import { ceremonyEconomyGrant, ceremonyGrantLabel } from '../utils/ceremonyGrants';
 import { COLORS } from '../constants';
 
-interface CeremonyEconomy {
-  addCoins: (n: number) => void;
-  addGems: (n: number) => void;
-}
-
 interface CeremonyRouterProps {
   activeCeremony: CeremonyItem | null;
   onDismiss: () => void;
-  economy: CeremonyEconomy;
 }
 
-export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyRouterProps) {
+export function CeremonyRouter({ activeCeremony, onDismiss }: CeremonyRouterProps) {
   return (
     <LocalErrorBoundary
       scope="ceremony"
@@ -212,12 +206,14 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           title={activeCeremony.data.title || 'Quest Step Complete!'}
           description={activeCeremony.data.description}
           accentColor={COLORS.green}
-          rewardLabel={activeCeremony.data.description}
-          onDismiss={() => {
-            if (activeCeremony.data.rewardCoins) economy.addCoins(activeCeremony.data.rewardCoins);
-            if (activeCeremony.data.rewardGems) economy.addGems(activeCeremony.data.rewardGems);
-            onDismiss();
-          }}
+          rewardLabel={(() => {
+            // Same source the pop-time grant used, so what is shown is
+            // exactly what was credited (dismiss-time grants could be lost
+            // to process death or double-paid on re-render).
+            const grant = ceremonyEconomyGrant(activeCeremony);
+            return grant ? ceremonyGrantLabel(grant) : undefined;
+          })()}
+          onDismiss={onDismiss}
         />
       )}
       {activeCeremony?.type === 'prestige' && (

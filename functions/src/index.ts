@@ -860,11 +860,17 @@ export const autoKickInactiveMembers = functions
         // Never kick the club owner
         if (memberId === ownerId) continue;
 
-        // Only kick on POSITIVE evidence of inactivity. `memberLastActive`
-        // is written solely by clubGoalProgress, which nothing currently
-        // calls, so treating a missing entry as "idle" (the old `!lastActive
-        // ||` branch) would have stripped every club down to its owner on
-        // the first nightly run — including members who joined minutes ago.
+        // Only kick on POSITIVE evidence of inactivity: a member with no
+        // stamp is SKIPPED, never kicked (the old `!lastActive ||` branch
+        // would have stripped every club down to its owner on the first
+        // nightly run — including members who joined minutes ago).
+        // `memberLastActive.{uid}` is stamped at join time by joinClub and
+        // refreshed on every puzzle completion by onPuzzleComplete
+        // (social.ts). Before that refresher existed, the join-time stamp
+        // was the only writer a member ever got — clubGoalProgress writes
+        // one too but nothing calls it — so every member aged past the
+        // cutoff exactly 14 days after joining no matter how much they
+        // played, and this job expelled loyal daily players on schedule.
         const lastActive = memberLastActive[memberId];
         if (lastActive && lastActive.toMillis() < cutoffTimestamp.toMillis()) {
           inactiveMembers.push(memberId);
@@ -938,10 +944,11 @@ function hashUid(uid: string): string {
  * POST /requestAccountDeletion
  * Headers: Authorization: Bearer <Firebase ID token>
  *
- * Purges: users/{uid} + all subcollections, players/{uid}, club membership +
- * authored chat messages, consent ledger entries, blockedUsers edges, push
- * tokens. Retains /receipts rows with UID replaced by SHA-256 hash (audit).
- * Finally deletes the Firebase Auth user record.
+ * Purges: users/{uid} + all subcollections, players/{uid}, daily/weekly AND
+ * per-event leaderboard rows, club membership + per-member goal residue +
+ * authored chat messages, referral dedup docs, consent ledger entries,
+ * blockedUsers edges, push tokens. Retains /receipts rows with UID replaced
+ * by SHA-256 hash (audit). Finally deletes the Firebase Auth user record.
  *
  * Must respond within 30 days per Google Play Data Safety policy. In practice
  * this function completes synchronously.
@@ -996,6 +1003,8 @@ export const requestAccountDeletion = functions.https.onRequest(
       playerDoc: 0,
       clubsLeft: 0,
       clubMessagesRemoved: 0,
+      eventScoresRemoved: 0,
+      referralsScrubbed: 0,
       receiptsHashed: 0,
       reportsAnonymized: 0,
     };
@@ -1029,6 +1038,35 @@ export const requestAccountDeletion = functions.https.onRequest(
           scoreDocs.docs.forEach((d) => batch.delete(d.ref));
           await batch.commit();
           stats.userSubcollections += scoreDocs.size;
+        }
+      }
+
+      // Event leaderboards live at events/{eventId}/scores/{uid} — the doc
+      // id IS the uid (submitValidatedScore's event branch and the client
+      // fallback both write it that way), and each row carries userId +
+      // displayName readable by every authenticated user with NO client
+      // delete rule. Left unswept, a "completed" GDPR deletion kept showing
+      // the user's display name on public event leaderboards forever.
+      // Deleting by direct ref — enumerating event ids via listDocuments(),
+      // which includes "missing" parents that only hold subcollections —
+      // needs no collection-group index.
+      const eventRefs = await db.collection("events").listDocuments();
+      for (let i = 0; i < eventRefs.length; i += 300) {
+        const scoreRefs = eventRefs
+          .slice(i, i + 300)
+          .map((eventRef) => eventRef.collection("scores").doc(uid));
+        const scoreSnaps = await db.getAll(...scoreRefs);
+        const batch = db.batch();
+        let deletes = 0;
+        for (const scoreSnap of scoreSnaps) {
+          if (scoreSnap.exists) {
+            batch.delete(scoreSnap.ref);
+            deletes++;
+          }
+        }
+        if (deletes > 0) {
+          await batch.commit();
+          stats.eventScoresRemoved += deletes;
         }
       }
 
@@ -1080,6 +1118,7 @@ export const requestAccountDeletion = functions.https.onRequest(
           memberIds: admin.firestore.FieldValue.arrayRemove(uid),
           [`memberContributions.${uid}`]: admin.firestore.FieldValue.delete(),
           [`memberRoles.${uid}`]: admin.firestore.FieldValue.delete(),
+          [`memberLastActive.${uid}`]: admin.firestore.FieldValue.delete(),
         };
         await clubDoc.ref.update(update);
         stats.clubsLeft += 1;
@@ -1093,6 +1132,42 @@ export const requestAccountDeletion = functions.https.onRequest(
           authored.docs.forEach((m) => batch.delete(m.ref));
           await batch.commit();
           stats.clubMessagesRemoved += authored.size;
+        }
+
+        // Per-member residue on goal docs: personal goals key progress and
+        // completion by uid, shared goals record per-member contributions
+        // and snapshot finalMemberIds at completion. Field deletes and
+        // arrayRemove are no-ops on docs where the uid never appears.
+        const personalGoals = await clubDoc.ref.collection("goals").get();
+        if (!personalGoals.empty) {
+          const batch = db.batch();
+          personalGoals.docs.forEach((g) =>
+            batch.update(g.ref, {
+              [`memberProgress.${uid}`]: admin.firestore.FieldValue.delete(),
+              [`completedMembers.${uid}`]: admin.firestore.FieldValue.delete(),
+              [`completedMembersAt.${uid}`]:
+                admin.firestore.FieldValue.delete(),
+            })
+          );
+          await batch.commit();
+        }
+        const sharedGoals = await clubDoc.ref.collection("sharedGoals").get();
+        if (!sharedGoals.empty) {
+          const batch = db.batch();
+          sharedGoals.docs.forEach((g) => {
+            const goalUpdate: Record<string, unknown> = {
+              [`memberContributions.${uid}`]:
+                admin.firestore.FieldValue.delete(),
+            };
+            // arrayRemove on a MISSING field materializes an empty array —
+            // only send it where a completion snapshot actually exists.
+            if (Array.isArray(g.data().finalMemberIds)) {
+              goalUpdate.finalMemberIds =
+                admin.firestore.FieldValue.arrayRemove(uid);
+            }
+            batch.update(g.ref, goalUpdate);
+          });
+          await batch.commit();
         }
       }
 
@@ -1108,6 +1183,39 @@ export const requestAccountDeletion = functions.https.onRequest(
         );
         await batch.commit();
         stats.receiptsHashed = receipts.size;
+      }
+
+      // Referral dedup docs at referrals/{referredUid}_{code} carry raw UIDs
+      // on both sides. Rows keyed by this user as the REFERRED party embed
+      // the uid in the doc id — delete them outright (the one-referral-ever
+      // marker died with the users/ subcollections above, and a deleted auth
+      // UID can never replay). Rows where this user was the REFERRER belong
+      // to someone else's dedup history — keep them, anonymizing the
+      // referrer the same way receipts are hashed.
+      const referredDocs = await db
+        .collection("referrals")
+        .where("referredUid", "==", uid)
+        .get();
+      if (!referredDocs.empty) {
+        const batch = db.batch();
+        referredDocs.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        stats.referralsScrubbed += referredDocs.size;
+      }
+      const referrerDocs = await db
+        .collection("referrals")
+        .where("referrerUid", "==", uid)
+        .get();
+      if (!referrerDocs.empty) {
+        const batch = db.batch();
+        referrerDocs.docs.forEach((d) =>
+          batch.update(d.ref, {
+            referrerUid: `deleted:${hashed}`,
+            anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+        );
+        await batch.commit();
+        stats.referralsScrubbed += referrerDocs.size;
       }
 
       const reports = await db.collection("reports").where("reporterId", "==", uid).get();

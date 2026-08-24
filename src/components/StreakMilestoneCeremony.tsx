@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence } from 'react-native-reanimated';
+import { Animated as RNAnimated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS, STREAK } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import GameIcon from './icons/GameIcon';
+import { useCeremonyTransition, CEREMONY_LAYER } from '../hooks/useCeremonyTransition';
 
 interface StreakMilestoneCeremonyProps {
   milestone: number;
@@ -15,16 +16,21 @@ interface StreakMilestoneCeremonyProps {
 
 export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMilestoneCeremonyProps) {
   const { t } = useTranslation();
-  const fade = useSharedValue(0);
-  const scale = useSharedValue(0.5);
+  // Shared ceremony transition: one entrance, one faster exit, instant
+  // settle + instant dismiss under reduced motion, stop-on-unmount.
+  const { animateDecorations, overlayStyle, cardStyle, requestDismiss } =
+    useCeremonyTransition(onDismiss);
+  // Burst origin follows the real window (the old hardcoded 180/250 was
+  // tuned for one device width and drifted off-center everywhere else).
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  // Fire pulse rests at 1, so it is already settled under reduced motion.
   const fire = useSharedValue(1);
   const decorationsMounted = useDeferredMount(280);
 
   const reward = STREAK.milestoneRewards[milestone as keyof typeof STREAK.milestoneRewards] || { coins: 0, gems: 0 };
 
   useEffect(() => {
-    fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
+    if (!animateDecorations) return undefined; // reduced motion: mounted settled
     fire.value = withRepeat(
       withSequence(
         withTiming(1.15, { duration: 600 }),
@@ -32,21 +38,29 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
       ),
       5,
     );
+    return () => {
+      cancelAnimation(fire);
+    };
+    // Mount-only: animateDecorations is latched for this ceremony's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const fireStyle = useAnimatedStyle(() => ({ transform: [{ scale: fire.value }] }));
 
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
-      {decorationsMounted && (
+    <RNAnimated.View
+      style={[styles.overlay, overlayStyle]}
+      accessibilityViewIsModal
+      accessibilityRole="alert"
+      accessibilityLabel={`${t('ceremony.streakMilestone')}. ${milestone} ${t('ceremony.days')}. ${t('ceremony.incredibleDedication')}`}
+    >
+      {decorationsMounted && animateDecorations && (
         <SparkleField count={24} intensity="intense" colors={[COLORS.coral, COLORS.gold, COLORS.orange, '#fff']} />
       )}
-      {decorationsMounted && (
-        <CelebrationBurst centerX={180} centerY={250} particleCount={16} colors={[COLORS.coral, COLORS.gold, COLORS.orange]} />
+      {decorationsMounted && animateDecorations && (
+        <CelebrationBurst centerX={windowWidth / 2} centerY={windowHeight * 0.31} particleCount={16} colors={[COLORS.coral, COLORS.gold, COLORS.orange]} />
       )}
-      <Animated.View style={[styles.card, cardStyle]}>
+      <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>{t('ceremony.streakMilestone')}</Text>
 
@@ -79,7 +93,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
 
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
-            onPress={onDismiss}
+            onPress={requestDismiss}
           >
             <LinearGradient
               colors={[COLORS.orange, '#ff6b35']}
@@ -89,8 +103,8 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
             </LinearGradient>
           </Pressable>
         </LinearGradient>
-      </Animated.View>
-    </Animated.View>
+      </RNAnimated.View>
+    </RNAnimated.View>
   );
 }
 
@@ -101,7 +115,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    zIndex: 200,
+    zIndex: CEREMONY_LAYER,
   },
   card: {
     width: '100%',

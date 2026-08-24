@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated as RNAnimated,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
@@ -16,6 +18,7 @@ import { analytics } from '../services/analytics';
 import { getProductById } from '../data/shopProducts';
 import { logger } from '../utils/logger';
 import GameIcon from './icons/GameIcon';
+import { useCeremonyTransition, CEREMONY_LAYER } from '../hooks/useCeremonyTransition';
 
 /**
  * First-purchase hard-modal offer. Fires once post-puzzle for non-payers
@@ -35,21 +38,18 @@ interface FirstPurchaseOfferModalProps {
 }
 
 export function FirstPurchaseOfferModal({ onDismiss }: FirstPurchaseOfferModalProps) {
+  // Shared ceremony transition: one entrance, one faster exit, instant
+  // settle + instant dismiss under reduced motion, stop-on-unmount.
+  const { animateDecorations, overlayStyle, cardStyle, requestDismiss } =
+    useCeremonyTransition(onDismiss);
   const { purchaseProduct } = useCommerce();
   const { updateProgress, currentLevel } = usePlayer();
   const product = getProductById(PRODUCT_ID);
 
-  const fade = useSharedValue(0);
-  const scale = useSharedValue(0.6);
   const decorationsMounted = useDeferredMount(280);
 
   const [purchasing, setPurchasing] = useState(false);
   const shownReported = useRef(false);
-
-  useEffect(() => {
-    fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
-  }, []);
 
   // Fire shown analytics + mark the one-time guard exactly once on mount.
   useEffect(() => {
@@ -78,8 +78,9 @@ export function FirstPurchaseOfferModal({ onDismiss }: FirstPurchaseOfferModalPr
         setPurchasing(false);
         return;
       }
-      // Success — fulfillment already applied via useCommerce. Dismiss.
-      onDismiss();
+      // Success — fulfillment already applied via useCommerce. Dismiss
+      // through the shared exit so the modal fades out instead of vanishing.
+      requestDismiss();
     } catch (err) {
       logger.warn('[FirstPurchaseOfferModal] purchase error:', err);
       setPurchasing(false);
@@ -89,21 +90,24 @@ export function FirstPurchaseOfferModal({ onDismiss }: FirstPurchaseOfferModalPr
   const handleDismiss = (reason: 'user_dismiss' | 'timeout' = 'user_dismiss') => {
     if (purchasing) return;
     void analytics.logEvent('first_purchase_modal_dismissed', { reason });
-    onDismiss();
+    requestDismiss();
   };
-
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   const priceLabel = product?.fallbackPrice ?? '$0.49';
   const originalPriceLabel = product?.originalPrice ?? '$1.99';
+  const description = product?.description ?? '200 Coins + 25 Gems + 5 Hints';
 
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
-      {decorationsMounted && (
+    <RNAnimated.View
+      style={[styles.overlay, overlayStyle]}
+      accessibilityViewIsModal
+      accessibilityRole="alert"
+      accessibilityLabel={`Welcome gift. First purchase, 75% off. ${description}. ${priceLabel}, was ${originalPriceLabel}.`}
+    >
+      {decorationsMounted && animateDecorations && (
         <SparkleField count={18} intensity="medium" colors={[ACCENT, COLORS.gold, '#fff']} />
       )}
-      <Animated.View style={[styles.card, cardStyle]}>
+      <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: ACCENT }]}>WELCOME GIFT</Text>
 
@@ -116,9 +120,7 @@ export function FirstPurchaseOfferModal({ onDismiss }: FirstPurchaseOfferModalPr
           </View>
 
           <Text style={[styles.title, { color: ACCENT }]}>First Purchase — 75% off</Text>
-          <Text style={styles.description}>
-            {product?.description ?? '200 Coins + 25 Gems + 5 Hints'}
-          </Text>
+          <Text style={styles.description}>{description}</Text>
 
           <View style={styles.priceRow}>
             <Text style={styles.strikePrice}>{originalPriceLabel}</Text>
@@ -156,8 +158,8 @@ export function FirstPurchaseOfferModal({ onDismiss }: FirstPurchaseOfferModalPr
             <Text style={styles.dismissText}>No thanks</Text>
           </Pressable>
         </LinearGradient>
-      </Animated.View>
-    </Animated.View>
+      </RNAnimated.View>
+    </RNAnimated.View>
   );
 }
 
@@ -168,7 +170,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    zIndex: 200,
+    zIndex: CEREMONY_LAYER,
   },
   card: {
     width: '100%',

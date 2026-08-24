@@ -17,6 +17,7 @@ import { ceremonyEconomyGrant, ceremonyGrantLabel } from '../ceremonyGrants';
 import { STREAK } from '../../constants';
 import { WIN_STREAK_TIERS } from '../../data/eventLayers';
 import { ATLAS_PAGES } from '../../data/collections';
+import { SEASONAL_QUESTS } from '../../data/seasonalQuests';
 import type { CeremonyItem } from '../../types';
 
 describe('streak milestones pay what the table shows', () => {
@@ -104,6 +105,63 @@ describe('quest step completion pays at ceremony pop time', () => {
         data: { rewardCoins: 75, rewardGems: 4 },
       }),
     ).toEqual({ coins: 75, gems: 4, hintTokens: 0, rareTile: false });
+  });
+
+  it.each(SEASONAL_QUESTS.map((q) => [q.id, q] as const))(
+    'claiming the LAST step of %s also pays the quest finalReward',
+    (_id, quest) => {
+      // The claim of a quest's final step both pays the step AND completes
+      // the quest — finalReward (2000c/50g) used to be displayed in the
+      // cosmetics catalog and never granted by any path.
+      const lastIndex = quest.steps.length - 1;
+      const lastStep = quest.steps[lastIndex];
+      const grant = ceremonyEconomyGrant({
+        type: 'quest_step_complete',
+        data: {
+          questId: quest.id,
+          stepIndex: lastIndex,
+          rewardCoins: lastStep.rewardCoins,
+          rewardGems: lastStep.rewardGems,
+        },
+      });
+      expect(grant).toEqual({
+        coins: lastStep.rewardCoins + quest.finalReward.coins,
+        gems: lastStep.rewardGems + quest.finalReward.gems,
+        hintTokens: 0,
+        rareTile: false,
+      });
+    },
+  );
+
+  it('a non-final step pays only its own reward', () => {
+    const quest = SEASONAL_QUESTS[0];
+    const step = quest.steps[0];
+    expect(
+      ceremonyEconomyGrant({
+        type: 'quest_step_complete',
+        data: {
+          questId: quest.id,
+          stepIndex: 0,
+          rewardCoins: step.rewardCoins,
+          rewardGems: step.rewardGems,
+        },
+      }),
+    ).toEqual({ coins: step.rewardCoins, gems: step.rewardGems, hintTokens: 0, rareTile: false });
+  });
+
+  it('weekly-goal reuse of the type (no questId) pays exactly what it carries', () => {
+    // updateWeeklyGoalProgress queues this shape when a weekly goal
+    // completes — the panel's displayed reward must be the credited one.
+    expect(
+      ceremonyEconomyGrant({
+        type: 'quest_step_complete',
+        data: {
+          weeklyGoalId: 'weekly_puzzles_20',
+          rewardCoins: 1000,
+          rewardGems: 20,
+        },
+      }),
+    ).toEqual({ coins: 1000, gems: 20, hintTokens: 0, rareTile: false });
   });
 });
 

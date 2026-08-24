@@ -11,9 +11,17 @@ import { useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { FriendChallenge, GameMode, BoardConfig } from '../types';
 import { getTitleLabel } from '../data/cosmetics';
+import { getRemoteBoolean } from '../services/remoteConfig';
 import { logger } from '../utils/logger';
 
 const getToday = (): string => new Date().toISOString().split('T')[0];
+
+/**
+ * Cap on the persisted `friendChallenges.sent` list. Every entry is
+ * stringified into each debounced local save and cloud sync, and nothing ever
+ * removed one — a tap-happy player grew the player blob without bound.
+ */
+const MAX_SENT_CHALLENGES = 20;
 
 /**
  * Deliver a gift via the secure Cloud Function callable; fall back to the
@@ -160,13 +168,39 @@ export function createSocialMethods<T extends PlayerSocialData>(
       status: 'pending',
     };
 
-    setData((prev) => ({
-      ...prev,
-      friendChallenges: {
-        ...prev.friendChallenges,
-        sent: [...prev.friendChallenges.sent, challenge],
-      },
-    }));
+    // Friend challenges are send-only: nothing in the app reads
+    // `users/{uid}/challenges` and no surface renders
+    // `friendChallenges.received`, so a challenge cannot arrive on the other
+    // device. Until a receive path ships, don't persist an undeliverable
+    // challenge into the player blob or write it into someone else's
+    // document. Flip `friendChallengesEnabled` on together with the reader.
+    const deliveryEnabled = getRemoteBoolean('friendChallengesEnabled');
+
+    setData((prev) => {
+      const nowMs = now.getTime();
+      // Drop already-expired entries and keep the tail bounded — this list
+      // rides along in every debounced player save and cloud sync, and used
+      // to grow by one per tap forever. Pruning runs even when delivery is
+      // off so existing saves shed their backlog.
+      const live = prev.friendChallenges.sent.filter((c) => {
+        const expiresMs = Date.parse(c.expiresAt);
+        return !Number.isFinite(expiresMs) || expiresMs > nowMs;
+      });
+      const sent = (deliveryEnabled ? [...live, challenge] : live).slice(
+        -MAX_SENT_CHALLENGES,
+      );
+      if (!deliveryEnabled && sent.length === prev.friendChallenges.sent.length) {
+        return prev;
+      }
+      return {
+        ...prev,
+        friendChallenges: { ...prev.friendChallenges, sent },
+      };
+    });
+
+    if (!deliveryEnabled) {
+      return challenge;
+    }
 
     // Persist challenge to Firestore for cross-device delivery
     if (user) {

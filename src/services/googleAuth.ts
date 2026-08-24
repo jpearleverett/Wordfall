@@ -1,5 +1,7 @@
 import { GoogleAuthProvider, linkWithCredential, signInWithCredential, unlink, User } from 'firebase/auth';
-import { auth, isFirebaseConfigured } from '../config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth, db, isFirebaseConfigured } from '../config/firebase';
 import { crashReporter } from './crashReporting';
 
 /**
@@ -94,15 +96,30 @@ export type GoogleLinkResult =
   | { ok: true; user: User; email: string | null }
   | { ok: false; error: string; code?: string };
 
+// Local persistence keys the recovery path adopts cloud data into. MUST
+// stay in sync with PlayerContext / EconomyContext STORAGE_KEY.
+const PLAYER_STORAGE_KEY = '@wordfall_player';
+const ECONOMY_STORAGE_KEY = '@wordfall_economy';
+
+// Held between a CREDENTIAL_IN_USE result and the caller's confirmed
+// recoverExistingGoogleAccount() call. Google ID tokens are short-lived,
+// so this never outlives the sign-in interaction it belongs to.
+let pendingRecoveryIdToken: string | null = null;
+
 /**
  * Link the currently-signed-in anonymous Firebase user to a Google account.
  * On success the UID is preserved and `user.isAnonymous` becomes `false`.
  *
  * If the Google credential is already linked to a DIFFERENT Firebase user
- * (e.g. the player previously linked on another device), we fall back to
- * `signInWithCredential` so the player recovers their existing progression
- * instead of being locked out. The caller should warn that local anonymous
- * progress on the current device will be abandoned in that case.
+ * (e.g. the player previously linked on another device), this returns
+ * `code: 'CREDENTIAL_IN_USE'` WITHOUT signing in. The caller must warn the
+ * player (local anonymous progress on this device will be abandoned) and
+ * then call {@link recoverExistingGoogleAccount}, which signs into the
+ * existing account and ADOPTS its cloud data. Signing in directly here was
+ * a data destroyer: the live Player/Economy providers keep their one-shot
+ * cloud hydration latched across a uid swap, so their debounced writers
+ * pushed this device's anonymous data over the existing account's cloud
+ * save within seconds — freshly stamped, unrecoverable from any device.
  */
 export async function linkAnonymousToGoogle(): Promise<GoogleLinkResult> {
   if (!isFirebaseConfigured) {
@@ -139,9 +156,16 @@ export async function linkAnonymousToGoogle(): Promise<GoogleLinkResult> {
       const err = linkErr as { code?: string };
       if (err?.code === 'auth/credential-already-in-use') {
         // The Google account is already bound to another Firebase user —
-        // typically the same player from a previous device. Recover them.
-        const signedIn = await signInWithCredential(auth, credential);
-        return { ok: true, user: signedIn.user, email: signedIn.user.email ?? null };
+        // typically the same player from a previous device. Do NOT sign in
+        // here: surface the conflict so the caller can confirm, then run
+        // recoverExistingGoogleAccount() to adopt that account's cloud data
+        // instead of overwriting it (see the doc comment above).
+        pendingRecoveryIdToken = idToken;
+        return {
+          ok: false,
+          code: 'CREDENTIAL_IN_USE',
+          error: 'This Google account already has a Wordfall profile in the cloud.',
+        };
       }
       throw linkErr;
     }
@@ -157,6 +181,115 @@ export async function linkAnonymousToGoogle(): Promise<GoogleLinkResult> {
     return {
       ok: false,
       error: err?.message ?? 'Could not complete Google Sign-In. Please try again.',
+      code: err?.code,
+    };
+  }
+}
+
+/**
+ * Complete a CREDENTIAL_IN_USE recovery after the caller has warned the
+ * player: sign into the EXISTING Firebase account the Google credential is
+ * bound to, then ADOPT that account's cloud data on this device.
+ *
+ * Adoption mechanics: the account's player + economy docs are fetched the
+ * moment auth lands (before the live providers' debounced writers can push
+ * this device's anonymous data over them), written into the local
+ * AsyncStorage blobs with a fresh lastModified stamp, and the JS runtime is
+ * reloaded so every provider re-hydrates from them. The fresh stamp makes
+ * the adopted blob win the post-reload lastModified reconciliation, which
+ * also heals any write that raced in before the reload. When the build
+ * cannot reload (no expo-updates), the adoption is rolled back and auth is
+ * signed out — with auth cleared, firestore.rules refuse the anonymous
+ * data pushes — so the existing account's cloud save is never destroyed.
+ */
+export async function recoverExistingGoogleAccount(): Promise<GoogleLinkResult> {
+  if (!isFirebaseConfigured) {
+    return { ok: false, error: 'Sign-in is unavailable — Firebase is not configured.' };
+  }
+  const idToken = pendingRecoveryIdToken;
+  if (!idToken) {
+    return { ok: false, error: 'No account recovery is pending. Please try signing in again.' };
+  }
+  try {
+    const credential = GoogleAuthProvider.credential(idToken);
+    const signedIn = await signInWithCredential(auth, credential);
+    const uid = signedIn.user.uid;
+
+    const [playerSnap, economySnap] = await Promise.all([
+      getDoc(doc(db, 'users', uid, 'data', 'player')),
+      getDoc(doc(db, 'users', uid, 'economy', 'current')),
+    ]);
+
+    const adoptions: Array<[string, string]> = [];
+    if (playerSnap.exists()) {
+      adoptions.push([
+        PLAYER_STORAGE_KEY,
+        JSON.stringify({ ...playerSnap.data(), lastModified: Date.now() }),
+      ]);
+    }
+    if (economySnap.exists()) {
+      adoptions.push([
+        ECONOMY_STORAGE_KEY,
+        JSON.stringify({ ...economySnap.data(), lastModified: Date.now() }),
+      ]);
+    }
+
+    if (adoptions.length === 0) {
+      // The account exists but has no cloud save — nothing to clobber, and
+      // this device's progress becomes its save. Safe to stay signed in.
+      pendingRecoveryIdToken = null;
+      return { ok: true, user: signedIn.user, email: signedIn.user.email ?? null };
+    }
+
+    // Snapshot the current local blobs so the no-reload path can roll the
+    // adoption back instead of leaving mixed state behind.
+    const priorLocal = await Promise.all(
+      adoptions.map(async ([key]) => [key, await AsyncStorage.getItem(key)] as const),
+    );
+    for (const [key, value] of adoptions) {
+      await AsyncStorage.setItem(key, value);
+    }
+
+    try {
+      // Reload so providers re-hydrate from the adopted blobs (same lazy
+      // require pattern as ErrorBoundary — dev builds lack the module).
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Updates = require('expo-updates');
+      await Updates.reloadAsync();
+      pendingRecoveryIdToken = null;
+      return { ok: true, user: signedIn.user, email: signedIn.user.email ?? null };
+    } catch {
+      // No reload available: the running providers still hold the anonymous
+      // data and WILL push it over the recovered account within seconds.
+      // Roll back and sign out rather than destroy the cloud save.
+      for (const [key, value] of priorLocal) {
+        if (value === null) await AsyncStorage.removeItem(key).catch(() => undefined);
+        else await AsyncStorage.setItem(key, value).catch(() => undefined);
+      }
+      await auth.signOut().catch(() => undefined);
+      return {
+        ok: false,
+        code: 'RESTART_REQUIRED',
+        error:
+          'This version of Wordfall cannot switch accounts in place. Your cloud progress is safe — please update the app and try again.',
+      };
+    }
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string };
+    crashReporter.captureException(
+      e instanceof Error ? e : new Error(String(e)),
+      { tags: { operation: 'googleSignIn.recover' } },
+    );
+    // If auth landed but the cloud fetch failed, staying signed in would
+    // clobber the account — sign out to protect it before reporting.
+    if (auth.currentUser && !auth.currentUser.isAnonymous) {
+      await auth.signOut().catch(() => undefined);
+    }
+    return {
+      ok: false,
+      error:
+        err?.message ??
+        'Could not download your cloud save. Check your connection and try again.',
       code: err?.code,
     };
   }

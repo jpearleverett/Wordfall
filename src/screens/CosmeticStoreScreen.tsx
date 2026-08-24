@@ -2,7 +2,8 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
+  Platform,
   Pressable,
   StyleSheet,
   Dimensions,
@@ -24,7 +25,6 @@ import {
   hashAvatarSeed,
 } from '../components/cosmetics/avatarVariants';
 import GameIcon from '../components/icons/GameIcon';
-import { useEconomy } from '../contexts/EconomyContext';
 import PrimaryButton from '../components/common/PrimaryButton';
 import {
   useEconomyStore,
@@ -389,10 +389,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
   const coins = useEconomyStore(selectCoins);
   const gems = useEconomyStore(selectGems);
   const libraryPoints = useEconomyStore(selectLibraryPoints);
-  const { canAfford, spendCoins, spendGems } = useEconomyActions();
-  // spendLibraryPoints is not yet part of the EconomyActions Pick (defined in
-  // economyStore.ts), so read it off the full context.
-  const { spendLibraryPoints } = useEconomy();
+  const { canAfford, spendCoins, spendGems, spendLibraryPoints } = useEconomyActions();
   const equippedFrame = usePlayerStore(selectEquippedFrame);
   const equippedTheme = usePlayerStore(selectEquippedTheme);
   const equippedTitle = usePlayerStore(selectEquippedTitle);
@@ -852,15 +849,22 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     >
       {renderTabBar()}
 
-      <ScrollView
+      <FlatList
+        data={currentItems}
+        renderItem={({ item }) => renderItemCard(item)}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
         style={styles.scrollView}
-        contentContainerStyle={styles.grid}
+        contentContainerStyle={styles.gridContent}
+        columnWrapperStyle={styles.gridRow}
         showsVerticalScrollIndicator={false}
-      >
-        {currentItems.map((item) => renderItemCard(item))}
-        {/* Bottom spacing */}
-        <View style={{ height: 40, width: '100%' }} />
-      </ScrollView>
+        initialNumToRender={10}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
+        // Bottom spacing (formerly a trailing spacer child of the grid)
+        ListFooterComponent={<View style={{ height: 40, width: '100%' }} />}
+      />
 
       {renderDetailModal()}
     </ScreenScaffold>
@@ -947,16 +951,18 @@ const styles = StyleSheet.create({
     ...SHADOWS.neonEdge(COLORS.accent),
   },
 
-  // Grid
+  // Grid (2-up FlatList — row wrapper carries the gaps the old flexWrap
+  // container expressed with `gap`, so spacing is pixel-identical)
   scrollView: {
     flex: 1,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  gridContent: {
     paddingHorizontal: 16,
-    gap: CARD_GAP,
     paddingBottom: 90,
+  },
+  gridRow: {
+    gap: CARD_GAP,
+    marginBottom: CARD_GAP,
   },
 
   // Card — rarity drives border, glow, and top edge

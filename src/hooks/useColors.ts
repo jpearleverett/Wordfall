@@ -12,13 +12,16 @@
 
 import { useMemo } from 'react';
 import { COLORS } from '../constants';
-import { useSettings } from '../contexts/SettingsContext';
+import { useColorblindMode } from '../services/colorblindPreference';
 import { getColorblindOverrides } from '../services/colorblind';
 
 export type AppColors = typeof COLORS;
 
 export function useColors(): AppColors {
-  const { colorblindMode } = useSettings();
+  // Narrow external-store read (NOT useSettings): useColors mounts in every
+  // LetterCell, so a full SettingsContext subscription re-rendered the
+  // whole board on any unrelated settings write.
+  const colorblindMode = useColorblindMode();
   return useMemo(() => {
     const overrides = getColorblindOverrides(colorblindMode);
     if (!overrides) return COLORS;

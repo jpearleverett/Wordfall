@@ -1012,9 +1012,20 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
   //
   // Three-tier VIP stack so the catalog supports all three typical
   // commitment horizons. Reward shapes share the same flag bundle
-  // (adsRemoved + vipSubscriber + vipExclusive frame); only the
-  // dailyDrip scales and the anchor discount grows with duration so
-  // the annual tier presents as the clear long-term value.
+  // (adsRemoved + vipSubscriber + vipExclusive frame); the dailyDrip
+  // scales and the anchor discount grows with duration so the annual
+  // tier presents as the clear long-term value, and the annual tier adds
+  // the legendary VIP trophy decoration.
+  //
+  // Cosmetic ids here MUST exist in src/data/cosmetics.ts —
+  // splitPlayerGrantIds silently drops any id that resolves via neither
+  // hasDecoration nor isProfileCosmeticId, which means a paid reward
+  // that never gets delivered. (frame_vip_monthly / frame_vip_annual /
+  // decoration_vip_annual_trophy were exactly that: promised on the
+  // monthly/annual tiers but defined nowhere, so buyers silently got
+  // nothing. They're replaced by the real frame_vip_exclusive +
+  // vip_trophy catalog ids; shopProducts.test.ts now pins the contract
+  // for every product.)
   //
   // Anchor pricing: weekly $4.99 anchors at $9.99 (50% off),
   // monthly $9.99 anchors at $19.99 (50% off), annual $49.99 anchors
@@ -1046,7 +1057,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     storeProductId: 'wordfall_vip_monthly',
     name: 'VIP Monthly',
     description:
-      'Ad-free + 75 daily gems + 5 daily hints + monthly cosmetic drop + 2x XP boost',
+      'Ad-free + 75 daily gems + 5 daily hints + exclusive VIP frame + 2x XP boost',
     fallbackPrice: '$9.99/month',
     fallbackPriceAmount: 9.99,
     originalPrice: '$19.99/month',
@@ -1055,7 +1066,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     rewards: {
       flags: { adsRemoved: true, vipSubscriber: true },
       dailyDrip: { gems: 75, hintTokens: 5 },
-      decorations: ['frame_vip_exclusive', 'frame_vip_monthly'],
+      decorations: ['frame_vip_exclusive'],
     },
     isNonConsumable: false,
     badge: 'popular',
@@ -1066,7 +1077,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     storeProductId: 'wordfall_vip_annual',
     name: 'VIP Annual',
     description:
-      'Ad-free + 100 daily gems + 8 daily hints + 12 monthly cosmetic drops + 2x XP boost + annual-exclusive trophy',
+      'Ad-free + 100 daily gems + 8 daily hints + exclusive VIP frame + legendary VIP trophy + 2x XP boost',
     fallbackPrice: '$49.99/year',
     fallbackPriceAmount: 49.99,
     originalPrice: '$149.99/year',
@@ -1075,11 +1086,10 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     rewards: {
       flags: { adsRemoved: true, vipSubscriber: true },
       dailyDrip: { gems: 100, hintTokens: 8 },
-      decorations: [
-        'frame_vip_exclusive',
-        'frame_vip_annual',
-        'decoration_vip_annual_trophy',
-      ],
+      // vip_trophy is the real LIBRARY_DECORATIONS legendary (also the
+      // 26-week VIP-streak ladder reward — an annual commitment grants it
+      // up front; unlocks are idempotent so the ladder tier stays safe).
+      decorations: ['frame_vip_exclusive', 'vip_trophy'],
     },
     isNonConsumable: false,
     badge: 'best_value',
@@ -1135,4 +1145,31 @@ export function internalIdToStoreId(id: IAPProductId): string | undefined {
 /** Get all non-consumable product IDs (for restore purchases) */
 export function getNonConsumableIds(): IAPProductId[] {
   return SHOP_PRODUCTS.filter((p) => p.isNonConsumable).map((p) => p.id);
+}
+
+/**
+ * The VIP daily drip for the tier the player actually bought, recovered
+ * from the most recent vip_* purchase-history record's declared
+ * rewards.dailyDrip. Mirrors the payout logic inside
+ * EconomyContext.claimVipDailyRewards exactly (same newest-first walk,
+ * same weekly-tier floor when no local record exists — e.g. a server-side
+ * renewal restored the flag without one), so UI copy derived from this
+ * helper cannot diverge from what the claim credits.
+ */
+export function getVipDailyDrip(
+  purchaseHistory: ReadonlyArray<{ item?: unknown }>,
+): { gems: number; hintTokens: number } {
+  for (let i = purchaseHistory.length - 1; i >= 0; i--) {
+    const record = purchaseHistory[i];
+    if (typeof record?.item === 'string' && record.item.startsWith('vip_')) {
+      const declared = productMap.get(record.item)?.rewards?.dailyDrip;
+      if (declared) {
+        return { gems: declared.gems ?? 0, hintTokens: declared.hintTokens ?? 0 };
+      }
+      break;
+    }
+  }
+  // No vip_* record: the weekly tier is the conservative floor.
+  const weekly = productMap.get('vip_weekly')?.rewards?.dailyDrip;
+  return { gems: weekly?.gems ?? 50, hintTokens: weekly?.hintTokens ?? 3 };
 }

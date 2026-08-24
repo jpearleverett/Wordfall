@@ -29,7 +29,12 @@ const LiveRail: React.FC<LiveRailProps> = ({ children }) => {
     >
       {visible.map((child, idx) => (
         <View
-          key={idx}
+          // React.Children.toArray assigns each element a stable positional key
+          // that counts falsy slots ('.0', '.1', ...), so keying the wrapper by
+          // the child's own key keeps every card pinned to its source slot even
+          // when a leading conditional card turns off — otherwise index keys
+          // would remount every downstream card.
+          key={React.isValidElement(child) && child.key != null ? child.key : idx}
           style={[
             styles.card,
             { width: CARD_WIDTH },

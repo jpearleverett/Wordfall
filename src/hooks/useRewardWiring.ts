@@ -32,6 +32,7 @@ import { getTitleLabel, computeEquippedBonuses } from '../data/cosmetics';
 import {
   getPrestigeCoinMultiplier,
   getPrestigeGemMultiplier,
+  getPrestigeRareTileBonus,
   getPrestigeXpMultiplier,
 } from '../data/prestigeSystem';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
@@ -91,6 +92,9 @@ interface PlayerContextLike {
     seasonalStamps: Record<string, number[]>;
   };
   missions: { dailyMissions: Array<{ id: string; progress: number; completed: boolean }>; lastMissionDate: string; missionsCompletedToday: number };
+  /** Distinct modes played since the last weekly reset (initWeeklyGoals).
+   *  Optional so pre-existing saves that hydrated without it stay safe. */
+  modesPlayedThisWeek?: string[];
   streaks: { currentStreak: number; bestStreak: number; lastPlayDate: string; graceDaysUsed: number; streakShieldAvailable: boolean; lastShieldDate: string };
   equippedTitle: string;
   equippedFrame: string;
@@ -156,6 +160,8 @@ interface EconomyContextLike {
   activateStarterPack: () => void;
   /** Full purchase history — used to detect non-payer segment for first-purchase offer (only length is read). */
   purchaseHistory: readonly unknown[];
+  /** True when the Premium Pass SKU is owned — gates the premium mastery lane. */
+  isPremiumPassFlag?: boolean;
 }
 
 interface UseRewardWiringParams {
@@ -227,6 +233,24 @@ export function useRewardWiring({
     const prevHighest = player.highestLevel;
     const isFirstWin = player.puzzlesSolved === 0;
 
+    // Only classic, level-bearing completions advance the GLOBAL progression
+    // ladder (starsByLevel / totalStars / currentLevel / highestLevel /
+    // chapter / wing state). Every other mode keeps its own independent
+    // ladder (advanceModeLevel below), and daily/weekly play at level 0 —
+    // recording those globally wrote phantom starsByLevel entries, skipped
+    // classic levels wholesale, and paid wing bonuses for wings never played.
+    const isClassicProgression = mode === 'classic' && level > 0;
+    // One payout per daily board. recordDailyComplete only dedups the date
+    // array — the daily board is deterministic all day and freely replayable,
+    // so every daily-specific grant below keys off this flag instead.
+    const todayUtc = new Date().toISOString().split('T')[0];
+    const isFirstDailyToday = isDaily && !(player.dailyCompleted ?? []).includes(todayUtc);
+    // consecutiveFailures increments on every loss (recordFailure) and is
+    // cleared below on wins, so a non-zero read here means at least one loss
+    // landed since the previous win — the win streak must break before this
+    // win is credited (losses themselves never call updateWinStreak).
+    const hadFailuresSinceLastWin = player.consecutiveFailures > 0;
+
     // "Flawless" = no hints, no undos, no shuffle, no wrong-trace (tracked by
     // `perfectRun` on the game state). Distinct from 3 stars, which is a
     // quantitative move-count threshold. A player can earn 3 stars while using
@@ -276,14 +300,29 @@ export function useRewardWiring({
       stars,
     });
     void analytics.updateUserProperties({
-      player_level: Math.max(level + 1, player.currentLevel),
+      // Non-classic modes carry their own ladder's level (or 0) — only
+      // classic wins can move the reported global player level.
+      player_level: isClassicProgression ? Math.max(level + 1, player.currentLevel) : player.currentLevel,
       total_puzzles_solved: player.puzzlesSolved + 1,
       player_stage: playerStageFromPuzzles(player.puzzlesSolved + 1),
       // Tier 6 B3 — attribute every subsequent event to the player's
       // prestige tier for whale-cohort funnel analysis.
       prestige_tier: player.prestige?.prestigeLevel ?? 0,
     });
-    player.recordPuzzleComplete(level, score, stars, isPerfect);
+    if (isClassicProgression) {
+      player.recordPuzzleComplete(level, score, stars, isPerfect);
+    } else {
+      // Non-classic wins still count toward the lifetime totals everything
+      // below (mastery, stamps, achievements, profile sync) reads, but must
+      // not touch the classic ladder — recordPuzzleComplete would write this
+      // mode's own level number into starsByLevel/currentLevel/highestLevel.
+      player.updateProgress({
+        puzzlesSolved: player.puzzlesSolved + 1,
+        totalScore: player.totalScore + score,
+        lastActiveDate: todayUtc,
+        ...(isPerfect ? { perfectSolves: player.perfectSolves + 1 } : {}),
+      });
+    }
 
     // Daily quest progress — emit O(1) events for active quests.
     player.recordDailyQuestEvent({ type: 'puzzle_complete' });
@@ -310,10 +349,25 @@ export function useRewardWiring({
       player.advanceModeLevel(mode);
     }
 
-    // Reset consecutive failures on success
-    if (player.consecutiveFailures > 0) {
-      player.updateProgress({ consecutiveFailures: 0, lastLevelStars: stars });
+    // Track distinct modes played this week. initWeeklyGoals resets the
+    // array on week rollover but nothing populated it, and the seasonal
+    // 'modes_played' quest step counted every puzzle as a "new mode".
+    const modesThisWeek = player.modesPlayedThisWeek ?? [];
+    const isNewModeThisWeek = !modesThisWeek.includes(mode);
+    if (isNewModeThisWeek) {
+      player.updateProgress({ modesPlayedThisWeek: [...modesThisWeek, mode] });
     }
+
+    // Record the stars actually earned so needsBreather() reads the real
+    // previous-level result — this used to be written only on recovery wins
+    // (consecutiveFailures > 0), so a post-fail 1-star win pinned the
+    // breather config on every later level however cleanly it was won, and
+    // a no-fail 1-star scrape never triggered the breather at all. The
+    // failure counter still clears on any win.
+    player.updateProgress({
+      lastLevelStars: stars,
+      ...(hadFailuresSinceLastWin ? { consecutiveFailures: 0 } : {}),
+    });
 
     // Update adaptive difficulty metrics with the real completion time
     // (was hard-coded to 0 until April 2026 which zeroed out the
@@ -387,7 +441,9 @@ export function useRewardWiring({
       const xpGain = Math.round(
         (baseXp +
           stars * 50 +
-          (isDaily ? 200 : 0) +
+          // Daily kicker pays once per daily board — replays of the same
+          // deterministic board earn only the base solve XP.
+          (isFirstDailyToday ? 200 : 0) +
           (isPerfect ? 150 : 0)) *
           xpBonusFactor,
       );
@@ -407,9 +463,12 @@ export function useRewardWiring({
     eventManager.onPuzzleComplete(score, stars, isPerfect);
     player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
 
-    // Handle daily completion
-    if (isDaily) {
-      const today = new Date().toISOString().split('T')[0];
+    // Handle daily completion — first completion of today's board only.
+    // The daily board is seeded by the date and stays tappable after
+    // completion, so an ungated block here was an unbounded coin/gem/XP
+    // farm (replay the known solution, collect 150c/2g each time).
+    if (isFirstDailyToday) {
+      const today = todayUtc;
       player.recordDailyComplete(today);
       const dailyCoins = Math.round(ECONOMY.dailyCompleteCoins * coinBonusFactor);
       const dailyGems = Math.round(ECONOMY.dailyCompleteGems * gemBonusFactor);
@@ -532,7 +591,16 @@ export function useRewardWiring({
     const baseDropChance = COLLECTION.rareTileBaseChance
       + (difficulty === 'hard' || difficulty === 'expert' ? COLLECTION.rareTileHardBonus : 0)
       + (isPerfect ? COLLECTION.rareTilePerfectBonus : 0);
-    const dropChance = Math.min(baseDropChance * eventMultipliers.rareTileChance, 1);
+    // Prestige tier-3's `rare_tile_bonus` (+2%) is additive on the base
+    // chance — it was displayed by the prestige ceremony as a permanent
+    // reward since launch with no consumer anywhere.
+    const prestigeRareTileBonus = getPrestigeRareTileBonus(
+      player.prestige?.permanentBonuses ?? [],
+    );
+    const dropChance = Math.min(
+      (baseDropChance + prestigeRareTileBonus) * eventMultipliers.rareTileChance,
+      1,
+    );
     if (guaranteedRare || Math.random() < dropChance) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const randomLetter = letters[Math.floor(Math.random() * letters.length)];
@@ -603,7 +671,7 @@ export function useRewardWiring({
       if (mission.id === 'get_perfect_solve' && isPerfect) {
         player.updateMissionProgress(mission.id, mission.progress + 1);
       }
-      if (mission.id === 'complete_daily' && isDaily) {
+      if (mission.id === 'complete_daily' && isFirstDailyToday) {
         player.updateMissionProgress(mission.id, 1);
       }
     });
@@ -613,7 +681,7 @@ export function useRewardWiring({
     player.updateWeeklyGoalProgress('total_score', score);
     player.updateWeeklyGoalProgress('stars_earned', stars);
     if (isPerfect) player.updateWeeklyGoalProgress('perfect_solves', 1);
-    if (isDaily) player.updateWeeklyGoalProgress('daily_completed', 1);
+    if (isFirstDailyToday) player.updateWeeklyGoalProgress('daily_completed', 1);
 
     // Update seasonal quest progress
     const questState = player.seasonalQuest;
@@ -627,9 +695,12 @@ export function useRewardWiring({
         else if (trackingKey === 'total_score') increment = score;
         else if (trackingKey === 'stars_earned') increment = stars;
         else if (trackingKey === 'perfect_solves' && isPerfect) increment = 1;
-        else if (trackingKey === 'daily_completed' && isDaily) increment = 1;
+        else if (trackingKey === 'daily_completed' && isFirstDailyToday) increment = 1;
         else if (trackingKey === 'words_found') increment = wordsFound;
-        else if (trackingKey === 'modes_played') increment = 1;
+        // "Play N different game modes" counts DISTINCT modes (per weekly
+        // window), not puzzles — an unconditional 1 here let four classic
+        // solves clear the mode-exploration step.
+        else if (trackingKey === 'modes_played') increment = isNewModeThisWeek ? 1 : 0;
 
         if (increment > 0) {
           const newProgress = questState.stepProgress + increment;
@@ -638,9 +709,15 @@ export function useRewardWiring({
       }
     }
 
-    // Detect level-up
-    const newLevel = Math.max(level + 1, prevLevel);
-    const leveledUp = newLevel > prevHighest;
+    // Detect level-up — classic ladder only. For non-classic completions
+    // `level` is that mode's own ladder (or 0 for daily/weekly); deriving
+    // newLevel from it handed out feature/mode unlocks, level-up fanfare and
+    // repeatable late-game milestone coins for levels never actually reached.
+    const newLevel = isClassicProgression ? Math.max(level + 1, prevLevel) : prevLevel;
+    const leveledUp = isClassicProgression && newLevel > prevHighest;
+    // What the player will PLAY next: non-classic ladders advanced via
+    // advanceModeLevel above, so their preview is the mode's own next level.
+    const nextPlayLevel = isClassicProgression ? newLevel : level > 0 ? level + 1 : newLevel;
 
     // Track level milestone in funnel
     void funnelTracker.trackLevelMilestone(newLevel);
@@ -704,9 +781,30 @@ export function useRewardWiring({
       }
     }
 
+    // Only classic wins add to totalStars now (see isClassicProgression),
+    // so project the post-completion total accordingly. Classic always plays
+    // the current (never-completed) level, so + stars is exact.
+    const totalStarsNow = player.totalStars + (isClassicProgression ? stars : 0);
+
     // Achievements — demoted to Tier 3 (no ceremony, silent).
     // The reward/unlock still happens in checkAchievements, we just don't queue modals.
-    const achievementCeremonies = player.checkAchievements();
+    // Counter state is still the PRE-completion snapshot here (React batches
+    // every setData this callback makes — same convention the mastery block
+    // below documents), so pass the post-completion values through the
+    // extraData escape hatch. Read stale, every counter-based tier crossing
+    // fired one puzzle late — or never, if the player churned at the
+    // threshold — while the achievements screen already showed it as met.
+    const distinctModesPlayed = Object.keys(player.modeStats ?? {})
+      .filter((m) => (player.modeStats?.[m]?.played ?? 0) > 0).length;
+    const achievementCeremonies = player.checkAchievements({
+      puzzle_solver: player.puzzlesSolved + 1,
+      high_scorer: player.totalScore + score,
+      star_collector: totalStarsNow,
+      perfect_player: player.perfectSolves + (isPerfect ? 1 : 0),
+      level_climber: isClassicProgression ? Math.max(player.highestLevel, level) : player.highestLevel,
+      daily_devotee: (player.dailyCompleted ?? []).length + (isFirstDailyToday ? 1 : 0),
+      mode_explorer: prevModePlayed === 0 ? distinctModesPlayed + 1 : distinctModesPlayed,
+    });
     for (const ceremony of achievementCeremonies) {
       // Tier 3: no modal — but the REWARD is not optional. The comment above
       // this loop used to claim "the reward/unlock still happens" while the
@@ -753,10 +851,12 @@ export function useRewardWiring({
       }
     }
 
-    // Star milestones (50/100/250/500 total stars)
-    const totalStarsNow = player.totalStars + stars;
+    // Star milestones (50/100/250/500 total stars) — totalStarsNow is the
+    // classic-gated projection computed above the achievements check, so
+    // non-classic wins can no longer celebrate a crossing that the recorded
+    // totalStars never makes.
     for (const sm of STAR_MILESTONES) {
-      const prevStars = totalStarsNow - stars;
+      const prevStars = player.totalStars;
       if (totalStarsNow >= sm.stars && prevStars < sm.stars) {
         summaryItems.push({
           type: 'star_milestone',
@@ -839,6 +939,15 @@ export function useRewardWiring({
         if (tierReward.free.coins) { economy.addCoins(tierReward.free.coins); rewardParts.push(`${tierReward.free.coins} coins`); }
         if (tierReward.free.gems) { economy.addGems(tierReward.free.gems); rewardParts.push(`${tierReward.free.gems} gems`); }
         if (tierReward.free.hintTokens) { economy.addHintTokens(tierReward.free.hintTokens); rewardParts.push(`${tierReward.free.hintTokens} hints`); }
+        // Premium Pass owners see the premium lane render as earned with no
+        // claim step (MasteryScreen), so the paid lane must be credited here
+        // too — it used to be display-only, delivering nothing for the SKU.
+        if (economy.isPremiumPassFlag && tierReward.premium) {
+          if (tierReward.premium.coins) { economy.addCoins(tierReward.premium.coins); rewardParts.push(`+${tierReward.premium.coins} premium coins`); }
+          if (tierReward.premium.gems) { economy.addGems(tierReward.premium.gems); rewardParts.push(`+${tierReward.premium.gems} premium gems`); }
+          if (tierReward.premium.hintTokens) { economy.addHintTokens(tierReward.premium.hintTokens); rewardParts.push(`+${tierReward.premium.hintTokens} premium hints`); }
+          if (tierReward.premium.decoration) player.unlockDecoration(tierReward.premium.decoration);
+        }
       }
       summaryItems.push({
         type: 'mastery_tier_up',
@@ -866,7 +975,16 @@ export function useRewardWiring({
     // Award mystery wheel free spin progress
     player.awardFreeSpin();
 
-    // Update win streak
+    // Update win streak. Losses only go through recordFailure — nothing
+    // calls updateWinStreak(false) on them — so the "consecutive" streak
+    // silently became a lifetime-wins counter and its milestone ceremonies
+    // ('Hat Trick!' etc., paid from WIN_STREAK_TIERS at pop) fired without
+    // consecutive wins. Break the streak here first when any loss landed
+    // since the last win; both updates are functional setData calls, so
+    // reset-then-credit composes to a streak of 1 within one React batch.
+    if (hadFailuresSinceLastWin) {
+      player.updateWinStreak(false);
+    }
     player.updateWinStreak(true);
 
     // Update flawless streak (increments on distinct calendar days; resets on
@@ -918,7 +1036,9 @@ export function useRewardWiring({
     // Firestore social layer: submit scores + sync profile
     const displayName = getTitleLabel(player.equippedTitle) || 'Player';
 
-    if (isDaily && userId) {
+    // First completion of today's board only — replays of the known
+    // solution must not resubmit to the daily leaderboard.
+    if (isFirstDailyToday && userId) {
       void firestoreService.submitDailyScore(userId, score, stars, level, displayName);
     }
 
@@ -1003,7 +1123,7 @@ export function useRewardWiring({
                 newLevel,
                 difficultyTransition,
                 nextLevelPreview: !isDaily
-                  ? { level: newLevel, difficulty: getDifficultyForLevel(newLevel) }
+                  ? { level: nextPlayLevel, difficulty: getDifficultyForLevel(nextPlayLevel) }
                   : null,
                 shareText,
                 friendComparison: result,
@@ -1029,8 +1149,8 @@ export function useRewardWiring({
           newLevel,
           difficultyTransition,
           nextLevelPreview: !isDaily ? {
-            level: newLevel,
-            difficulty: getDifficultyForLevel(newLevel),
+            level: nextPlayLevel,
+            difficulty: getDifficultyForLevel(nextPlayLevel),
           } : null,
           shareText,
           friendComparison,
@@ -1054,7 +1174,13 @@ export function useRewardWiring({
       );
       throw e;
     }
-  }, [params, player, economy, navigation, userId]);
+    // `player`/`economy` are stable context facades (state resolves to the
+    // store snapshot at call time — src/utils/contextFacade.ts), so they are
+    // deliberately NOT dependencies: listing the old full context values
+    // re-minted handleComplete on every one of the 15+ writes a completion
+    // makes, which defeated GameScreen's memo and re-rendered the whole
+    // gameplay tree during victory animations.
+  }, [params, navigation, userId]);
 
   return handleComplete;
 }

@@ -5,6 +5,7 @@ import {
   isOfferExpired,
   getDiscountedPrice,
 } from '../dynamicPricing';
+import { getProductById } from '../shopProducts';
 import type { SpendingSegment, EngagementSegment } from '../../services/playerSegmentation';
 
 describe('MEGA_BUNDLES data', () => {
@@ -88,6 +89,29 @@ describe('getDynamicOffers', () => {
       expect(offers[i].priority).toBeGreaterThanOrEqual(offers[i - 1].priority);
     }
   });
+
+  // Every dynamic offer must point at a purchasable SHOP_PRODUCTS entry —
+  // anything else (e.g. the old 'mega_bundle_gold' churned/dolphin offers)
+  // renders a card with a made-up price whose purchase always fails.
+  it('every offer across all segment combinations resolves in SHOP_PRODUCTS', () => {
+    const spendings: SpendingSegment[] = ['non_payer', 'minnow', 'dolphin', 'whale'];
+    const engagements: EngagementSegment[] = ['new_player', 'casual', 'regular', 'hardcore', 'lapsed', 'at_risk', 'returned'];
+    const daysSinceActiveValues = [undefined, 0, 2, 5, 10, 20];
+    const playerLevels = [1, 10, 30];
+
+    for (const spending of spendings) {
+      for (const engagement of engagements) {
+        for (const daysSinceActive of daysSinceActiveValues) {
+          for (const playerLevel of playerLevels) {
+            const offers = getDynamicOffers(spending, engagement, playerLevel, daysSinceActive);
+            for (const offer of offers) {
+              expect(getProductById(offer.productId)).toBeDefined();
+            }
+          }
+        }
+      }
+    }
+  });
 });
 
 describe('getFlashSale', () => {
@@ -138,6 +162,39 @@ describe('getFlashSale', () => {
         break;
       }
     }
+  });
+
+  // Pricing invariant: the advertised BUY NOW price must be the price the
+  // store actually charges (the catalog fallbackPriceAmount) — there is no
+  // discounted-SKU mechanism, so any other number is a lie the purchase
+  // sheet contradicts. Before the fix, 4 of 5 pool entries advertised
+  // $1.79/$2.50/$1.94/$5.99 while the store charged $2.99/$4.99/$2.99/$9.99.
+  it('advertised sale price equals the real charged price on every day of the year', () => {
+    let salesSeen = 0;
+    const productsSeen = new Set<string>();
+    for (let day = 0; day < 365; day++) {
+      const date = new Date(Date.UTC(2026, 0, 1, 12) + day * 86400000);
+      const sale = getFlashSale(date);
+      if (!sale) continue;
+      salesSeen++;
+      productsSeen.add(sale.productId);
+
+      const product = getProductById(sale.productId);
+      expect(product).toBeDefined();
+
+      const advertised = parseFloat(sale.salePrice.replace('$', ''));
+      expect(Math.abs(advertised - product!.fallbackPriceAmount)).toBeLessThanOrEqual(0.01);
+
+      // Anchor must be the catalog anchor, and the % badge must be derived
+      // from anchor vs. real price rather than freehand.
+      expect(sale.originalPriceAmount).toBe(product!.originalPriceAmount);
+      expect(sale.discountPercent).toBe(
+        Math.round((1 - product!.fallbackPriceAmount / product!.originalPriceAmount!) * 100),
+      );
+    }
+    // The hashed rotation should have exercised the whole pool.
+    expect(salesSeen).toBeGreaterThan(0);
+    expect(productsSeen.size).toBeGreaterThanOrEqual(5);
   });
 });
 
@@ -239,10 +296,13 @@ describe('getDynamicOffers — Tier 6 B6 comeback ladder', () => {
     });
   });
 
-  it('Day 15+ churned: 30% mega bundle with LAST CALL badge, 72h', () => {
+  it('Day 15+ churned: 30% Champion Pack with LAST CALL badge, 72h', () => {
+    // champion_pack, NOT mega_bundle_gold: the mega bundles are not in
+    // SHOP_PRODUCTS and can't be purchased, so the winback offer must
+    // point at a real premium bundle.
     const offers = getDynamicOffers('non_payer', 'lapsed', 20, 20);
     expect(offers[0]).toMatchObject({
-      productId: 'mega_bundle_gold',
+      productId: 'champion_pack',
       discountPercent: 30,
       badge: 'LAST CALL',
       expiresInHours: 72,

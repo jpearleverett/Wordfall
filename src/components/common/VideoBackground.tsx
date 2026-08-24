@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, View, Image, ImageSourcePropType } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { logger } from '../../utils/logger';
 
 interface VideoBackgroundProps {
@@ -122,9 +123,10 @@ function VideoBackgroundInner({
   placeholder,
 }: VideoBackgroundProps) {
   const [shouldLoad, setShouldLoad] = useState(!lazy);
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
-    if (!lazy) return;
+    if (!lazy || reduceMotion) return;
 
     // Defer video loading to after mount so it doesn't block app startup.
     // Use a small delay to let the initial render settle first.
@@ -133,10 +135,13 @@ function VideoBackgroundInner({
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [lazy]);
+  }, [lazy, reduceMotion]);
 
-  // Show placeholder until we decide to load video
-  if (!shouldLoad) {
+  // Reduce motion: a full-screen looping video is decorative motion, so skip
+  // it entirely and settle on the static placeholder (image + overlay) that
+  // the pre-load state already renders. Also show the placeholder until we
+  // decide to load the video.
+  if (reduceMotion || !shouldLoad) {
     return (
       <PlaceholderView
         placeholder={placeholder}

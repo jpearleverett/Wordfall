@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -63,6 +63,20 @@ import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADO
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { useAuth } from './src/contexts/AuthContext';
 import { useEconomy } from './src/contexts/EconomyContext';
+import {
+  EconomyStoreContext,
+  useEconomyActions,
+  useEconomyStore,
+  selectGems,
+} from './src/stores/economyStore';
+import {
+  PlayerStoreContext,
+  usePlayerActions,
+  usePlayerStore,
+  selectFeaturesUnlocked,
+  selectCurrentLevel,
+} from './src/stores/playerStore';
+import { makeContextFacade } from './src/utils/contextFacade';
 import { useSettings } from './src/contexts/SettingsContext';
 import { usePlayer } from './src/contexts/PlayerContext';
 import { useHardEnergy } from './src/hooks/useHardEnergy';
@@ -113,6 +127,8 @@ import {
   getWelcomeBackMessage,
 } from './src/services/playerSegmentation';
 import { firestoreService, FirestoreGift } from './src/services/firestore';
+import { applyGiftGrant } from './src/utils/giftGrants';
+import { comebackAmounts } from './src/utils/comebackRewards';
 
 // Extracted modules for decomposition
 import { useRewardWiring, playerStageFromPuzzles } from './src/hooks/useRewardWiring';
@@ -192,11 +208,40 @@ function HomeStackScreen() {
   );
 }
 
+/**
+ * Stable player/economy handles for navigation wrappers.
+ *
+ * The context values from usePlayer()/useEconomy() rebuild on every state
+ * write, so wrappers that only need actions plus tap-time state reads were
+ * re-rendering (and re-minting their callbacks) 15+ times per puzzle
+ * completion. These facades have permanent identity: actions resolve to
+ * the stable action bags, state reads resolve to the store snapshot at
+ * call time (see src/utils/contextFacade.ts). Render-time reads must NOT
+ * go through them — subscribe narrowly via usePlayerStore/useEconomyStore.
+ */
+function useStableContextFacades() {
+  const playerActions = usePlayerActions();
+  const economyActions = useEconomyActions();
+  const playerStoreApi = useContext(PlayerStoreContext);
+  const economyStoreApi = useContext(EconomyStoreContext);
+  if (!playerStoreApi || !economyStoreApi) {
+    throw new Error('useStableContextFacades must render inside player/economy providers');
+  }
+  const player = useMemo(
+    () => makeContextFacade(playerStoreApi.getState, playerActions),
+    [playerStoreApi, playerActions],
+  );
+  const economy = useMemo(
+    () => makeContextFacade(economyStoreApi.getState, economyActions),
+    [economyStoreApi, economyActions],
+  );
+  return { player, economy };
+}
+
 // Play Tab Stack
 // Event screen wrapper — wires navigation callbacks for Play and Shop buttons
 function EventScreenWrapperNav({ navigation }: any) {
-  const player = usePlayer();
-  const economy = useEconomy();
+  const { player, economy } = useStableContextFacades();
 
   const handlePlayEventPuzzle = useCallback(() => {
     // Events run in the mode their rules describe (speedSolve → timer,
@@ -217,7 +262,7 @@ function EventScreenWrapperNav({ navigation }: any) {
           `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
           [
             { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
             {
               text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
               onPress: () => {
@@ -295,7 +340,8 @@ function EventScreenWrapperNav({ navigation }: any) {
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
-  }, [player, economy, navigation]);
+    // `player`/`economy` are stable facades (call-time reads) — not deps.
+  }, [navigation]);
 
   return (
     <EventScreen
@@ -442,6 +488,29 @@ function detectDifficultyTransition(oldLevel: number, newLevel: number): { from:
   return null;
 }
 
+// Shared "Watch Ad (+5)" handler for the three out-of-energy dialogs. The
+// button used to grant the refill instantly without showing anything —
+// bypassing the soft-scarcity system, the gem refill, and every ad
+// impression. Now the rewarded ad must actually complete (same adManager
+// convention as the hard-energy path in GameScreenWrapper): refill only on
+// `result.rewarded`, never on error/unavailability. `life_reward` is the
+// closest existing AdRewardType with a strict daily cap
+// (AD_CONFIG.MAX_LIFE_ADS_PER_DAY); the grant itself is applied here by the
+// caller, not by processAdReward, so no lives are credited.
+async function watchAdForEnergyRefill(player: {
+  refillEnergy: (method: 'ad') => boolean;
+}): Promise<void> {
+  try {
+    const { adManager } = await import('./src/services/ads');
+    const result = await adManager.showRewardedAd('life_reward');
+    if (result.rewarded) {
+      player.refillEnergy('ad');
+    }
+  } catch (err) {
+    if (__DEV__) console.warn('[Energy] rewarded ad failed:', err);
+  }
+}
+
 // Hide the global tab bar whenever the focused nested route inside a tab
 // stack is 'Game'. This is the documented React-Navigation pattern for
 // custom tab bars — see `NeonTabBar` which reads the resolved tabBarStyle
@@ -459,10 +528,14 @@ function hideTabBarOnGame({ route }: { route: { name: string; state?: any } }) {
 // Main Tab Navigator with progressive tab unlocking
 function MainTabs() {
   const insets = useSafeAreaInsets();
-  const player = usePlayer();
+  // Narrow subscription: the root tab navigator reads exactly one player
+  // field. A full usePlayer() re-rendered the whole Tab.Navigator (and the
+  // inline NeonTabBar render prop) on every one of the 15+ player writes a
+  // puzzle completion makes — concurrent with victory animations.
+  const featuresUnlocked = usePlayerStore(selectFeaturesUnlocked);
   const reduceMotion = useReduceMotion();
 
-  const hasFeature = (id: string) => player.featuresUnlocked.includes(id);
+  const hasFeature = (id: string) => featuresUnlocked.includes(id);
 
   return (
     <Tab.Navigator
@@ -531,8 +604,7 @@ function MainTabs() {
 
 // Modes screen wrapper - wires navigation to start game in selected mode
 function ModesScreenWrapper({ navigation, route }: any) {
-  const player = usePlayer();
-  const economy = useEconomy();
+  const { player, economy } = useStableContextFacades();
 
   // Warm the shared-board caches while the player is reading the mode list.
   //
@@ -567,7 +639,7 @@ function ModesScreenWrapper({ navigation, route }: any) {
           `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
           [
             { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
             {
               text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
               onPress: () => {
@@ -668,7 +740,10 @@ function ModesScreenWrapper({ navigation, route }: any) {
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
-  }, [player.currentLevel, navigation, player, economy]);
+    // `player`/`economy` are stable facades read at tap time — keeping
+    // player.currentLevel out of deps also stops the autoStart effect
+    // below from re-running on every level change.
+  }, [navigation]);
 
   // R8: Home's "Try X Mode" recommendation deep-links straight into the
   // recommended mode instead of dropping the player on the grid to find it
@@ -689,12 +764,26 @@ function ModesScreenWrapper({ navigation, route }: any) {
 function GameScreenWrapper({ route, navigation }: any) {
   const params = route.params || {};
   const { user } = useAuth();
-  const player = usePlayer();
-  const economy = useEconomy();
+  // The wrapper sits directly above the perf-critical GameScreen, so it
+  // must NOT subscribe to the full Player/Economy contexts (their values
+  // rebuild on every one of the 15+ writes a completion makes, re-minting
+  // every callback below and defeating GameScreen's memo mid-animation).
+  // Reactive needs are exactly two narrow fields (subscribed below);
+  // everything else goes through stable facades: actions resolve to the
+  // stable action bags, state reads resolve to the store snapshot at
+  // call time. See src/utils/contextFacade.ts.
+  const { player, economy } = useStableContextFacades();
+  const mysteryWheelSpins = usePlayerStore((s) => s.mysteryWheel.spinsAvailable);
+  const gems = useEconomyStore(selectGems);
   const hardEnergy = useHardEnergy();
   const [showSpinPrompt, setShowSpinPrompt] = useState(false);
   const [earnedNewSpin, setEarnedNewSpin] = useState(false);
   const spinsBeforeComplete = useRef(0);
+  // The baseline above is only meaningful once handleComplete has recorded
+  // it. Without this guard the detection effect ran on mount and compared
+  // preexisting unspent spins against the ref's initial 0 — so every level's
+  // home exit was interrupted by the spin prompt until the spin was spent.
+  const hasCompletedThisLevelRef = useRef(false);
   const [pendingNavAction, setPendingNavAction] = useState<'home' | 'next' | null>(null);
 
   // Phase 4B hard-energy gate. When the Remote Config flag is on and the
@@ -706,19 +795,33 @@ function GameScreenWrapper({ route, navigation }: any) {
     if (!hardEnergy.enabled) return;
     const key = `${params.mode ?? 'classic'}:${params.level ?? 0}:${route.key}`;
     if (debitedLevelRef.current === key) return;
-    debitedLevelRef.current = key;
+    // While the modal is up the recovery handlers own the flow: closing it
+    // re-runs this effect, which then performs the (exactly-once) debit.
+    if (showNoLives) return;
     if (!hardEnergy.canPlay) {
       setShowNoLives(true);
       return;
     }
     const { started } = hardEnergy.startLevel();
-    if (!started) setShowNoLives(true);
-  }, [hardEnergy, params.mode, params.level, route.key]);
+    if (!started) {
+      setShowNoLives(true);
+      return;
+    }
+    // Claim the guard key only AFTER a successful debit. Claiming it before
+    // the canPlay check burned the key on the out-of-lives path, so the
+    // gated level played free after an ad or gem refill — each rewarded ad
+    // effectively bought two level-plays; a gem refill under-charged by one.
+    debitedLevelRef.current = key;
+  }, [hardEnergy, params.mode, params.level, route.key, showNoLives]);
 
   const handleNoLivesClose = useCallback(() => {
+    // Abandoning the level: claim the guard key so the debit effect can't
+    // charge a life during the exit transition (e.g. a life regenerating
+    // while the modal was open).
+    debitedLevelRef.current = `${params.mode ?? 'classic'}:${params.level ?? 0}:${route.key}`;
     setShowNoLives(false);
     navigation.goBack();
-  }, [navigation]);
+  }, [navigation, params.mode, params.level, route.key]);
 
   const handleNoLivesWatchAd = useCallback(async () => {
     try {
@@ -754,6 +857,18 @@ function GameScreenWrapper({ route, navigation }: any) {
   // the next board while the victory screen is on display and reuse it at
   // tap time when the target (mode/level/config) still matches.
   const prefetchedNext = useRef<{ key: string; board: Board } | null>(null);
+  // Handles for the deferred prefetch so unmount can cancel it — a bare
+  // setTimeout here used to run synchronous generateBoard (p95 <900ms)
+  // for an already-unmounted wrapper, janking the outgoing navigation.
+  const prefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefetchInteractionRef = useRef<{ cancel: () => void } | null>(null);
+  useEffect(
+    () => () => {
+      if (prefetchTimeoutRef.current) clearTimeout(prefetchTimeoutRef.current);
+      prefetchInteractionRef.current?.cancel();
+    },
+    [],
+  );
 
   const computeNextTarget = useCallback(() => {
     const mode = (params.mode || 'classic') as GameMode;
@@ -771,7 +886,8 @@ function GameScreenWrapper({ route, navigation }: any) {
     }
     const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
     return { mode, modeLevel, config, chapter, key: `${mode}:${modeLevel}:${JSON.stringify(config)}` };
-  }, [params, player]);
+    // `player` is a stable facade (call-time reads) — not a dependency.
+  }, [params]);
 
   const handleComplete = useCallback((
     stars: number,
@@ -781,7 +897,8 @@ function GameScreenWrapper({ route, navigation }: any) {
     assists?: { hintsUsed: number; undosUsed: number },
   ) => {
     // Track spins before completion to detect if a new one is awarded
-    spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
+    spinsBeforeComplete.current = mysteryWheelSpins;
+    hasCompletedThisLevelRef.current = true;
     handleCompleteInner(stars, score, perfectRun, completionTimeSeconds, assists);
 
     // Pre-generate the next board while the player is looking at the
@@ -789,9 +906,14 @@ function GameScreenWrapper({ route, navigation }: any) {
     // generation in handleNextLevel. The 600ms delay lets the victory
     // animation start without competing for the JS thread; the key check
     // at tap time guards against the target shifting (e.g. adaptive
-    // difficulty settling after completion processing).
-    setTimeout(() => {
-      InteractionManager.runAfterInteractions(() => {
+    // difficulty settling after completion processing). Both handles are
+    // tracked so leaving the screen right after completing cancels the
+    // synchronous generateBoard instead of janking the exit navigation
+    // for an unmounted wrapper.
+    prefetchTimeoutRef.current = setTimeout(() => {
+      prefetchTimeoutRef.current = null;
+      prefetchInteractionRef.current = InteractionManager.runAfterInteractions(() => {
+        prefetchInteractionRef.current = null;
         try {
           const target = computeNextTarget();
           if (prefetchedNext.current?.key === target.key) return;
@@ -808,7 +930,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         }
       });
     }, 600);
-  }, [handleCompleteInner, player.mysteryWheel.spinsAvailable, computeNextTarget]);
+  }, [handleCompleteInner, mysteryWheelSpins, computeNextTarget]);
 
   const handleNextLevel = useCallback(() => {
     try {
@@ -873,7 +995,8 @@ function GameScreenWrapper({ route, navigation }: any) {
         navigation.goBack();
       }
     }
-  }, [params, navigation, player, computeNextTarget]);
+    // `player` is a stable facade (call-time reads) — not a dependency.
+  }, [params, navigation, computeNextTarget]);
 
   const handleSkipLevel = useCallback(() => {
     const SKIP_COST = 200;
@@ -945,7 +1068,8 @@ function GameScreenWrapper({ route, navigation }: any) {
         navigation.goBack();
       }
     }
-  }, [params, navigation, player, economy]);
+    // `player`/`economy` are stable facades (call-time reads) — not deps.
+  }, [params, navigation]);
 
   if (!params.board) {
     return (
@@ -958,12 +1082,16 @@ function GameScreenWrapper({ route, navigation }: any) {
   // Extract completion data from params (set by handleComplete)
   const completionData = params.completionData || {};
 
-  // Detect when a new spin is earned during puzzle completion
+  // Detect when a new spin is earned during puzzle completion — only after
+  // handleComplete has recorded the pre-completion baseline. A spin the
+  // player already held on entry must NOT trigger the prompt (see the
+  // "Only show spin prompt when a NEW spin was earned" note below).
   useEffect(() => {
-    if (player.mysteryWheel.spinsAvailable > spinsBeforeComplete.current) {
+    if (!hasCompletedThisLevelRef.current) return;
+    if (mysteryWheelSpins > spinsBeforeComplete.current) {
       setEarnedNewSpin(true);
     }
-  }, [player.mysteryWheel.spinsAvailable]);
+  }, [mysteryWheelSpins]);
 
   // Only show spin prompt when a NEW spin was earned this puzzle, not for old spins
   const handleHomeWithPrompt = useCallback(() => {
@@ -1059,7 +1187,7 @@ function GameScreenWrapper({ route, navigation }: any) {
             <Text style={spinPromptStyles.icon}>{'\u{1F3B0}'}</Text>
             <Text style={spinPromptStyles.title}>Free Spin Available!</Text>
             <Text style={spinPromptStyles.subtitle}>
-              You have {player.mysteryWheel.spinsAvailable} spin{player.mysteryWheel.spinsAvailable !== 1 ? 's' : ''} on the Mystery Wheel
+              You have {mysteryWheelSpins} spin{mysteryWheelSpins !== 1 ? 's' : ''} on the Mystery Wheel
             </Text>
             <Pressable
               style={({ pressed }) => [spinPromptStyles.spinButton, pressed && { transform: [{ scale: 0.96 }], opacity: 0.88 }]}
@@ -1081,7 +1209,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       <NoLivesModal
         visible={showNoLives}
         livesRemaining={hardEnergy.livesRemaining}
-        gemsAvailable={economy.gems}
+        gemsAvailable={gems}
         gemRefillCost={hardEnergy.gemRefillCost}
         nextLifeAtMs={hardEnergy.nextLifeAtMs}
         onClose={handleNoLivesClose}
@@ -1143,6 +1271,11 @@ function HomeMainScreen({ route, navigation }: any) {
   const [showMysteryWheel, setShowMysteryWheel] = useState(false);
   const [freeSpinToast, setFreeSpinToast] = useState(false);
   const prevSpinsRef = React.useRef(player.mysteryWheel.spinsAvailable);
+  // Synchronous daily-deal purchase claim. The persisted one-per-day guard
+  // below is read via AsyncStorage (async), so a fast double-tap passed it
+  // twice and charged/delivered twice before either write landed. This ref
+  // is claimed before the first await; released only on non-purchase exits.
+  const dealPurchaseGuardRef = React.useRef<string | null>(null);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1174,10 +1307,11 @@ function HomeMainScreen({ route, navigation }: any) {
       });
       const rewards = player.checkComebackRewards();
       if (rewards.length > 0) {
-        const is7day = rewards.some(r => r.includes('7day'));
-        const is14day = rewards.some(r => r.includes('14day'));
-        const coins = is14day ? 500 : is7day ? 350 : 200;
-        const hints = is14day ? 15 : is7day ? 10 : 5;
+        // Tiers keyed to the ids checkComebackRewards actually emits
+        // (3day/7day/30day). This used to branch on '14day' — which nothing
+        // emits — so the 500/15 tier was unreachable and a 30+ day returner
+        // was paid the bottom tier.
+        const { coins, hints } = comebackAmounts(rewards);
         setComebackCoins(coins);
         setComebackHints(hints);
         economy.addCoins(coins);
@@ -1391,37 +1525,32 @@ function HomeMainScreen({ route, navigation }: any) {
   }, []);
 
   // ── Gift claiming ──
+  // Grants route through the shared applyGiftGrant mapper so this banner
+  // delivers exactly what ClubScreen's GiftInbox delivers for the same gift
+  // document. It used to convert 'tile' — and, via a bare else, even 'life' —
+  // gifts into random rare collection letters, so the reward depended on
+  // which screen the recipient happened to claim from.
   const handleClaimAllGifts = useCallback(async () => {
     if (pendingGifts.length === 0 || claimingGift) return;
     setClaimingGift(true);
-    let totalHints = 0;
-    let totalTiles = 0;
+    const totals = { hint: 0, tile: 0, life: 0 };
     for (const gift of pendingGifts) {
       const claimed = await firestoreService.claimGift(gift.id);
       if (claimed || !firestoreService.isAvailable()) {
-        if (gift.type === 'hint') {
-          totalHints += gift.amount;
-        } else {
-          totalTiles += gift.amount;
-        }
-      }
-    }
-    if (totalHints > 0) economy.addHintTokens(totalHints);
-    if (totalTiles > 0) {
-      for (let i = 0; i < totalTiles; i++) {
-        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+        const granted = applyGiftGrant(gift, economy);
+        if (granted) totals[granted.type] += granted.amount;
       }
     }
     setPendingGifts([]);
     setClaimingGift(false);
     const parts: string[] = [];
-    if (totalHints > 0) parts.push(`${totalHints} hint${totalHints > 1 ? 's' : ''}`);
-    if (totalTiles > 0) parts.push(`${totalTiles} rare tile${totalTiles > 1 ? 's' : ''}`);
+    if (totals.hint > 0) parts.push(`${totals.hint} hint${totals.hint > 1 ? 's' : ''}`);
+    if (totals.tile > 0) parts.push(`${totals.tile} wildcard tile${totals.tile > 1 ? 's' : ''}`);
+    if (totals.life > 0) parts.push(totals.life === 1 ? '1 life' : `${totals.life} lives`);
     if (parts.length > 0) {
       Alert.alert('Gifts Claimed!', `You received ${parts.join(' and ')} from friends!`);
     }
-  }, [pendingGifts, claimingGift, economy, player]);
+  }, [pendingGifts, claimingGift, economy]);
 
   // Ceremony tracking & dismissal now handled by useCeremonyQueue hook
 
@@ -1550,7 +1679,7 @@ function HomeMainScreen({ route, navigation }: any) {
           `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
           [
             { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
             {
               text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
               onPress: () => {
@@ -1775,9 +1904,14 @@ function HomeMainScreen({ route, navigation }: any) {
           // unbounded gem drain, since its delivery branch was also missing.
           const today = new Date().toISOString().slice(0, 10);
           const dealGuardKey = '@wordfall_daily_deal_purchase';
+          const claim = `${deal.id}:${today}`;
+          // Synchronous re-entry claim BEFORE the first await — the
+          // AsyncStorage guard alone let a double-tap charge twice.
+          if (dealPurchaseGuardRef.current === claim) return;
+          dealPurchaseGuardRef.current = claim;
           try {
             const prior = await AsyncStorage.getItem(dealGuardKey);
-            if (prior === `${deal.id}:${today}`) {
+            if (prior === claim) {
               Alert.alert('Already Purchased', "Today's deal is one per day — come back tomorrow!");
               return;
             }
@@ -1786,6 +1920,7 @@ function HomeMainScreen({ route, navigation }: any) {
           }
           const canAfford = economy.canAfford(deal.currency, deal.salePrice);
           if (!canAfford) {
+            dealPurchaseGuardRef.current = null;
             Alert.alert('Not Enough ' + (deal.currency === 'coins' ? 'Coins' : 'Gems'),
               `You need ${deal.salePrice} ${deal.currency} for this deal.`);
             return;
@@ -1793,6 +1928,9 @@ function HomeMainScreen({ route, navigation }: any) {
           const spent = deal.currency === 'coins'
             ? economy.spendCoins(deal.salePrice)
             : economy.spendGems(deal.salePrice);
+          if (!spent) {
+            dealPurchaseGuardRef.current = null;
+          }
           if (spent) {
             if (deal.contents.coins) economy.addCoins(deal.contents.coins);
             if (deal.contents.gems) economy.addGems(deal.contents.gems);
@@ -2097,6 +2235,15 @@ function AppContent() {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* While a full-screen ceremony is up, hide the entire navigation
+          tree from screen readers so focus cannot escape to covered
+          content. Android: importantForAccessibility; iOS:
+          accessibilityElementsHidden. */}
+      <View
+        style={{ flex: 1 }}
+        importantForAccessibility={activeCeremony ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={activeCeremony != null}
+      >
       <NavigationContainer
         ref={navigationRef}
         onReady={handleNavigationReady}
@@ -2181,6 +2328,7 @@ function AppContent() {
           )}
         </RootStack.Navigator>
       </NavigationContainer>
+      </View>
 
       {/* Ceremony modals — rendered at app level to overlay all screens.
           Wrapped in a local boundary so a render error in any one ceremony
@@ -2188,7 +2336,6 @@ function AppContent() {
       <CeremonyRouter
         activeCeremony={activeCeremony}
         onDismiss={handleDismissCeremony}
-        economy={economy}
       />
       <BoardGenBanner />
       <NotSyncedBanner />

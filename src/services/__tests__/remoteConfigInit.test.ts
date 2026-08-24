@@ -100,3 +100,33 @@ describe('the chapter overlay is wired to config activation', () => {
     expect(chapters.getAllChapters().length).toBe(before);
   });
 });
+
+describe('the interstitial cadence knob has exactly one name', () => {
+  it('declares no unread seconds mirror of interstitialIntervalMs', () => {
+    // A second key named `interstitialIntervalSeconds` was declared and
+    // documented as a mirror, but ads.ts only ever read
+    // `interstitialIntervalMs` — tuning the seconds key in the Firebase
+    // console changed nothing on device. One name, and it must be the one
+    // the ad gate reads.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const path = require('path');
+    const configSrc = fs.readFileSync(
+      path.join(__dirname, '..', 'remoteConfig.ts'),
+      'utf8',
+    );
+    const adsSrc = fs.readFileSync(
+      path.join(__dirname, '..', 'ads.ts'),
+      'utf8',
+    );
+
+    // The declaration + default (`key: value`) must not exist for any
+    // interstitial-interval key other than the Ms one. Prose comments
+    // mentioning the removed key are fine.
+    const declared = [...configSrc.matchAll(/^\s*(interstitialInterval\w*)\s*:/gm)]
+      .map(m => m[1]);
+    expect(new Set(declared)).toEqual(new Set(['interstitialIntervalMs']));
+    expect(adsSrc).toContain("adCap('interstitialIntervalMs'");
+  });
+});

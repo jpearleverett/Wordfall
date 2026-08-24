@@ -412,7 +412,15 @@ function checkSolvability(
   wordPositions: Map<string, CellPosition[]>,
   rng: () => number,
   mode?: GameMode,
-  difficulty?: Difficulty
+  difficulty?: Difficulty,
+  /**
+   * Shared-board (daily/weekly) generation: accept/reject must be a pure
+   * function of the seed, so the backtracker runs on its deterministic
+   * node budget alone instead of a wall-clock cut — a slow device timing
+   * out at 60ms on a candidate a fast device proves solvable would hand
+   * the two populations DIFFERENT boards for the same leaderboard.
+   */
+  deterministic?: boolean
 ): boolean {
   // noGravity: just check all words are independently findable
   if (mode === 'noGravity') {
@@ -434,7 +442,12 @@ function checkSolvability(
   // shrinkingBoard: simulate the full shrink sequence to verify solvability
   // Words must survive outer ring removals that happen every 2 words cleared
   if (mode === 'shrinkingBoard') {
-    return isSolvableShrinkingBoard(grid, words, 2, GEN_SOLVE_BUDGET_MS);
+    return isSolvableShrinkingBoard(
+      grid,
+      words,
+      2,
+      deterministic ? Number.POSITIVE_INFINITY : GEN_SOLVE_BUDGET_MS,
+    );
   }
 
   // classic / timePressure / perfectSolve / etc: standard solvability with gravity
@@ -447,9 +460,15 @@ function checkSolvability(
     }
   }
 
-  // Fall back to budgeted full backtracking solver
+  // Fall back to budgeted full backtracking solver (node-budget only in
+  // deterministic mode — see the parameter doc above).
   if (!solvable) {
-    solvable = isSolvable(grid, words, wordPositions, GEN_SOLVE_BUDGET_MS);
+    solvable = isSolvable(
+      grid,
+      words,
+      wordPositions,
+      deterministic ? undefined : GEN_SOLVE_BUDGET_MS,
+    );
   }
   if (!solvable) return false;
 
@@ -481,6 +500,7 @@ function attemptGenerate(
   profile?: GenerationProfile,
   themeWords?: string[],
   requireForgiving: boolean = true,
+  deterministic: boolean = false,
 ): Board | null {
   const words = selectWords(config, rng, mode, profile, themeWords);
   if (words.length < config.wordCount) return null;
@@ -620,6 +640,7 @@ function attemptGenerate(
       rng,
       mode,
       requireForgiving ? config.difficulty : undefined,
+      deterministic,
     )
   ) {
     return null;
@@ -722,11 +743,21 @@ export function generateBoard(
   mode?: GameMode,
   profile?: GenerationProfile,
   themeWords?: string[],
+  /**
+   * Shared-board (daily/weekly) generation: the result must be a pure
+   * function of the seed across devices, so every wall-clock guard is
+   * disabled — attempt caps and the solver's node budgets bound the work
+   * deterministically instead. A slow device timing out where a fast one
+   * succeeds would otherwise hand the two populations different boards
+   * for the same leaderboard.
+   */
+  deterministic: boolean = false,
 ): Board {
   const baseSeed = seed ?? Date.now();
   const startTime = Date.now();
 
   const checkTimeout = (): void => {
+    if (deterministic) return;
     if (Date.now() - startTime > GENERATION_TIMEOUT_MS) {
       throw new Error('Board generation timed out');
     }
@@ -790,6 +821,7 @@ export function generateBoard(
       profile,
       themeWords,
       attempt < FORGIVENESS_ATTEMPT_BUDGET,
+      deterministic,
     );
     if (board) return board;
   }
@@ -804,7 +836,7 @@ export function generateBoard(
   for (let attempt = 0; attempt < 60; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + 1000 + attempt * 7919);
-    const board = attemptGenerate(fallbackConfig, rng, mode, profile, themeWords);
+    const board = attemptGenerate(fallbackConfig, rng, mode, profile, themeWords, true, deterministic);
     if (board) return board;
   }
 
@@ -818,7 +850,7 @@ export function generateBoard(
   for (let attempt = 0; attempt < 60; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + 2000 + attempt * 7919);
-    const board = attemptGenerate(fallback2Config, rng, mode, profile);
+    const board = attemptGenerate(fallback2Config, rng, mode, profile, undefined, true, deterministic);
     if (board) return board;
   }
 
@@ -836,7 +868,7 @@ export function generateBoard(
   for (let attempt = 0; attempt < 100; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + 3000 + attempt * 7919);
-    const board = attemptGenerate(minimalConfig, rng, mode);
+    const board = attemptGenerate(minimalConfig, rng, mode, undefined, undefined, true, deterministic);
     if (board) return board;
   }
 
@@ -943,6 +975,12 @@ const DAILY_FAIRNESS: FairnessBudget = {
   target: DAILY_FAIRNESS_TARGET,
   samples: DAILY_FAIRNESS_SAMPLES,
   budgetMs: DAILY_FAIRNESS_BUDGET_MS,
+  // The daily ranks on a shared leaderboard exactly like the weekly — a
+  // time-cut search served slow devices a DIFFERENT board for the same
+  // date (the weekly got this flag first; the daily was the straggler).
+  // Wall time stays bounded by attempts × per-candidate node budgets, and
+  // the ModesScreen warm-up prefetch pays it off the tap path.
+  deterministic: true,
 };
 
 /**
@@ -955,12 +993,11 @@ const DAILY_FAIRNESS: FairnessBudget = {
  * 34% of natural playthroughs dead-ended across a sampled year, with
  * individual days at 100% (unfinishable without foreknowledge).
  *
- * Candidate seeds derive from `baseSeed` plus the attempt index, so the "same
- * puzzle for everyone" guarantee holds for any player who runs the same
- * number of attempts. The time budget can cut the search short on a slow
- * device, which is a deliberate trade: a device-dependent board is a far
- * smaller problem than a multi-second freeze, and both boards came out of the
- * same fairness-ranked sequence.
+ * Candidate seeds derive from `baseSeed` plus the attempt index. Both shared
+ * budgets now set `deterministic`, which also threads into generateBoard so
+ * candidate ACCEPTANCE ignores wall-clock too (solver node budgets bound the
+ * work instead) — the whole search is a pure function of the seed and every
+ * device shows the same board for the same date/week.
  */
 function shopFairestBoard(
   config: BoardConfig,
@@ -970,7 +1007,7 @@ function shopFairestBoard(
 ): Board {
   const deadline = Date.now() + budget.budgetMs;
 
-  let board = generateBoard(config, baseSeed, undefined, undefined, themeWords);
+  let board = generateBoard(config, baseSeed, undefined, undefined, themeWords, budget.deterministic);
   let bestScore = estimateForgiveness(
     board.grid,
     board.words.map((w) => w.word),
@@ -981,7 +1018,7 @@ function shopFairestBoard(
   for (let attempt = 1; attempt < budget.attempts && bestScore < budget.target; attempt++) {
     if (!budget.deterministic && Date.now() >= deadline) break;
     const seed = baseSeed + attempt * 7919;
-    const candidate = generateBoard(config, seed, undefined, undefined, themeWords);
+    const candidate = generateBoard(config, seed, undefined, undefined, themeWords, budget.deterministic);
     const score = estimateForgiveness(
       candidate.grid,
       candidate.words.map((w) => w.word),

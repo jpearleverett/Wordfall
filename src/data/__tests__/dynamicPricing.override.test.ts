@@ -28,24 +28,28 @@ describe('getFlashSale — dailyDealOverride', () => {
     expect(sale).toBeNull();
   });
 
-  it('returns override deal when JSON is valid', () => {
+  it('returns override deal when JSON is valid, priced at the real charged price', () => {
     mockGetRemoteString.mockReturnValue(
       JSON.stringify({
-        productId: 'remote_deal_01',
+        productId: 'gems_500',
         name: 'Launch Week Deal',
         icon: '🎉',
         description: 'Special limited-time offer',
-        originalPriceAmount: 9.99,
+        originalPriceAmount: 19.99,
         discountPercent: 50,
       }),
     );
     const sale = getFlashSale(new Date('2026-06-15T12:00:00Z'));
     expect(sale).not.toBeNull();
-    expect(sale!.productId).toBe('remote_deal_01');
+    expect(sale!.productId).toBe('gems_500');
     expect(sale!.name).toBe('Launch Week Deal');
+    // The advertised buy price is the SKU's real charged price ($9.99),
+    // NOT originalPriceAmount * (1 - discount) — the store sheet would
+    // contradict any other number. The badge is derived from the authored
+    // anchor vs. the real price (9.99 vs 19.99 → 50%).
+    expect(sale!.salePrice).toBe('$9.99');
+    expect(sale!.originalPriceAmount).toBe(19.99);
     expect(sale!.discountPercent).toBe(50);
-    expect(sale!.salePrice).toBe('$5.00');
-    expect(sale!.originalPrice).toBe('$9.99');
   });
 
   it('honors override endTime for hoursRemaining', () => {
@@ -53,7 +57,7 @@ describe('getFlashSale — dailyDealOverride', () => {
     const endTime = now.getTime() + 6 * 3600 * 1000;
     mockGetRemoteString.mockReturnValue(
       JSON.stringify({
-        productId: 'x',
+        productId: 'starter_pack',
         name: 'n',
         icon: 'i',
         description: 'd',
@@ -64,6 +68,44 @@ describe('getFlashSale — dailyDealOverride', () => {
     );
     const sale = getFlashSale(now);
     expect(sale?.hoursRemaining).toBe(6);
+  });
+
+  it('falls through to the hashed default when the override product is not purchasable', () => {
+    mockGetRemoteString.mockReturnValue(
+      JSON.stringify({
+        productId: 'remote_deal_01', // not in SHOP_PRODUCTS — can't be bought
+        name: 'Ghost Deal',
+        icon: '👻',
+        description: 'Should never render',
+        originalPriceAmount: 9.99,
+        discountPercent: 50,
+      }),
+    );
+    const sale = getFlashSale(new Date('2026-06-15T12:00:00Z'));
+    // Either a real pool deal or no deal today — never the unfulfillable id.
+    if (sale) expect(sale.productId).not.toBe('remote_deal_01');
+  });
+
+  it('corrects an override whose math would advertise below the real price', () => {
+    // Old behavior: 4.99 * (1 - 0.50) advertised $2.50 while the store
+    // charged $4.99. The authored anchor (≤ the real price) is discarded
+    // for the catalog anchor and the badge re-derived.
+    mockGetRemoteString.mockReturnValue(
+      JSON.stringify({
+        productId: 'gems_250',
+        name: 'Bad Math Deal',
+        icon: '💎',
+        description: 'd',
+        originalPriceAmount: 4.99,
+        discountPercent: 50,
+      }),
+    );
+    const sale = getFlashSale(new Date('2026-06-15T12:00:00Z'));
+    expect(sale).not.toBeNull();
+    expect(sale!.productId).toBe('gems_250');
+    expect(sale!.salePrice).toBe('$4.99'); // the real charged price
+    expect(sale!.originalPriceAmount).toBe(7.99); // catalog anchor
+    expect(sale!.discountPercent).toBe(38); // derived, not the authored 50
   });
 
   it('falls through to default hashed deal when override is malformed JSON', () => {

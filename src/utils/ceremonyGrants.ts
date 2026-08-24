@@ -19,14 +19,15 @@
  *   - daily_quest_claim   → claimDailyQuest returns the reward to App.tsx,
  *                           which credits it at claim time
  *   - mystery_wheel_jackpot → the wheel spin flow grants the segment
- *   - quest_step_complete / season_pass_complete / feature unlocks → no
- *                           currency amounts are displayed
+ *   - season_pass_complete / feature unlocks → no currency amounts are
+ *                           displayed
  *   - inbox_reward        → useRewardInboxClaim credits the amounts at the
  *                           rules-enforced unclaimed→claimed transition and
  *                           only then queues the ceremony (display-only)
  */
 import { CeremonyItem } from '../types';
 import { WIN_STREAK_TIERS } from '../data/eventLayers';
+import { getQuestFinalReward } from '../data/seasonalQuests';
 
 export interface CeremonyGrant {
   coins: number;
@@ -108,6 +109,25 @@ export function ceremonyEconomyGrant(ceremony: CeremonyItem): CeremonyGrant | nu
       // break), so amounts are tuned as "nice", not "jackpot".
       const grant = flawlessMilestoneGrant(Number(ceremony.data?.streak) || 0);
       return grant && !isEmpty(grant) ? grant : null;
+    }
+    case 'quest_step_complete': {
+      // Seasonal quest step rewards used to be credited in the router's
+      // onDismiss — a swipe-away or process death between pop and dismiss
+      // silently ate the reward, and a re-rendered dismiss could double-pay.
+      // Pop-time grant here makes it exactly-once like every other type.
+      //
+      // Claiming a quest's LAST step also completes the quest, whose
+      // finalReward coins/gems no path ever granted — they ride this same
+      // exactly-once grant. (The cosmetic half of finalReward is unlocked
+      // by popCeremony at the same pop.) Weekly-goal completions reuse this
+      // ceremony type without questId/stepIndex, so `final` stays null for
+      // them.
+      const final = getQuestFinalReward(ceremony.data?.questId, ceremony.data?.stepIndex);
+      const grant = normalize({
+        coins: (Number(ceremony.data?.rewardCoins) || 0) + (final?.coins ?? 0),
+        gems: (Number(ceremony.data?.rewardGems) || 0) + (final?.gems ?? 0),
+      });
+      return isEmpty(grant) ? null : grant;
     }
     case 'win_streak_milestone': {
       // The ceremony carries only {streak, label}; the amounts live in the

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SHADOWS } from '../../constants';
@@ -34,6 +34,8 @@ const NeonProgressBar: React.FC<NeonProgressBarProps> = ({
 }) => {
   const clamped = Math.min(1, Math.max(0, progress));
   const scaleXAnim = useSharedValue(0);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const dotSize = Math.max(8, height + 2);
 
   useEffect(() => {
     scaleXAnim.value = withSpring(clamped, { damping: 14, stiffness: 120, overshootClamping: false });
@@ -43,18 +45,24 @@ const NeonProgressBar: React.FC<NeonProgressBarProps> = ({
     transform: [{ scaleX: scaleXAnim.value }],
   }));
 
-  const dotAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: scaleXAnim.value }],
-  }));
+  // The dot rides the fill tip via translateX against the measured track width.
+  // (It must NOT live inside the scaleX'd fill layer — RN transforms compose
+  // down the subtree, which squashed the circle by the progress factor.)
+  const dotAnimStyle = useAnimatedStyle(() => {
+    const tipX = scaleXAnim.value * trackWidth;
+    const maxX = Math.max(trackWidth - dotSize, 0);
+    const translateX = Math.min(Math.max(tipX - dotSize / 2, 0), maxX);
+    return { transform: [{ translateX }] };
+  });
 
   const lighterColor = lighten(color, 0.3);
   const borderRadius = height / 2;
-  const dotSize = Math.max(8, height + 2);
 
   return (
     <View style={styles.container}>
       {/* Track background with neon tube border */}
       <View
+        onLayout={(event: LayoutChangeEvent) => setTrackWidth(event.nativeEvent.layout.width)}
         style={[
           styles.track,
           {
@@ -97,8 +105,8 @@ const NeonProgressBar: React.FC<NeonProgressBarProps> = ({
       </View>
 
       {/* Plasma glow dot at the tip of the fill */}
-      {/* Dot positioning layer — overlays the track, dot follows fill */}
-      {showGlowDot && clamped > 0 && (
+      {/* Dot positioning layer — overlays the track, dot follows fill via translateX */}
+      {showGlowDot && clamped > 0 && trackWidth > 0 && (
         <View style={[styles.dotTrack, { height }]} pointerEvents="none">
           <Animated.View
             style={[
@@ -156,13 +164,12 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   dotPositioner: {
+    // Sized to the dot itself; horizontal placement comes from the animated
+    // translateX so the dot stays round at every progress value.
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    width: '100%',
-    transformOrigin: 'left center',
-    alignItems: 'flex-end',
     justifyContent: 'center',
   },
   dotAnchor: {

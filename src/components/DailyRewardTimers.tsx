@@ -7,7 +7,9 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useIsFocused } from '@react-navigation/native';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
   DAILY_REWARD_TIMERS,
   getTimeRemaining,
@@ -49,6 +51,10 @@ interface TimerCardProps {
    *  Each tick causes the card to recompute `remaining`. One shared interval
    *  instead of one-per-card avoids spawning N parallel 1-second timers. */
   tick: number;
+  /** Decorative-motion gate computed by the parent (focused && !reduceMotion).
+   *  When false the ready pulse loop never starts — the READY state still
+   *  reads via the TAP badge, green timer text, and glow border. */
+  animate: boolean;
 }
 
 const TimerCard = React.memo(function TimerCard({
@@ -56,6 +62,7 @@ const TimerCard = React.memo(function TimerCard({
   lastClaimed,
   onClaim,
   tick,
+  animate,
 }: TimerCardProps) {
   // Recompute on every parent tick — cheap (just a subtraction).
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -64,9 +71,12 @@ const TimerCard = React.memo(function TimerCard({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const isReady = remaining <= 0;
 
-  // Pulse animation when ready to claim
+  // Pulse animation when ready to claim. Gated on `animate` (focus +
+  // reduce-motion, computed by the parent) — freezeOnBlur does not stop an
+  // already-running native-driver loop, and reduce-motion users get the
+  // static READY styling with no loop at all.
   useEffect(() => {
-    if (!isReady) {
+    if (!isReady || !animate) {
       pulseAnim.setValue(1);
       return;
     }
@@ -89,8 +99,9 @@ const TimerCard = React.memo(function TimerCard({
 
     return () => {
       animation.stop();
+      pulseAnim.setValue(1);
     };
-  }, [isReady, pulseAnim]);
+  }, [isReady, animate, pulseAnim]);
 
   const handlePress = useCallback(() => {
     if (isReady) {
@@ -161,11 +172,21 @@ const DailyRewardTimers: React.FC<DailyRewardTimersProps> = ({
   // Single shared tick. Previously each TimerCard span up its own 1-second
   // interval — with N=5 cards that's 5 parallel intervals and 5 re-renders per
   // second. Now one interval drives all children.
+  //
+  // Focus-gated: HomeScreen stays mounted for the whole session (stack base +
+  // freezeOnBlur), so without the gate this interval fires a setState every
+  // second behind GameScreen and while backgrounded. On refocus the effect
+  // re-runs and bumps the tick immediately so countdowns snap to the correct
+  // value before the first interval fires.
+  const isFocused = useIsFocused();
+  const reduceMotion = useReduceMotion();
   const [tick, setTick] = useState(0);
   useEffect(() => {
+    if (!isFocused) return;
+    setTick((t) => t + 1);
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [isFocused]);
 
   return (
     <View style={styles.container}>
@@ -178,6 +199,7 @@ const DailyRewardTimers: React.FC<DailyRewardTimersProps> = ({
             lastClaimed={timerStates[timer.id] ?? 0}
             onClaim={onClaim}
             tick={tick}
+            animate={isFocused && !reduceMotion}
           />
         ))}
       </View>

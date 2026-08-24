@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { firestoreService, FirestoreGift } from '../services/firestore';
 import { claimGiftSecure } from '../services/gifts';
+import { applyGiftGrant } from '../utils/giftGrants';
 import { useEconomyActions } from '../stores/economyStore';
 import { useAuth } from '../contexts/AuthContext';
 import { crashReporter } from '../services/crashReporting';
@@ -65,10 +66,10 @@ export const GiftInbox: React.FC = () => {
 
   const applyGrant = useCallback(
     (gift: FirestoreGift) => {
-      const amount = Math.max(1, Math.min(gift.amount ?? 1, 10));
-      if (gift.type === 'hint') addHintTokens(amount);
-      else if (gift.type === 'tile') addBoosterToken('wildcardTile', amount);
-      else if (gift.type === 'life') addLives(amount);
+      // Shared canonical mapping (with the [1,10] clamp) — the Home banner's
+      // claim-all in App.tsx goes through the same module, so a gift is worth
+      // the same thing no matter which surface claims it.
+      applyGiftGrant(gift, { addHintTokens, addBoosterToken, addLives });
     },
     [addHintTokens, addBoosterToken, addLives],
   );

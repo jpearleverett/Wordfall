@@ -74,7 +74,11 @@ export interface RemoteConfigValues {
   starterBundlePrice: string;
   eventCalendarOverride: string;   // JSON string; empty = use built-in calendar
   dailyDealOverride: string;       // JSON string; empty = use hashed defaults
-  interstitialIntervalSeconds: number; // mirror of interstitialIntervalMs but named per plan 0.11
+  // NOTE: the interstitial cadence knob is `interstitialIntervalMs` (declared
+  // above, read by ads.ts `adCap`). A second `interstitialIntervalSeconds`
+  // mirror used to be declared here but nothing ever read it, so tuning it in
+  // the console silently did nothing — it is deliberately gone. Do not
+  // re-add a mirror; change `interstitialIntervalMs`.
   // Login calendar A/B — '30day' (default) vs '7day' (legacy)
   loginCalendarVariant: string;
   // Phase-offset Login Calendar wrap so perfect-daily players don't hit
@@ -112,6 +116,10 @@ export interface RemoteConfigValues {
   friendsEnabled: boolean;
   maxFriendsPerUser: number;
   friendLeaderboardHomeCardEnabled: boolean;
+  /** Friend-vs-friend challenges. OFF until a receive path exists — nothing
+   *  reads `users/{uid}/challenges`, so a "sent" challenge can never arrive.
+   *  Flip on together with the reader + a received-challenges surface. */
+  friendChallengesEnabled: boolean;
 
   // Booster combo synergies (Branch 10)
   boosterCombosEnabled: boolean;
@@ -313,7 +321,6 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   starterBundlePrice: '0.49',
   eventCalendarOverride: '',
   dailyDealOverride: '',
-  interstitialIntervalSeconds: 90,
   // Login calendar variant — '30day' escalating cycle by default
   loginCalendarVariant: '30day',
   // Offset the 30-day Login Calendar wrap point by 5 days so it doesn't
@@ -346,6 +353,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   friendsEnabled: true,
   maxFriendsPerUser: 100,
   friendLeaderboardHomeCardEnabled: true,
+  // Friend challenges — send-only today (no reader for users/{uid}/challenges),
+  // so delivery stays off rather than persisting undeliverable challenges.
+  friendChallengesEnabled: false,
 
   // Booster combos — 2x score for next 3 words after a two-booster activation
   boosterCombosEnabled: true,

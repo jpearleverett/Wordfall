@@ -17,8 +17,6 @@ describe('WEEKLY_GOAL_TEMPLATES data', () => {
       'stars_earned',
       'daily_completed',
       'perfect_solves',
-      'words_found',
-      'modes_played',
     ];
 
     for (const template of WEEKLY_GOAL_TEMPLATES) {
@@ -37,16 +35,32 @@ describe('WEEKLY_GOAL_TEMPLATES data', () => {
     expect(uniqueIds.size).toBe(ids.length);
   });
 
-  it('covers all 7 tracking keys', () => {
+  it('covers all 5 wired tracking keys', () => {
     const keys = new Set(WEEKLY_GOAL_TEMPLATES.map(t => t.trackingKey));
-    expect(keys.size).toBe(7);
+    expect(keys.size).toBe(5);
     expect(keys).toContain('puzzles_solved');
     expect(keys).toContain('total_score');
     expect(keys).toContain('stars_earned');
     expect(keys).toContain('daily_completed');
     expect(keys).toContain('perfect_solves');
-    expect(keys).toContain('words_found');
-    expect(keys).toContain('modes_played');
+  });
+
+  it('every tracking key is actually fed by useRewardWiring', () => {
+    // Six templates used to carry 'words_found' / 'modes_played', keys that
+    // updateWeeklyGoalProgress was NEVER called with — a goal drawn from
+    // them sat frozen at 0 all week. A template whose key the wiring does
+    // not update is a goal that can never progress; this scan makes adding
+    // one a test failure instead of a live dead bar.
+    const fs = require('fs');
+    const path = require('path');
+    const wiring = fs.readFileSync(
+      path.join(__dirname, '../../hooks/useRewardWiring.ts'),
+      'utf8',
+    );
+    const keys = new Set(WEEKLY_GOAL_TEMPLATES.map(t => t.trackingKey));
+    for (const key of keys) {
+      expect(wiring).toMatch(new RegExp(`updateWeeklyGoalProgress\\(\\s*'${key}'`));
+    }
   });
 
   it('higher targets within same tracking key have higher rewards', () => {

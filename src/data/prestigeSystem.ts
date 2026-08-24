@@ -159,6 +159,38 @@ export function getPrestigeGemMultiplier(permanentBonuses: string[]): number {
   return 1 + bonus;
 }
 
+/**
+ * Extra per-puzzle hints from accumulated prestige bonuses (tier 1's
+ * `hint_bonus_1`). Displayed by the PrestigeResetCeremony since launch but
+ * never applied anywhere — the decoder existed only for coins/gems.
+ */
+export function getPrestigeHintBonus(permanentBonuses: string[]): number {
+  let bonus = 0;
+  for (const id of permanentBonuses) {
+    const [prefix, valueStr] = splitBonusId(id);
+    const value = Number.parseFloat(valueStr);
+    if (!Number.isFinite(value)) continue;
+    if (prefix === 'hint_bonus') bonus += value;
+  }
+  return Math.max(0, Math.round(bonus));
+}
+
+/**
+ * Additive rare-tile drop-chance from prestige (tier 3's
+ * `rare_tile_bonus_0.02`). Companion to the hint decoder above — same
+ * "displayed as permanent, never consumed" gap.
+ */
+export function getPrestigeRareTileBonus(permanentBonuses: string[]): number {
+  let bonus = 0;
+  for (const id of permanentBonuses) {
+    const [prefix, valueStr] = splitBonusId(id);
+    const value = Number.parseFloat(valueStr);
+    if (!Number.isFinite(value)) continue;
+    if (prefix === 'rare_tile_bonus') bonus += value;
+  }
+  return Math.max(0, bonus);
+}
+
 /** Split a bonus ID like "coin_bonus_0.25" into ["coin_bonus", "0.25"]. */
 function splitBonusId(id: string): [string, string] {
   const lastUnderscore = id.lastIndexOf('_');

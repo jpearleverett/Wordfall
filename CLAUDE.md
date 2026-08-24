@@ -2,7 +2,7 @@
 
 **Word search with gravity** (React Native + Expo). Each puzzle has a pre-authored list of words to find on a letter grid. The player traces letters with their finger — when the trace matches a list word it auto-resolves (no submit button), those cells clear, and remaining letters fall via gravity into the empty spaces. 10 modes, 40 hand-curated chapters covering levels 1–600 (names, themes, 12-word theme lists, star gates, per-chapter difficulty profile), then unbounded procedural chapters past level 600 via `generateProceduralChapter()`. Every board is procedurally generated from a seed — there are no hand-placed grids in the repo. Clubs, VIP, prestige.
 
-**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**97 suites / ~1374 tests**).
+**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**137+ suites / ~2050 tests**).
 
 For detailed architecture see `agent_docs/architecture.md` — it's a short **index** that routes you to per-domain slices (state, engine, screens, cloud) so you only read what the current question needs.
 
@@ -22,7 +22,7 @@ For detailed architecture see `agent_docs/architecture.md` — it's a short **in
 ```bash
 npx expo start --dev-client            # Metro bundler (Expo Go NOT supported)
 npm run typecheck                      # tsc --noEmit
-npm test                               # jest (97 suites)
+npm test                               # jest (137+ suites)
 npx expo export --platform android     # REQUIRED before release — only local check that runs hermesc
                                        # (typecheck + tests pass even when the prod bundle is broken)
 npm install --legacy-peer-deps         # .npmrc sets this by default
@@ -57,6 +57,8 @@ reward tables — all support a `*_VERBOSE=1` env var to print full profiles.
 | `engine/__tests__/modeSolvability` | Every generated board is solvable under **its own mode's** clear rule | 0 unsolvable across 8 modes |
 | `__tests__/rewardCadence` | No long stretch of levels without a scheduled payoff | ≤5 dry levels to L60, ≤9 to L150 |
 | `__tests__/curveProfile` + `spikeLevels` | Early levels never repeat a board or go backwards | monotonic through L14 |
+| `__tests__/defectLedger` | Every defect fixed in the Aug 2026 sweeps stays fixed AND the ledger stays honest (an "open" entry whose checks pass must be flipped) — one machine-checked entry per defect in `defectLedger.json`, spanning perf/animation classes (F1–F7, P1–P9) and correctness classes (C1–C8: money, server, gameplay contract, time, input, progression, persistence, telemetry); `node scripts/defect-scorecard.js` prints % done by severity/class | 100+ fixed |
+| `__tests__/animationReachability` | 22 dead animation components (zero importers, several with infinite loops) stay deleted; re-adding one requires a consumer + delisting | 0 resurrected |
 
 **Read those two stuck numbers together.** The 57% was treated for a while as
 the game's mid-game difficulty. It isn't — it is what a player who has not

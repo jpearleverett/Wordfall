@@ -32,14 +32,18 @@ const NeonStarBurst: React.FC<NeonStarBurstProps> = ({
       burstOpacity.value = 1;
 
       burstScale.value = withTiming(1, { duration: BURST_DURATION });
-      burstOpacity.value = withTiming(0, { duration: BURST_DURATION }, () => {
-        pulseScale.value = withRepeat(
-          withSequence(
-            withTiming(1.04, { duration: PULSE_DURATION / 2 }),
-            withTiming(1.0, { duration: PULSE_DURATION / 2 }),
-          ),
-          6,
-        );
+      burstOpacity.value = withTiming(0, { duration: BURST_DURATION }, (finished) => {
+        // Only chain the pulse when the burst actually completed — a cancelled
+        // burst (unmount / reset) must not spawn 12s of pulse on a dead value.
+        if (finished) {
+          pulseScale.value = withRepeat(
+            withSequence(
+              withTiming(1.04, { duration: PULSE_DURATION / 2 }),
+              withTiming(1.0, { duration: PULSE_DURATION / 2 }),
+            ),
+            6,
+          );
+        }
       });
     }
 
@@ -50,6 +54,12 @@ const NeonStarBurst: React.FC<NeonStarBurstProps> = ({
       cancelAnimation(pulseScale);
       pulseScale.value = 1;
     }
+
+    return () => {
+      cancelAnimation(burstScale);
+      cancelAnimation(burstOpacity);
+      cancelAnimation(pulseScale);
+    };
   }, [active]);
 
   const lines = React.useMemo(() => {

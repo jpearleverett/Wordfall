@@ -372,6 +372,32 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
  * clause was always true on a win, silently reducing stars to "used a hint
  * or not"; a guard on the real tiers keeps that from regressing.
  */
+/**
+ * Pure prechecks for charge-then-dispatch surfaces. GameScreen spends
+ * PERSISTENT economy goods (hint tokens, gems, booster tokens) before
+ * dispatching, and the corresponding reducer cases silently no-op on a
+ * dead board — which turned each of those charges into a paid nothing:
+ *  - USE_HINT / USE_PREMIUM_HINT return state unchanged when the
+ *    mode-aware picker finds no traceable word;
+ *  - SMART_SHUFFLE returns state unchanged when a remaining word has no
+ *    occurrence in the grid (the shuffle preserves word paths, so a word
+ *    missing before the shuffle is missing after it too).
+ * Callers must gate the charge on these returning true.
+ */
+export function canProduceHint(state: GameState): boolean {
+  if (state.status !== 'playing') return false;
+  const remaining = state.board.words.filter(w => !w.found).map(w => w.word);
+  if (remaining.length === 0) return false;
+  return pickHintForMode(state, remaining) !== null;
+}
+
+export function canSmartShuffle(state: GameState): boolean {
+  if (state.status !== 'playing') return false;
+  const remaining = state.board.words.filter(w => !w.found);
+  if (remaining.length === 0) return false;
+  return remaining.every(w => isWordInGrid(state.board.grid, w.word));
+}
+
 export function computeStars(
   status: GameStatus,
   assistsUsed: number,
@@ -449,6 +475,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         wordsUntilShrink: state.wordsUntilShrink,
         shrinkCount: state.shrinkCount,
         score: state.score,
+        // One-shot purchased effects consumed by this clear. Undo rolled
+        // back their BENEFIT (score, shrink counter) but not their
+        // consumption — the paid doubler/freeze evaporated without ever
+        // applying to a kept move.
+        scoreDoubler: state.scoreDoubler,
+        boardFreezeActive: state.boardFreezeActive,
       };
 
       // Remove letters from grid
@@ -525,10 +557,32 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      // Clean up wildcard if it was used in this word
+      // Clean up wildcard if it was used in this word — and re-derive any
+      // SURVIVING marker's position from the post-gravity grid by TILE ID.
+      // The marker used to keep its fixed (row,col), so after any fall it
+      // silently re-assigned to whatever letter slid into that slot; a
+      // marker whose tile was destroyed (e.g. shrink ring) refunds the
+      // in-puzzle count instead of evaporating.
       const wildcardSet = new Set(state.wildcardCells.map(c => `${c.row},${c.col}`));
       const usedWildcard = selectedCells.some(c => wildcardSet.has(`${c.row},${c.col}`));
-      const newWildcardCells = usedWildcard ? [] : state.wildcardCells;
+      let newWildcardCells: CellPosition[] = [];
+      let wildcardsDestroyed = 0;
+      if (!usedWildcard && state.wildcardCells.length > 0) {
+        const wildcardIds = new Set(
+          state.wildcardCells
+            .map(p => board.grid[p.row]?.[p.col]?.id)
+            .filter((id): id is string => typeof id === 'string'),
+        );
+        for (let r = 0; r < newGrid.length; r++) {
+          for (let c = 0; c < (newGrid[0]?.length ?? 0); c++) {
+            const cell = newGrid[r][c];
+            if (cell && wildcardIds.has(cell.id)) {
+              newWildcardCells.push({ row: r, col: c });
+            }
+          }
+        }
+        wildcardsDestroyed = state.wildcardCells.length - newWildcardCells.length;
+      }
 
       // Record solve step for replay. Snapshot capture is opt-in
       // (captureReplay on state) because gridToSnapshot is ~1ms per call and
@@ -565,6 +619,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         shrinkCount: newShrinkCount,
         wordsUntilShrink: newWordsUntilShrink,
         wildcardCells: newWildcardCells,
+        boosterCounts:
+          wildcardsDestroyed > 0
+            ? {
+                ...state.boosterCounts,
+                wildcardTile: state.boosterCounts.wildcardTile + wildcardsDestroyed,
+              }
+            : state.boosterCounts,
         spotlightActive: false,
         spotlightLetters: [],
         solveSequence: [...state.solveSequence, solveStep],
@@ -639,6 +700,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         gravityDirection: prevDirection,
         shrinkCount: prevShrinkCount,
         wordsUntilShrink: prevWordsUntilShrink,
+        // Restore one-shot effects consumed by the undone clear (legacy
+        // history entries without the fields keep current state).
+        scoreDoubler: lastHistory.scoreDoubler ?? state.scoreDoubler,
+        boardFreezeActive: lastHistory.boardFreezeActive ?? state.boardFreezeActive,
         // Reset temporary booster states since board changed
         spotlightActive: false,
         spotlightLetters: [],
@@ -684,7 +749,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'TICK_TIMER': {
       if (state.status !== 'playing' || state.timeRemaining <= 0) return state;
-      const newTime = state.timeRemaining - 1;
+      // elapsedSeconds > 1 is the background catch-up: JS timers pause
+      // while the app is backgrounded, so the resume handler deducts the
+      // whole backgrounded span at once (the anti-cheat the snapshot
+      // module documents — backgrounding must not stop the clock).
+      const elapsed = Math.max(1, Math.round(action.elapsedSeconds ?? 1));
+      const newTime = state.timeRemaining - elapsed;
       if (newTime <= 0) {
         return { ...state, timeRemaining: 0, status: 'timeout' };
       }
@@ -867,7 +937,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedCells: hint.positions,
         selectionDirection: null,
         premiumHintUsed: true,
-        // Premium hints do not consume hint tokens or count as hintsUsed (no star penalty)
+        // Premium hints do not consume hint tokens or count as hintsUsed
+        // (no star penalty) — but they ARE hints, and game_mechanics.md
+        // defines FLAWLESS as "no hints, no undos, no shuffle". A paid
+        // reveal kept the badge, the streak increment, and the milestone
+        // ladder; that contradiction is resolved on the side of the doc.
+        perfectRun: false,
       };
     }
 
@@ -1062,6 +1137,30 @@ export function useGame(
 
     return () => clearInterval(interval);
   }, [mode, status, store]);
+
+  // Background catch-up for the timed clock. JS timers pause while the app
+  // is backgrounded, so the interval above silently froze the timePressure
+  // countdown — despite puzzleSnapshot.ts documenting the still-ticking
+  // timer as deliberate anti-cheat. On resume, deduct the whole
+  // backgrounded span in one catch-up tick (timeout floors at 0).
+  useEffect(() => {
+    if (mode !== 'timePressure') return undefined;
+    let backgroundedAt: number | null = null;
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'background' || next === 'inactive') {
+        if (backgroundedAt === null) backgroundedAt = Date.now();
+        return;
+      }
+      if (next === 'active' && backgroundedAt !== null) {
+        const elapsedSeconds = Math.floor((Date.now() - backgroundedAt) / 1000);
+        backgroundedAt = null;
+        if (elapsedSeconds > 0 && store.getState().status === 'playing') {
+          store.dispatch({ type: 'TICK_TIMER', elapsedSeconds });
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [mode, store]);
 
   // ── isStuck (debounced DFS — mode-aware) ─────────────────────────────
   const [isStuck, setIsStuck] = useState(false);

@@ -21,6 +21,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { GameState, PuzzleSnapshot } from '../types';
+import { getWeekId } from '../utils/weekId';
 import { logger } from '../utils/logger';
 
 const STORAGE_KEY = 'wordfall.puzzleSnapshot.v1';
@@ -110,6 +111,24 @@ export function snapshotMatchesTarget(
   snapshot: PuzzleSnapshot,
   targetLevel: number,
   targetMode: string,
+  now: Date = new Date(),
 ): boolean {
-  return snapshot.level === targetLevel && snapshot.mode === targetMode;
+  if (snapshot.level !== targetLevel || snapshot.mode !== targetMode) {
+    return false;
+  }
+  // Shared boards rotate by DATE, not level — daily/weekly always launch at
+  // level 0, so a mid-puzzle snapshot from day D matched day D+1's launch
+  // and hydrated verbatim over a different board (stale letters, a find
+  // list half-marked found, day-D progress double-counting on completion).
+  // Bound shared-mode snapshots to the UTC period they were saved in.
+  const savedAt = new Date(snapshot.savedAtMs);
+  if (snapshot.mode === 'daily') {
+    return (
+      savedAt.toISOString().slice(0, 10) === now.toISOString().slice(0, 10)
+    );
+  }
+  if (snapshot.mode === 'weekly') {
+    return getWeekId(savedAt) === getWeekId(now);
+  }
+  return true;
 }

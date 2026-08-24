@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CeremonyItem } from '../types';
 import { analytics } from '../services/analytics';
 import { soundManager } from '../services/sound';
+import { requestActiveCeremonyDismiss } from './useCeremonyTransition';
 
 /** Maximum ceremonies to show per puzzle completion to prevent modal fatigue */
 const MAX_CEREMONIES_PER_BATCH = 2;
@@ -73,9 +74,6 @@ export function useCeremonyQueue({
   const batchCountRef = useRef<number>(0);
   // Track previous pending count to detect new batches (new puzzle completion)
   const prevPendingCountRef = useRef<number>(0);
-  // Ref to always have the latest popCeremony in setTimeout callbacks
-  const popCeremonyRef = useRef(popCeremony);
-  popCeremonyRef.current = popCeremony;
 
   // Auto-reset batch counter when new ceremonies are queued (new puzzle completed).
   // This ensures the cap applies per-puzzle, not across consecutive puzzles.
@@ -86,12 +84,28 @@ export function useCeremonyQueue({
     prevPendingCountRef.current = pendingCeremonyCount;
   }, [pendingCeremonyCount]);
 
+  // Dismissal starts a short breather before the next ceremony fires; the
+  // processing effect respects it (see below) and the dismiss handler
+  // schedules a resumeTick bump for when it elapses.
+  const cooldownUntilRef = useRef<number>(0);
+
   // Process pending ceremonies when loaded, unblocked, and queue has items.
-  // Single effect prevents race condition where two effects both pop ceremonies.
+  // This effect is the ONLY automatic advance path. It used to share
+  // advancement with a 300ms setTimeout inside handleDismissCeremony; the
+  // effect fired first (activeCeremony -> null re-runs it immediately), then
+  // the timer popped a SECOND ceremony 300ms later and replaced the first —
+  // that ceremony's pop-time grant was paid but its celebration never
+  // rendered. Single ownership makes the documented breather real and makes
+  // a dropped celebration impossible.
   useEffect(() => {
     if (loaded && !isBlocked && !activeCeremony && pendingCeremonyCount > 0) {
       if (batchCountRef.current >= MAX_CEREMONIES_PER_BATCH) {
         // Cap reached — defer remaining ceremonies to next batch (HomeScreen return)
+        return;
+      }
+      if (Date.now() < cooldownUntilRef.current) {
+        // Mid-breather: the dismiss handler has already scheduled a
+        // resumeTick bump for when the breather ends.
         return;
       }
       const next = popCeremony();
@@ -124,11 +138,14 @@ export function useCeremonyQueue({
         void soundManager.playSound('flawlessMilestone');
       }
 
-      // Auto-dismiss Tier 2 ceremonies after their specified duration
+      // Auto-dismiss Tier 2 ceremonies after their specified duration.
+      // Route through the mounted ceremony's graceful exit (shared
+      // ceremony-transition fade) so the card doesn't hard-cut off screen;
+      // ceremonies not on the contract fall back to the direct dismiss.
       if (activeCeremony.autoDismissMs) {
         if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
         autoDismissTimerRef.current = setTimeout(() => {
-          handleDismissRef.current();
+          requestActiveCeremonyDismiss(() => handleDismissRef.current());
         }, activeCeremony.autoDismissMs);
       }
     }
@@ -158,17 +175,14 @@ export function useCeremonyQueue({
       void analytics.trackCeremonyDismissed(activeCeremony.type, durationMs);
     }
     setActiveCeremony(null);
-    // Check for more ceremonies after a short delay (use ref to avoid stale closure)
+    // Breather before the next ceremony: the processing effect skips pops
+    // until this elapses, and the resumeTick bump re-runs it right after.
+    // The effect is the only advance path — popping here as well raced it
+    // and could eat a celebration (see the effect's comment).
+    cooldownUntilRef.current = Date.now() + 300;
+    if (ceremonyTimerRef.current) clearTimeout(ceremonyTimerRef.current);
     ceremonyTimerRef.current = setTimeout(() => {
-      if (batchCountRef.current >= MAX_CEREMONIES_PER_BATCH) {
-        // Cap reached — remaining will fire on next batch
-        return;
-      }
-      const next = popCeremonyRef.current();
-      if (next) {
-        batchCountRef.current += 1;
-        setActiveCeremony(next);
-      }
+      setResumeTick((t) => t + 1);
     }, 300);
   }, [activeCeremony]);
 

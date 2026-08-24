@@ -5,7 +5,7 @@ import { WordPlacement } from '../types';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { useColors } from '../hooks/useColors';
-import { useSettings } from '../contexts/SettingsContext';
+import { useColorblindMode } from '../services/colorblindPreference';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { getWordBankMotionPolicy } from '../utils/gameMotion';
 
@@ -168,7 +168,7 @@ const WordChip = React.memo(function WordChip({
   // the remapped palette. Gated on the mode so the default look is
   // bit-for-bit unchanged when it's off.
   const palette = useColors();
-  const { colorblindMode } = useSettings();
+  const colorblindMode = useColorblindMode();
   const cvdActive = colorblindMode !== 'off';
 
   const getChipStyle = () => {

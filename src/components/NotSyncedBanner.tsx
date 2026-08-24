@@ -27,16 +27,25 @@ export function NotSyncedBanner() {
     (s) => s.state === 'failed' && s.failureCount >= SHOW_AFTER_N_FAILURES,
   );
 
+  // Stay mounted through the fade-out: the old `if (!shouldShow) return
+  // null` unmounted the banner on the same render the 220ms exit fade
+  // started, so the exit animation never actually displayed.
+  const [rendered, setRendered] = React.useState(false);
   useEffect(() => {
-    Animated.timing(opacity, {
+    if (shouldShow) setRendered(true);
+    const anim = Animated.timing(opacity, {
       toValue: shouldShow ? 1 : 0,
       duration: 220,
       easing: Easing.inOut(Easing.quad),
       useNativeDriver: true,
-    }).start();
+    });
+    anim.start(({ finished }) => {
+      if (finished && !shouldShow) setRendered(false);
+    });
+    return () => anim.stop();
   }, [shouldShow, opacity]);
 
-  if (!shouldShow) return null;
+  if (!rendered) return null;
 
   return (
     <Animated.View

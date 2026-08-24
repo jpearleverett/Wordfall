@@ -16,6 +16,7 @@ import {
   Animated,
   Easing,
   Alert,
+  FlatList,
   Pressable,
   type ViewStyle,
 } from 'react-native';
@@ -36,7 +37,7 @@ import {
   currentSeason,
   daysRemaining,
 } from '../data/masteryRewards';
-import { CollectionReward } from '../types';
+import { CollectionReward, MasteryReward } from '../types';
 import { useCommerce } from '../hooks/useCommerce';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import {
@@ -51,6 +52,11 @@ import {
   PREMIUM_INNER_BORDER,
   PREMIUM_GLOW,
 } from '../utils/rewardArt';
+
+// Stable footer identity for the virtualized tier ladder: extra clearance
+// beyond the list's own bottom padding so the final tier row scrolls fully
+// clear of the floating tab bar (same 36pt the old bottomSpacer provided).
+const LADDER_FOOTER = <View style={{ height: 36 }} />;
 
 /**
  * IconMedallion's shell (accent ring + glow + body gradient) hosting a
@@ -850,14 +856,8 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
     }
   }, [commerce, isPremium, purchasingPass]);
 
-  return (
-    <ScreenScaffold
-      title="MASTERY TRACK"
-      eyebrow={seasonName.toUpperCase()}
-      accent={COLORS.teal}
-      backdrop="mastery"
-      onBack={onBack}
-    >
+  const listHeader = (
+    <View>
       {/* Progress hero */}
       <View style={styles.progressPanel}>
         <LinearGradient
@@ -966,28 +966,60 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
           <Text style={[styles.laneTagText, { color: COLORS.purpleLight }]}>PREMIUM</Text>
         </View>
       </View>
+    </View>
+  );
 
-      {MASTERY_REWARDS.map((reward) => (
-        <MasteryTierRow
-          key={reward.tier}
-          tier={reward.tier}
-          free={reward.free}
-          premium={reward.premium}
-          unlocked={currentTier >= reward.tier}
-          nextUnlocked={currentTier >= reward.tier + 1}
-          premiumOwned={isPremium}
-          isCurrent={currentTier === reward.tier - 1}
-          reduceMotion={reduceMotion}
-        />
-      ))}
-      {/* Extra clearance beyond the scaffold's own bottom padding so the
-          final tier row scrolls fully clear of the floating tab bar. */}
-      <View style={styles.bottomSpacer} />
+  return (
+    <ScreenScaffold
+      title="MASTERY TRACK"
+      eyebrow={seasonName.toUpperCase()}
+      accent={COLORS.teal}
+      backdrop="mastery"
+      onBack={onBack}
+      scroll={false}
+    >
+      {/* Virtualized ladder (mirrors SeasonPassScreen): only ~8 of the 30
+          tier rows mount at open instead of the whole spine of gradients,
+          medallions and ribbons; the hero/upsell/lane tags scroll with the
+          list as its header. */}
+      <FlatList
+        data={MASTERY_REWARDS}
+        keyExtractor={(reward: MasteryReward) => String(reward.tier)}
+        renderItem={({ item: reward }: { item: MasteryReward }) => (
+          <MasteryTierRow
+            tier={reward.tier}
+            free={reward.free}
+            premium={reward.premium}
+            unlocked={currentTier >= reward.tier}
+            nextUnlocked={currentTier >= reward.tier + 1}
+            premiumOwned={isPremium}
+            isCurrent={currentTier === reward.tier - 1}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={LADDER_FOOTER}
+      />
     </ScreenScaffold>
   );
 };
 
 const styles = StyleSheet.create({
+  // FlatList owns scrolling (ScreenScaffold gets scroll={false}); content
+  // padding mirrors the scaffold's own scroll-mode values so spacing is
+  // unchanged.
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 110,
+    paddingTop: 12,
+  },
   panelFill: { borderRadius: 18 },
 
   // ── Progress hero ────────────────────────────────────────────────────
@@ -1336,9 +1368,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...PREMIUM_GLOW,
     zIndex: 2,
-  },
-  bottomSpacer: {
-    height: 36,
   },
   chipColumn: {
     gap: 6,

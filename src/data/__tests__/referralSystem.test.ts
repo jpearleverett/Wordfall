@@ -86,6 +86,46 @@ describe('generateReferralCode', () => {
   });
 });
 
+describe('generateReferralCode — collision-retry salt', () => {
+  const VALID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  // The h*31+c hash is affine, so any two prefixes with equal hashes collide
+  // under every common suffix: 'ab' (97*31+98) and 'bC' (98*31+67) both hash
+  // to 3105. These two distinct "uids" therefore share a referral code —
+  // exactly the case where the second registrant's referralCodes upsert is
+  // rejected and every referral would silently credit the first owner.
+  const uidA = 'abFyZk29QhUvT1';
+  const uidB = 'bCFyZk29QhUvT1';
+
+  it('distinct uids CAN collide at salt 0 — the case the retry protocol exists for', () => {
+    expect(uidA).not.toBe(uidB);
+    expect(generateReferralCode(uidA)).toBe(generateReferralCode(uidB));
+  });
+
+  it('salt 0 (the default) is byte-identical to the historical output', () => {
+    // Pinned against the pre-salt implementation: already-registered codes,
+    // share links, and locally cached player.referralCode must stay valid.
+    expect(generateReferralCode('user123')).toBe('3U9AKJ');
+    expect(generateReferralCode('user123', 0)).toBe('3U9AKJ');
+  });
+
+  it('a salted retry escapes the taken code and stays a valid 6-char code', () => {
+    const taken = generateReferralCode(uidA); // registered first, by uidA
+    for (let salt = 1; salt <= 3; salt++) {
+      const retry = generateReferralCode(uidB, salt);
+      expect(retry).not.toBe(taken);
+      expect(retry.length).toBe(6);
+      for (const char of retry) {
+        expect(VALID_CHARS).toContain(char);
+      }
+    }
+  });
+
+  it('salted codes are deterministic per (uid, salt) and vary across salts', () => {
+    expect(generateReferralCode(uidB, 1)).toBe(generateReferralCode(uidB, 1));
+    expect(generateReferralCode(uidB, 1)).not.toBe(generateReferralCode(uidB, 2));
+  });
+});
+
 describe('getReferralRewards', () => {
   it('returns referrer rewards object', () => {
     const rewards = getReferralRewards(1);

@@ -1,0 +1,5255 @@
+[
+  {
+    "id": "cer-transition-module-missing",
+    "title": "Shared ceremony transition policy module was specified (red tests) but never committed",
+    "file": "src/hooks/useCeremonyTransition.ts",
+    "klass": "F3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyTransition.ts",
+        "pattern": "export function getCeremonyMotionPlan"
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/ceremonyTransition.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "cer-quest-grant-dismiss-time",
+    "title": "Quest-step rewards granted in router onDismiss \u2014 lost on process death, double-paid on re-render",
+    "file": "src/App/CeremonyRouter.tsx",
+    "klass": "F6",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/App/CeremonyRouter.tsx",
+        "pattern": "economy\\.addCoins"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/App/CeremonyRouter.tsx",
+        "pattern": "economy\\.addGems"
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/ceremonyGrants.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "cer-quest-reward-label-duplication",
+    "title": "Quest-step ceremony repeats its description as the reward label",
+    "file": "src/App/CeremonyRouter.tsx",
+    "klass": "F3",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/App/CeremonyRouter.tsx",
+        "pattern": "rewardLabel=\\{activeCeremony\\.data\\.description\\}"
+      }
+    ]
+  },
+  {
+    "id": "cer-a11y-focus-escape",
+    "title": "Screen-reader focus escapes to navigation content underneath an active ceremony",
+    "file": "App.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "activeCeremony \\? 'no-hide-descendants' : 'auto'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "accessibilityElementsHidden=\\{activeCeremony != null\\}"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-MilestoneCeremony",
+    "title": "MilestoneCeremony owns a private entrance with no exit, no reduced-motion settle, no unmount stop",
+    "file": "src/components/MilestoneCeremony.tsx",
+    "klass": "F3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "requestDismiss"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-FeatureUnlockCeremony",
+    "title": "FeatureUnlockCeremony not on the shared ceremony transition contract",
+    "file": "src/components/FeatureUnlockCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/FeatureUnlockCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/FeatureUnlockCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/FeatureUnlockCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-ModeUnlockCeremony",
+    "title": "ModeUnlockCeremony bespoke runOnJS exit competes with the shared transition contract",
+    "file": "src/components/ModeUnlockCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeUnlockCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeUnlockCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeUnlockCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-AchievementCeremony",
+    "title": "AchievementCeremony not on the shared ceremony transition contract",
+    "file": "src/components/AchievementCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/AchievementCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/AchievementCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/AchievementCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-StreakMilestoneCeremony",
+    "title": "StreakMilestoneCeremony not on the shared ceremony transition contract",
+    "file": "src/components/StreakMilestoneCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-CollectionCompleteCeremony",
+    "title": "CollectionCompleteCeremony not on the shared ceremony transition contract",
+    "file": "src/components/CollectionCompleteCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-PrestigeResetCeremony",
+    "title": "PrestigeResetCeremony: no shared contract, heavy particle field mounts with the card (entrance jank)",
+    "file": "src/components/PrestigeResetCeremony.tsx",
+    "klass": "P7",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/PrestigeResetCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PrestigeResetCeremony.tsx",
+        "pattern": "useDeferredMount\\(280\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PrestigeResetCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-SeasonPassCompleteCeremony",
+    "title": "SeasonPassCompleteCeremony: no shared contract, heavy particle field mounts with the card (entrance jank)",
+    "file": "src/components/SeasonPassCompleteCeremony.tsx",
+    "klass": "P7",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonPassCompleteCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonPassCompleteCeremony.tsx",
+        "pattern": "useDeferredMount\\(280\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonPassCompleteCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-FirstPurchaseOfferModal",
+    "title": "FirstPurchaseOfferModal not on the shared ceremony transition contract",
+    "file": "src/components/FirstPurchaseOfferModal.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/FirstPurchaseOfferModal.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/FirstPurchaseOfferModal.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/FirstPurchaseOfferModal.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-puzzlecomplete-double-entrance",
+    "title": "PuzzleComplete still has two competing 'const entrance = Animated.parallel' owners",
+    "file": "src/components/PuzzleComplete.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/PuzzleComplete.tsx",
+        "pattern": "const entrance = Animated\\.parallel",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PuzzleComplete.tsx",
+        "pattern": "reduceMotion=\\{suppressMotion\\}"
+      }
+    ]
+  },
+  {
+    "id": "dead-animation-components-removed",
+    "title": "22 dead animation-bearing components (zero importers, several with infinite loops) removed",
+    "file": "src/components",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "test",
+        "suite": "src/__tests__/animationReachability.test.ts"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/LevelUpCeremony.tsx",
+        "pattern": "."
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/game/GravityTrailEffect.tsx",
+        "pattern": "."
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/SynthwaveBackdrop.tsx",
+        "pattern": "."
+      }
+    ]
+  },
+  {
+    "id": "ceremony-auto-dismiss-hard-cut",
+    "title": "Tier-2 auto-dismissed ceremonies hard-cut off screen instead of playing the shared exit",
+    "file": "src/hooks/useCeremonyQueue.ts",
+    "klass": "F4",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyQueue.ts",
+        "pattern": "requestActiveCeremonyDismiss"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyTransition.ts",
+        "pattern": "activeGracefulDismiss"
+      }
+    ]
+  },
+  {
+    "id": "ceremony-dual-advance-race",
+    "title": "Dismiss-timer advance raced the processing effect and could eat a popped ceremony's celebration",
+    "file": "src/hooks/useCeremonyQueue.ts",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useCeremonyQueue.ts",
+        "pattern": "popCeremonyRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyQueue.ts",
+        "pattern": "cooldownUntilRef"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/ceremonyQueue.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "tension-bgm-never-reverts",
+    "title": "Tense BGM never hands back to the mode bed on undo/retry falling edge",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "tensionBedActiveRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(tensionBedActiveRef\\.current && status === 'playing'\\)"
+      }
+    ]
+  },
+  {
+    "id": "valid-flash-anim-truncated-by-submit",
+    "title": "Valid-word green flash ramped over 300ms but unmounted at 50ms (~5% peak opacity \u2014 invisible)",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "validFlashAnim, \\{\\n          toValue: 1,\\n          duration: 300"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "duration: 40,"
+      }
+    ]
+  },
+  {
+    "id": "bloom-removal-window-shorter-than-lifetime",
+    "title": "Word-clear particles removed at 700ms but live up to 800ms (pop out mid-fade)",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "CLEAR_PARTICLE_REMOVE_AFTER_MS"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "removeIds\\(ids\\);\\n          \\}, 700\\)"
+      }
+    ]
+  },
+  {
+    "id": "dead-chain-era-styles",
+    "title": "24 orphaned StyleSheet entries in GameScreen (chain-era relics + stale duplicates of GameFlashes styles)",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "chainPopup:"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "vhsGlitchOverlay:"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "scorePopupCombo:"
+      }
+    ]
+  },
+  {
+    "id": "board-replace-ghost-storm",
+    "title": "Wholesale board replacement (snapshot hydration) ghosted every tile \u2014 full-board dissolve storm",
+    "file": "src/components/game/gridGeometry.ts",
+    "klass": "F4",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/game/gridGeometry.ts",
+        "pattern": "gridsShareNoCellIds"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/game/__tests__/gridGeometry.test.ts",
+        "pattern": "wholesale board replacement resets"
+      }
+    ]
+  },
+  {
+    "id": "idle-glint-runs-while-blurred",
+    "title": "Idle glint timer chain ran forever behind the result overlay and blurred routes",
+    "file": "src/components/Grid.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/Grid.tsx",
+        "pattern": "!reduceMotion && glintActive &&"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/game/PlayField.tsx",
+        "pattern": "=== 'playing' && isFocused"
+      }
+    ]
+  },
+  {
+    "id": "lettercell-full-settings-subscription",
+    "title": "Every LetterCell (+WordBank) subscribed to the full SettingsContext for one field (colorblindMode)",
+    "file": "src/components/LetterCell.tsx",
+    "klass": "P1",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/LetterCell.tsx",
+        "pattern": "useSettings\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/WordBank.tsx",
+        "pattern": "useSettings\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useColors.ts",
+        "pattern": "useSettings\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/colorblindPreference.ts",
+        "pattern": "useSyncExternalStore"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/SettingsContext.tsx",
+        "pattern": "publishColorblindMode\\(settings\\.colorblindMode\\)"
+      }
+    ]
+  },
+  {
+    "id": "reward-wiring-unstable-context-deps",
+    "title": "handleComplete re-minted on every context write (15+/completion), defeating GameScreen's memo",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "P1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "\\}, \\[params, player, economy, navigation, userId\\]\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "\\}, \\[params, navigation, userId\\]\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/contextFacade.ts",
+        "pattern": "export function makeContextFacade"
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/contextFacade.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "gamescreenwrapper-full-context-subscription",
+    "title": "GameScreenWrapper subscribed to full Player/Economy contexts for two narrow fields",
+    "file": "App.tsx",
+    "klass": "P1",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const \\{ player, economy \\} = useStableContextFacades\\(\\);",
+        "count": 3
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "usePlayerStore\\(\\(s\\) => s\\.mysteryWheel\\.spinsAvailable\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const gems = useEconomyStore\\(selectGems\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "usePlayer\\(\\)",
+        "count": 4
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "useEconomy\\(\\)",
+        "count": 3
+      }
+    ]
+  },
+  {
+    "id": "maintabs-full-player-context",
+    "title": "Root tab navigator re-rendered on every player write for one field (featuresUnlocked)",
+    "file": "App.tsx",
+    "klass": "P1",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const featuresUnlocked = usePlayerStore\\(selectFeaturesUnlocked\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const hasFeature = \\(id: string\\) => featuresUnlocked\\.includes\\(id\\);"
+      }
+    ]
+  },
+  {
+    "id": "modes-event-wrappers-full-context",
+    "title": "Modes/Event wrappers re-rendered per context write; unstable handleSelectMode re-ran the autoStart effect",
+    "file": "App.tsx",
+    "klass": "P1",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "App.tsx",
+        "pattern": "\\}, \\[player\\.currentLevel, navigation, player, economy\\]\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "App.tsx",
+        "pattern": "\\}, \\[player, economy, navigation\\]\\);"
+      }
+    ]
+  },
+  {
+    "id": "app-prefetch-timeout-untracked",
+    "title": "Next-board prefetch setTimeout/InteractionManager never cancelled on unmount (sync generateBoard for a dead wrapper)",
+    "file": "App.tsx",
+    "klass": "P3",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "prefetchTimeoutRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "prefetchInteractionRef\\.current\\?\\.cancel\\(\\)"
+      }
+    ]
+  },
+  {
+    "id": "mastery-ladder-unvirtualized",
+    "title": "Mastery ladder virtualized via FlatList (SeasonPass pattern)",
+    "file": "src/screens/MasteryScreen.tsx",
+    "klass": "P2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "MASTERY_REWARDS\\.map\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "<FlatList",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "data=\\{MASTERY_REWARDS\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "scroll=\\{false\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "ListHeaderComponent=\\{listHeader\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "initialNumToRender=\\{8\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SeasonPassScreen.tsx",
+        "pattern": "<FlatList"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SeasonPassScreen.tsx",
+        "pattern": "scroll=\\{false\\}"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "cosmetic-store-unvirtualized-svg-catalog",
+    "title": "Cosmetic store catalog virtualized (2-col FlatList replaces ScrollView.map of up to 71 SVG cards)",
+    "file": "src/screens/CosmeticStoreScreen.tsx",
+    "klass": "P2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "currentItems\\.map\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "<ScrollView"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "data=\\{currentItems\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "numColumns=\\{2\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "keyExtractor=\\{\\(item\\) => item\\.id\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "removeClippedSubviews=\\{Platform\\.OS === 'android'\\}",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "economy-actions-missing-spendlibrarypoints",
+    "title": "spendLibraryPoints read from useEconomyActions() instead of full EconomyContext",
+    "file": "src/screens/CosmeticStoreScreen.tsx",
+    "klass": "P1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "useEconomy\\(\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "from '\\.\\./contexts/EconomyContext'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "\\{[^}]*spendLibraryPoints[^}]*\\}\\s*=\\s*useEconomyActions\\(",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/stores/economyStore.ts",
+        "pattern": "'spendLibraryPoints'"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "leaderboard-unvirtualized-rows",
+    "title": "Leaderboard rows virtualized: ScrollView+map converted to windowed FlatList",
+    "file": "src/screens/LeaderboardScreen.tsx",
+    "klass": "P2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "entries\\.slice\\(3\\)\\.map\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "<ScrollView"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "<FlatList",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "ListHeaderComponent"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "ListFooterComponent"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "renderItem=\\{renderRow\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "keyExtractRow = \\(item: LeaderboardEntry\\) => item\\.id",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "removeClippedSubviews=\\{Platform\\.OS === 'android'\\}",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "leaderboard-champion-pulse-unfocused",
+    "title": "Champion pulse loop gated on focus and mounted podium",
+    "file": "src/screens/LeaderboardScreen.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "\\}, \\[reduceMotion, championPulse\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "useIsFocused"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "const championActive = isFocused && !reduceMotion && entries\\.length > 0",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "\\}, \\[championActive, championPulse\\]\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "leaderboard-fetch-race-no-cancel",
+    "title": "Leaderboard fetch race fixed with request-sequence guard + effect cleanup",
+    "file": "src/screens/LeaderboardScreen.tsx",
+    "klass": "P3",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "const seq = \\+\\+fetchSeqRef\\.current",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "seq !== fetchSeqRef\\.current",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "if \\(isStale\\(\\)\\) return;",
+        "count": 3
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "fetchSeqRef\\.current\\+\\+",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "useEffect\\(\\(\\) => \\{\\s*fetchLeaderboard\\(activeTime\\);\\s*\\}, \\[activeTime"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "editprofile-titles-unvirtualized",
+    "title": "Locked profile titles collapsed behind disclosure row (no eager full-catalog mount)",
+    "file": "src/screens/EditProfileScreen.tsx",
+    "klass": "P2",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/EditProfileScreen.tsx",
+        "pattern": "sortedTitles\\.map\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EditProfileScreen.tsx",
+        "pattern": "visibleTitles\\.map\\(",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EditProfileScreen.tsx",
+        "pattern": "showLockedTitles"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EditProfileScreen.tsx",
+        "pattern": "titleBuckets\\.locked\\.length"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "library-scene-loops-run-while-blurred",
+    "title": "GrandLibraryScene Folio bob + DustMote loops now focus-gated (freezeOnBlur does not stop native-driver loops)",
+    "file": "src/components/library/GrandLibraryScene.tsx",
+    "klass": "P4",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "\\[\\s*(anim,\\s*delay,\\s*reduceMotion|bob,\\s*reduceMotion)\\s*\\]"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "useIsFocused",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "const active = isFocused && !reduceMotion;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "loop\\.stop\\(\\);\\s*(anim|bob)\\.setValue\\(0\\);",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "\\}, \\[anim, delay, active\\]\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "\\}, \\[bob, active\\]\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "active=\\{active\\}",
+        "count": 3
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "library-wing-stagger-runs-under-skeleton",
+    "title": "Wing entrance stagger no longer plays under the skeleton; composite stopped on cleanup",
+    "file": "src/screens/LibraryScreen.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "Animated\\.parallel\\(animations\\)\\.start\\(\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "\\}, \\[wingAnims, reduceMotion\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "if \\(loading\\) return;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "return startAnimationWithCleanup\\(Animated\\.parallel\\(animations\\)\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "\\}, \\[wingAnims, reduceMotion, loading\\]\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "libraryscreen-full-economy-for-librarypoints",
+    "title": "libraryPoints read via narrow economyStore selector instead of full useEconomy context",
+    "file": "src/screens/LibraryScreen.tsx",
+    "klass": "P1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "\\buseEconomy\\(\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "contexts/EconomyContext"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "useEconomyStore\\(selectLibraryPoints\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "collections-cardshine-runs-while-blurred",
+    "title": "CardShine sweep loop gated on screen focus (freezeOnBlur tab)",
+    "file": "src/screens/CollectionsScreen.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "\\[\\s*reduceMotion,\\s*sweep\\s*\\]"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "useIsFocused"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "\\},\\s*\\[active,\\s*sweep\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "shineActive\\s*=\\s*isFocused\\s*&&\\s*!reduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "active=\\{shineActive\\}",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "sweep\\.setValue\\(0\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "club-crest-pulse-no-consumer",
+    "title": "crestPulse loop gated on clubId + focus, settles when idle",
+    "file": "src/screens/ClubScreen.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ClubScreen.tsx",
+        "pattern": "\\},\\s*\\[reduceMotion,\\s*crestPulse\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ClubScreen.tsx",
+        "pattern": "import \\{ useIsFocused \\} from '@react-navigation/native'",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ClubScreen.tsx",
+        "pattern": "if \\(clubId \\|\\| !isFocused \\|\\| reduceMotion\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ClubScreen.tsx",
+        "pattern": "\\},\\s*\\[clubId,\\s*isFocused,\\s*reduceMotion,\\s*crestPulse\\]\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "profile-fake-loading-skeleton",
+    "title": "ProfileScreen fabricated 400ms loading skeleton removed",
+    "file": "src/screens/ProfileScreen.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "const \\[loading, setLoading\\] = useState\\(true\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "setTimeout\\(\\(\\) => setLoading\\(false\\), \\d+\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "if \\(loading\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "<Skeleton"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "No loading branch: every value on this screen comes synchronously",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "referral-rewards-loading-flash",
+    "title": "Referral rewards card no longer flashes empty during in-flight fetch",
+    "file": "src/components/ReferralPendingRewards.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ReferralPendingRewards.tsx",
+        "pattern": "!loading\\s*&&\\s*rewards\\.length\\s*===\\s*0"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ReferralPendingRewards.tsx",
+        "pattern": "if\\s*\\(rewards\\.length\\s*===\\s*0\\)\\s*return\\s+null",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ReferralPendingRewards.tsx",
+        "pattern": "setLoading"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "onboarding-pulse-loop-no-reduce-motion",
+    "title": "Onboarding glow pulse loop now gated on reduce motion",
+    "file": "src/screens/OnboardingScreen.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "if \\(reduceMotion \\|\\| !pulseVisible\\) return",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "onboarding-pulse-runs-through-tutorial",
+    "title": "Pulse loop keyed on phase; stops+resets outside welcome/celebrate",
+    "file": "src/screens/OnboardingScreen.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "\\[scaleAnim, fadeAnim, pulseAnim\\]"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "phase === 'welcome' \\|\\| phase === 'celebrate'",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "pulseAnim\\.setValue\\(1\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "\\}, \\[phase, reduceMotion, pulseAnim\\]\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "home-wheel-loops-skip-reduce-motion",
+    "title": "Mystery-wheel pulse + disc spin loops gated on focus only, ignoring reduce-motion",
+    "file": "src/screens/HomeScreen.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "if \\(isFocused && \\(mysteryWheelSpins"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "!isFocused \\|\\| !mysteryWheelVisible"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "if \\(ambientActive && \\(mysteryWheelSpins > 0 \\|\\| dailyFreeSpinAvailable\\)\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "!ambientActive \\|\\| !mysteryWheelVisible",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "\\[ambientActive, mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse\\]",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "\\[ambientActive, mysteryWheelVisible, wheelSpin\\]",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "home-wheel-loop-cleanup-no-reset",
+    "title": "Wheel loop cleanups stop without resetting Animated.Values to resting state",
+    "file": "src/screens/HomeScreen.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "return \\(\\) => pulse\\.stop\\(\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "return \\(\\) => spin\\.stop\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "wheelPulse\\.setValue\\(1\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "wheelSpin\\.setValue\\(0\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "neon-highway-pulse-no-reduce-motion",
+    "title": "Current-node pulse loops now gated on reduce motion, not just focus",
+    "file": "src/components/home/NeonHighwayProgress.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "if \\(!isFocused\\) return;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "import \\{ useReduceMotion \\} from '\\.\\./\\.\\./hooks/useReduceMotion';",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "if \\(!isFocused \\|\\| reduceMotion\\) return;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "pulseScale\\.setValue\\(1\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "pulseOpacity\\.setValue\\(0\\.5\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-reward-timers-interval-runs-blurred",
+    "title": "Shared countdown setInterval now pauses while HomeScreen is unfocused, recomputes on refocus",
+    "file": "src/components/DailyRewardTimers.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "clearInterval\\(id\\);\\s*\\}, \\[\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "import \\{ useIsFocused \\} from '@react-navigation/native';",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "if \\(!isFocused\\) return;\\s*setTick\\(\\(t\\) => t \\+ 1\\);\\s*const id = setInterval",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "\\}, \\[isFocused\\]\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-reward-timer-ready-pulse-ungated",
+    "title": "TimerCard ready pulse loop gated on focus + reduce-motion via parent-computed animate prop",
+    "file": "src/components/DailyRewardTimers.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "if \\(!isReady\\) \\{"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "\\}, \\[isReady, pulseAnim\\]\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "if \\(!isReady \\|\\| !animate\\) \\{",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "animate=\\{isFocused && !reduceMotion\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "\\}, \\[isReady, animate, pulseAnim\\]\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "animation\\.stop\\(\\);\\s*pulseAnim\\.setValue\\(1\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "live-rail-index-keys-remount",
+    "title": "LiveRail cards keyed by array index remount downstream rail on conditional card toggle",
+    "file": "src/components/home/LiveRail.tsx",
+    "klass": "P8",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/home/LiveRail.tsx",
+        "pattern": "key=\\{idx\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/LiveRail.tsx",
+        "pattern": "key=\\{React\\.isValidElement\\(child\\) && child\\.key != null \\? child\\.key : idx\\}",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "contextual-ungated-urgency-pulse",
+    "title": "ContextualOffer entrance + FOMO pulse gated on reduce motion",
+    "file": "src/components/ContextualOffer.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "if \\(reduceMotion \\|\\| !urgent\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "fade\\.value = 1;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "\\[secondsLeft < 60\\]"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "contextual-dismiss-inside-updater",
+    "title": "Expiry analytics + onDismiss moved out of setSecondsLeft updater",
+    "file": "src/components/ContextualOffer.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "set[A-Z]\\w*\\(\\s*\\(prev\\)\\s*=>\\s*\\{[\\s\\S]{0,400}?(onDismiss\\(|analytics\\.)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "setSecondsLeft\\(\\(prev\\) => Math\\.max\\(0, prev - 1\\)\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "expiredRef\\.current"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "postloss-scrim-scale-entrance",
+    "title": "PostLossModal entrance scale applied to full-screen scrim instead of card",
+    "file": "src/components/PostLossModal.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "styles\\.overlay\\s*,[\\s\\S]{0,250}?transform:\\s*\\[\\s*\\{\\s*scale"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "\\[styles\\.card,\\s*cardStyle\\]",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "postloss-no-reduce-motion",
+    "title": "PostLossModal private entrance ignores reduce-motion preference",
+    "file": "src/components/PostLossModal.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "useCeremonyTransition"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "Animated\\.(spring|timing)\\("
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "postloss-dismiss-inside-updater",
+    "title": "PostLossModal auto-dismiss calls onDismiss inside setTimeLeft updater",
+    "file": "src/components/PostLossModal.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "set[A-Z]\\w*\\(\\s*\\(prev\\)\\s*=>\\s*\\{[\\s\\S]{0,400}?(onDismiss|requestDismiss)\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "if \\(timeLeft === 0\\) \\{\\s*requestDismiss\\(\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "sessionreminder-exit-finished-unguarded",
+    "title": "SessionEndReminder exit dismiss unguarded by finished",
+    "file": "src/components/SessionEndReminder.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": ",\\s*\\(\\)\\s*=>\\s*\\{\\s*runOnJS\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "\\(finished\\)\\s*=>\\s*\\{\\s*if\\s*\\(finished\\)\\s*\\{\\s*runOnJS\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "cancelAnimation\\(slide\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "cancelAnimation\\(fade\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "sessionreminder-no-reduce-motion",
+    "title": "SessionEndReminder ignores reduce-motion preference",
+    "file": "src/components/SessionEndReminder.tsx",
+    "klass": "P5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "if\\s*\\(reduceMotion\\)\\s*\\{"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "useSharedValue\\(reduceMotion \\? 0 : 80\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "const slide = useSharedValue\\(80\\);"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "tutorial-hand-loop-survives-step-change",
+    "title": "Tutorial hand bob loop leaked across step changes (cancel only in unreachable !visible branch)",
+    "file": "src/components/TutorialOverlay.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "if\\s*\\(step\\.showHandPointer\\s*&&\\s*!reduceMotion\\)\\s*\\{[\\s\\S]*?\\}\\s*else\\s*\\{[\\s\\S]{0,400}?cancelAnimation\\(hand\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "\\}\\s*else\\s*\\{\\s*fade\\.value\\s*=\\s*withTiming\\(0[\\s\\S]{0,120}?cancelAnimation\\(hand\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "return \\(\\) => \\{\\s*cancelAnimation\\(hand\\);"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "tutorial-hand-loop-no-reduce-motion",
+    "title": "Tutorial pointer bob and entrance slide spring had no reduce-motion gate",
+    "file": "src/components/TutorialOverlay.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "if \\(step\\.showHandPointer\\) \\{"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "hand\\.value = step\\.showHandPointer \\? 1 : 0;"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mode-tutorial-springs-no-reduce-motion",
+    "title": "Mode tutorial springs/fades gated on reduce motion (covers mode-tutorial-entrance-bounce)",
+    "file": "src/components/ModeTutorialOverlay.tsx",
+    "klass": "P5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "from '\\.\\./hooks/useReduceMotion'",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "if \\(reduceMotion\\)",
+        "count": 3
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "iconScaleAnim\\.setValue\\(1\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "\\.start\\(\\(\\) =>"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "\\.start\\(\\(\\{ finished \\}\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "return \\(\\) => entrance\\.stop\\(\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mystery-wheel-spin-callback-ignores-finished",
+    "title": "Mystery wheel spin completion callback now checks Reanimated finished before runOnJS",
+    "file": "src/components/MysteryWheel.tsx",
+    "klass": "F6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "\\},\\s*\\(finished\\)\\s*=>"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "if\\s*\\(finished\\)\\s*\\{\\s*runOnJS\\(onSpinComplete\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "\\},\\s*\\(\\)\\s*=>\\s*\\{\\s*runOnJS\\("
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mystery-wheel-box-reveal-timer-leak",
+    "title": "Mystery box 1s reveal timeout stored in ref and cleared on unmount and re-spin",
+    "file": "src/components/MysteryWheel.tsx",
+    "klass": "P3",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "boxRevealTimer\\.current\\s*=\\s*setTimeout\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "clearTimeout\\(boxRevealTimer\\.current\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "setTimeout\\(\\(\\)\\s*=>\\s*\\{\\s*setMysteryBoxResult"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "ambient-backdrop-conditional-hooks",
+    "title": "AmbientBackdrop stars useMemo called after variant early-returns",
+    "file": "src/components/common/AmbientBackdrop.tsx",
+    "klass": "P1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "const stars = useMemo[\\s\\S]*?if \\(variant === 'game'\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "getLocalBg\\(variant\\);[\\s\\S]*use(Memo|Effect|SharedValue|AnimatedStyle)\\("
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "ambient-backdrop-ungated-decorative-loops",
+    "title": "NebulaOrb/TwinklingStar infinite loops lack reduce-motion gate",
+    "file": "src/components/common/AmbientBackdrop.tsx",
+    "klass": "P5",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "isFocused\\s*&&\\s*!reduceMotion\\s*&&",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "return \\(\\) => cancelAnimation\\(anim\\);",
+        "count": 2
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "gameheader-scorepop-ignores-reduce-motion",
+    "title": "ScorePop +N callout animated unconditionally under reduce motion",
+    "file": "src/components/GameHeader.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "color: string; reduceMotion: boolean"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "translateY\\.value = -24"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "cancelAnimation\\(translateY\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "reduceMotion=\\{reduceMotion\\}"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "<ScorePop key=\\{pop\\.key\\} amount=\\{pop\\.amount\\} color=\\{accentColor\\} />"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "progress-glow-dot-leads-spring-fill",
+    "title": "Progress glow dot snapped ahead of the spring-animated fill tip",
+    "file": "src/components/GameHeader.tsx",
+    "klass": "F2",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "left: `\\$\\{progress\\}%`"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "const progressGlowDotStyle = useAnimatedStyle"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "left: `\\$\\{interpolate\\(progressValue\\.value"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "progressGlowDotStyle",
+        "count": 2
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "video-background-ignores-reduce-motion",
+    "title": "Looping background video now settles on static placeholder under reduce motion",
+    "file": "src/components/common/VideoBackground.tsx",
+    "klass": "P5",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "from '\\.\\./\\.\\./hooks/useReduceMotion'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "if \\(reduceMotion \\|\\| !shouldLoad\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "if \\(!lazy \\|\\| reduceMotion\\) return;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "if \\(!shouldLoad\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "skeleton-shimmer-no-reduce-motion",
+    "title": "Skeleton shimmer loop gated behind reduce motion with cancelAnimation cleanup",
+    "file": "src/components/common/Skeleton.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/Skeleton.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/Skeleton.tsx",
+        "pattern": "if\\s*\\(\\s*reduceMotion\\s*\\)[\\s\\S]{0,200}withRepeat\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/Skeleton.tsx",
+        "pattern": "cancelAnimation\\(shimmer\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/Skeleton.tsx",
+        "pattern": "-1,\\s*\\);\\s*\\},\\s*\\[\\]\\);"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "neonstarburst-unguarded-completion",
+    "title": "NeonStarBurst burst callback guarded on finished + unmount cancelAnimation cleanup",
+    "file": "src/components/victory/NeonStarBurst.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/victory/NeonStarBurst.tsx",
+        "pattern": "withTiming\\(0,\\s*\\{\\s*duration:\\s*BURST_DURATION\\s*\\},\\s*\\(\\)\\s*=>"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/victory/NeonStarBurst.tsx",
+        "pattern": "\\(finished\\)\\s*=>\\s*\\{[\\s\\S]{0,260}?if\\s*\\(finished\\)\\s*\\{[\\s\\S]{0,120}?withRepeat\\(",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/victory/NeonStarBurst.tsx",
+        "pattern": "return\\s*\\(\\)\\s*=>\\s*\\{\\s*cancelAnimation\\(burstScale\\);\\s*cancelAnimation\\(burstOpacity\\);\\s*cancelAnimation\\(pulseScale\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "neon-progressbar-dot-scalex-squash",
+    "title": "Glow dot squashed by scaleX positioner; now translateX vs measured width",
+    "file": "src/components/common/NeonProgressBar.tsx",
+    "klass": "F2",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/NeonProgressBar.tsx",
+        "pattern": "dotAnimStyle = useAnimatedStyle\\(\\(\\) => \\(\\{\\s*transform: \\[\\{ scaleX"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/NeonProgressBar.tsx",
+        "pattern": "transformOrigin: 'left center',\\s*alignItems: 'flex-end'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/NeonProgressBar.tsx",
+        "pattern": "const dotAnimStyle = useAnimatedStyle\\(\\(\\) => \\{[\\s\\S]{0,400}?transform: \\[\\{ translateX \\}\\]"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/NeonProgressBar.tsx",
+        "pattern": "onLayout=\\{\\(event: LayoutChangeEvent\\) => setTrackWidth"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "seasonal-quest-pulse-ungated",
+    "title": "SeasonalQuestCard claimable pulse ignored reduce motion and left the scale unsettled",
+    "file": "src/components/SeasonalQuestCard.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonalQuestCard.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonalQuestCard.tsx",
+        "pattern": "if \\(reduceMotion \\|\\| !stepReady\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonalQuestCard.tsx",
+        "pattern": "cancelAnimation\\(pulse\\);\\n      pulse\\.value = 1;"
+      }
+    ]
+  },
+  {
+    "id": "ceremony-spark-infinite-repeat-leak",
+    "title": "CeremonySpark ambient dots ran infinite Reanimated repeats with no cancellation on unmount",
+    "file": "src/components/MilestoneCeremony.tsx",
+    "klass": "P3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "withDelay\\(delay, withRepeat\\(withTiming\\(1, \\{ duration: dur \\}\\), -1, true\\)\\);\\n    // Infinite repeat"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "return \\(\\) => cancelAnimation\\(t\\);"
+      }
+    ]
+  },
+  {
+    "id": "celebration-burst-hardcoded-origin",
+    "title": "CelebrationBurst origins hardcoded to one device's pixels (off-center everywhere else)",
+    "file": "src/components/StreakMilestoneCeremony.tsx",
+    "klass": "F2",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "centerX=\\{180\\}"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "centerX=\\{180\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "useWindowDimensions"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "useWindowDimensions"
+      }
+    ]
+  },
+  {
+    "id": "achievement-dead-animated-text",
+    "title": "Dead module-scope AnimatedText in AchievementCeremony",
+    "file": "src/components/AchievementCeremony.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/AchievementCeremony.tsx",
+        "pattern": "AnimatedText"
+      }
+    ]
+  },
+  {
+    "id": "scanline-animated-path-dead-and-ungated",
+    "title": "ScanLineOverlay carried a dead, ungated infinite scroll loop no caller ever enabled",
+    "file": "src/components/common/ScanLineOverlay.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/ScanLineOverlay.tsx",
+        "pattern": "withRepeat"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/ScanLineOverlay.tsx",
+        "pattern": "animated\\?: boolean"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/ScanLineOverlay.tsx",
+        "pattern": "scrollingLine"
+      }
+    ]
+  },
+  {
+    "id": "particlesystem-dead-exports",
+    "title": "ShimmerEffect and PulsingGlowRing exported with zero importers",
+    "file": "src/components/effects/ParticleSystem.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/effects/ParticleSystem.tsx",
+        "pattern": "ShimmerEffect"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/effects/ParticleSystem.tsx",
+        "pattern": "PulsingGlowRing"
+      }
+    ]
+  },
+  {
+    "id": "not-synced-banner-dead-exit-fade",
+    "title": "NotSyncedBanner's exit fade unmounted on the frame it started (never displayed)",
+    "file": "src/components/NotSyncedBanner.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/NotSyncedBanner.tsx",
+        "pattern": "if \\(!shouldShow\\) return null;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/NotSyncedBanner.tsx",
+        "pattern": "if \\(finished && !shouldShow\\) setRendered\\(false\\);"
+      }
+    ]
+  },
+  {
+    "id": "event-claim-anim-ungated",
+    "title": "Event reward-claim bounce ran for reduce-motion users",
+    "file": "src/screens/EventScreen.tsx",
+    "klass": "P5",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EventScreen.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EventScreen.tsx",
+        "pattern": "if \\(!reduceMotion\\) \\{\\n      Animated\\.sequence",
+        "count": 1
+      }
+    ]
+  },
+  {
+    "id": "event-leaderboard-rank-in-row-key",
+    "title": "Event leaderboard rows keyed by userId+rank (index key in disguise, remounts on reorder)",
+    "file": "src/components/events/EventLeaderboardCard.tsx",
+    "klass": "P8",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/events/EventLeaderboardCard.tsx",
+        "pattern": "key=\\{`\\$\\{entry\\.userId\\}-\\$\\{rank\\}`\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/events/EventLeaderboardCard.tsx",
+        "pattern": "key=\\{entry\\.userId\\}"
+      }
+    ]
+  },
+  {
+    "id": "mystery-wheel-dismiss-mid-spin-reroll",
+    "title": "Finished-guard on the spin callback made mid-spin dismissal a free re-roll \u2014 dismissal now locked while spinning",
+    "file": "src/components/MysteryWheel.tsx",
+    "klass": "F6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "onPress=\\{spinning \\? undefined : onDismiss\\}",
+        "count": 2
+      }
+    ]
+  },
+  {
+    "id": "ceremony-dismiss-registry-wrong-target",
+    "title": "Single-slot graceful-dismiss registry could be stolen by a non-queue modal (auto-dismiss would close the wrong surface)",
+    "file": "src/hooks/useCeremonyTransition.ts",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyTransition.ts",
+        "pattern": "queueManaged"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "queueManaged: false"
+      }
+    ]
+  },
+  {
+    "id": "auto-advance-delay-unclamped",
+    "title": "autoAdvanceDelayMs read unclamped \u2014 a blanked RC value would auto-navigate off every victory screen instantly",
+    "file": "src/components/PuzzleComplete.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/PuzzleComplete.tsx",
+        "pattern": "getRemoteNumberClamped\\('autoAdvanceDelayMs', 3500, 1500, 15000\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/PuzzleComplete.tsx",
+        "pattern": "getRemoteNumber\\('autoAdvanceDelayMs'\\)"
+      }
+    ]
+  },
+  {
+    "id": "grid-superseded-fall-not-stopped",
+    "title": "A re-fall during the predecessor's hold/stagger left the old sequence running \u2014 stale timing clobber + dropped onGravitySettled",
+    "file": "src/components/Grid.tsx",
+    "klass": "F6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/Grid.tsx",
+        "pattern": "const superseded = activeFallsRef\\.current\\.get\\(fall\\.id\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/Grid.tsx",
+        "pattern": "superseded\\.stop\\(\\);"
+      }
+    ]
+  },
+  {
+    "id": "daily-leaderboard-ceiling-rejects-real-scores",
+    "title": "Daily plays at level 0 so the server ceiling was 1000 \u2014 virtually every legitimate daily score rejected",
+    "file": "functions/src/social.ts",
+    "klass": "C2",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "if \\(scope === 'daily'\\) \\{"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "return 10_000;"
+      }
+    ]
+  },
+  {
+    "id": "stuck-rescue-grants-undo-in-no-assist-modes",
+    "title": "Free stuck rescue granted a working undo in expert/perfectSolve (allowUndo:false modes)",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "modeConfig\\.rules\\.allowUndo &&\\n      !modeConfig\\.rules\\.unlimitedUndo &&"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "mode !== 'relax' &&\\n      undosLeft <= 0"
+      }
+    ]
+  },
+  {
+    "id": "shared-board-wallclock-nondeterminism",
+    "title": "Daily/weekly candidate acceptance depended on wall-clock solver budgets \u2014 slow devices could get a different shared board",
+    "file": "src/engine/boardGenerator.ts",
+    "klass": "C4",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/engine/boardGenerator.ts",
+        "pattern": "deterministic \\? undefined : GEN_SOLVE_BUDGET_MS"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/boardGenerator.ts",
+        "pattern": "deterministic \\? Number\\.POSITIVE_INFINITY : GEN_SOLVE_BUDGET_MS"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/boardGenerator.ts",
+        "pattern": "if \\(deterministic\\) return;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/boardGenerator.ts",
+        "pattern": "budgetMs: DAILY_FAIRNESS_BUDGET_MS,\\n  // The daily ranks on a shared leaderboard"
+      }
+    ]
+  },
+  {
+    "id": "daily-deal-double-tap-double-charge",
+    "title": "Daily-deal one-per-day guard was async-only \u2014 a fast double-tap charged and delivered twice",
+    "file": "App.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "dealPurchaseGuardRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "if \\(dealPurchaseGuardRef\\.current === claim\\) return;"
+      }
+    ]
+  },
+  {
+    "id": "dead-trace-release-clips-drag-then-tap",
+    "title": "180ms dead-trace release wiped viable partial traces, breaking drag-then-tap-to-extend",
+    "file": "src/screens/game/PlayField.tsx",
+    "klass": "C5",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/game/PlayField.tsx",
+        "pattern": "selectionIsLivePrefixRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/game/PlayField.tsx",
+        "pattern": "if \\(selectionIsLivePrefixRef\\.current\\) return;"
+      }
+    ]
+  },
+  {
+    "id": "streak-break-inherits-grace-cooldown",
+    "title": "A diffDays===2 break (grace on cooldown, no shield) kept the dead streak's grace cooldown",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "const streakBroke = streakReset;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "diffDays >= 3 && !shieldConsumed"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/streakGrace.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "hint-token-spent-when-solver-returns-null",
+    "title": "Hint token charged when USE_HINT would no-op on a dead board",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "export function canProduceHint"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(!canProduceHint\\(store\\.getState\\(\\)\\)\\) return;"
+      }
+    ]
+  },
+  {
+    "id": "premium-autosolve-charges-gems-on-dead-board",
+    "title": "close_finish_premium took gems before USE_PREMIUM_HINT could no-op on a dead board",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "canProduceHint\\(store\\.getState\\(\\)\\) && spendGems\\(gemCost\\)"
+      }
+    ]
+  },
+  {
+    "id": "smart-shuffle-refund-never-reaches-economy",
+    "title": "SMART_SHUFFLE failure refunded only in-puzzle counts; the economy token stayed spent",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "export function canSmartShuffle"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(!canSmartShuffle\\(store\\.getState\\(\\)\\)\\) return;"
+      }
+    ]
+  },
+  {
+    "id": "wildcard-cancel-spends-second-token",
+    "title": "Cancelling wildcard placement spent a second booster token",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C1",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(gameState\\.wildcardMode\\) \\{"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(gameState\\.boosterCounts\\.wildcardTile <= 0\\) \\{"
+      }
+    ]
+  },
+  {
+    "id": "wildcard-position-not-remapped-after-gravity",
+    "title": "Unused wildcard marker kept stale coordinates after gravity (reassigned to whatever slid in)",
+    "file": "src/hooks/useGame.ts",
+    "klass": "C3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "const wildcardIds = new Set"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "wildcardsDestroyed"
+      }
+    ]
+  },
+  {
+    "id": "undo-does-not-restore-consumed-freeze-doubler",
+    "title": "Undo rolled back a doubler/freeze's benefit but not its consumption",
+    "file": "src/hooks/useGame.ts",
+    "klass": "C1",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "scoreDoubler: lastHistory\\.scoreDoubler \\?\\? state\\.scoreDoubler"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "scoreDoubler: state\\.scoreDoubler,\\n        boardFreezeActive: state\\.boardFreezeActive,"
+      }
+    ]
+  },
+  {
+    "id": "premium-hint-preserves-flawless-and-3-stars",
+    "title": "A paid premium reveal kept the FLAWLESS badge and streak (doc defines flawless as no hints)",
+    "file": "src/hooks/useGame.ts",
+    "klass": "C3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "premiumHintUsed: true,[\\s\\S]{0,400}?perfectRun: false,"
+      }
+    ]
+  },
+  {
+    "id": "daily-snapshot-survives-rollover",
+    "title": "Mid-daily snapshot from day D hydrated verbatim into day D+1's different board",
+    "file": "src/services/puzzleSnapshot.ts",
+    "klass": "C3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/puzzleSnapshot.ts",
+        "pattern": "if \\(snapshot\\.mode === 'daily'\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/puzzleSnapshot.ts",
+        "pattern": "getWeekId\\(savedAt\\) === getWeekId\\(now\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/puzzleSnapshot.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "timer-pauses-in-background-despite-anticheat-doc",
+    "title": "timePressure clock froze while backgrounded despite the documented anti-cheat",
+    "file": "src/hooks/useGame.ts",
+    "klass": "C3",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "elapsedSeconds"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/types.ts",
+        "pattern": "type: 'TICK_TIMER'; elapsedSeconds\\?: number"
+      }
+    ]
+  },
+  {
+    "id": "prestige-hint-bonus-never-applied",
+    "title": "Prestige tier-1 '+1 hint' displayed as permanent but never provisioned (rare-tile decoder landed too)",
+    "file": "src/data/prestigeSystem.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/data/prestigeSystem.ts",
+        "pattern": "export function getPrestigeHintBonus"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/prestigeSystem.ts",
+        "pattern": "export function getPrestigeRareTileBonus"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "prestigeFreeHintsRef"
+      }
+    ]
+  },
+  {
+    "id": "onpuzzlecomplete-clubid-never-written",
+    "title": "onPuzzleComplete resolved club via phantom users.clubId field \u2014 entire club pipeline dead",
+    "file": "functions/src/social.ts",
+    "klass": "C2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "where\\('memberIds', 'array-contains', userId\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/social.ts",
+        "pattern": "if \\(!userData\\?\\.clubId\\) return;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "tx\\.set\\(db\\.collection\\('users'\\)\\.doc\\(uid\\), \\{ clubId \\}, \\{ merge: true \\}\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "clubId: admin\\.firestore\\.FieldValue\\.delete\\(\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "streak-reminder-queries-nonexistent-field",
+    "title": "processStreakReminders queried streaks.currentStreak map no writer produces \u2014 zero matches forever",
+    "file": "functions/src/social.ts",
+    "klass": "C2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/social.ts",
+        "pattern": "where\\('streaks\\.currentStreak'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "\\.where\\('currentStreak', '>', 0\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "userData\\.lastActiveDate"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "weekly-rewards-rerun-resets-claimed",
+    "title": "distributeWeeklyRewards re-run rewrote claimed:false onto already-claimed reward docs \u2014 double-pay",
+    "file": "functions/src/social.ts",
+    "klass": "C1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/social.ts",
+        "pattern": "batch\\.set\\(rewardRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "db\\.getAll\\(\\.\\.\\.chunk\\.map"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "skippedExisting"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "dead-goal-templates-chain-combo",
+    "title": "Chain/combo club-goal templates read fields the Option A refactor deleted \u2014 unprogressable goals dealt weekly",
+    "file": "functions/src/social.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/social.ts",
+        "pattern": "trackingKey: '(chains|combos)Triggered'|result\\.(chainCount|maxCombo)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/social.ts",
+        "pattern": "id: 'shared_cascade'"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "day2-reengagement-payer-filter-dead",
+    "title": "Day-2 reengagement payer filter read purchaseHistory off root doc where it never exists \u2014 payers got non-payer push",
+    "file": "functions/src/social.ts",
+    "klass": "C2",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/social.ts",
+        "pattern": "Array\\.isArray\\(u\\.purchaseHistory\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "\\.collection\\('purchases'\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "return !purchases\\.empty"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "personal-goals-pooled-and-pay-everyone",
+    "title": "Personal club goals pooled all members' progress and paid every memberId, contradicting the mode:'personal' contract",
+    "file": "functions/src/social.ts",
+    "klass": "C6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "memberProgress\\.\\$\\{userId\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "completedMembersAt\\.\\$\\{userId\\}"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/social.ts",
+        "pattern": "users/\\$\\{memberId\\}/rewards/\\$\\{goalDoc\\.id\\}"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "autokick-kicks-active-members-14-days-after-join",
+    "title": "memberLastActive only ever stamped at join \u2014 autokick expelled every member 14 days after joining regardless of play",
+    "file": "functions/src/index.ts",
+    "klass": "C2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "memberLastActive\\.\\$\\{userId\\}"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/index.ts",
+        "pattern": "written solely by clubGoalProgress"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/index.ts",
+        "pattern": "if \\(lastActive && lastActive\\.toMillis\\(\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "account-deletion-misses-event-scores",
+    "title": "requestAccountDeletion left userId+displayName on public event leaderboards plus club/referral residues after reporting success",
+    "file": "functions/src/index.ts",
+    "klass": "C2",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "functions/src/index.ts",
+        "pattern": "\\.collection\\(\"events\"\\)\\.listDocuments\\(\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/index.ts",
+        "pattern": "eventScoresRemoved"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/index.ts",
+        "pattern": "memberLastActive\\.\\$\\{uid\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/index.ts",
+        "pattern": "referralsScrubbed"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "leaderboard-validation-bypassed-by-direct-write-rules",
+    "title": "Direct leaderboard writes capped at server ceilings; server markers unforgeable",
+    "file": "firestore.rules",
+    "klass": "C2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "firestore.rules",
+        "pattern": "data\\.score <= 1000000"
+      },
+      {
+        "type": "pattern-present",
+        "file": "firestore.rules",
+        "pattern": "hasAny\\(\\['server', 'validatedAt'\\]\\)",
+        "count": 6
+      },
+      {
+        "type": "pattern-present",
+        "file": "firestore.rules",
+        "pattern": "docId == request\\.auth\\.uid \\+ '_' \\+ request\\.resource\\.data\\.weekId",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "firestore.rules",
+        "pattern": "request\\.resource\\.data\\.score - resource\\.data\\.score <= 250000",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "firestore.rules",
+        "pattern": "data\\.score <= 10000(?!0)",
+        "count": 2
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/firestoreRulesShape.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "puzzleresults-unbounded-forgery",
+    "title": "puzzleResults owner writes bounded to server clamps and made immutable",
+    "file": "firestore.rules",
+    "klass": "C2",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "firestore.rules",
+        "pattern": "data\\.wordsFound <= 1000",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "firestore.rules",
+        "pattern": "allow update, delete: if false;",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/firestoreRulesShape.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "apple-ssn-collection-group-index-missing",
+    "title": "COLLECTION_GROUP index override for purchases.transactionId (Apple SSN lookup)",
+    "file": "firestore.indexes.json",
+    "klass": "C2",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "firestore.indexes.json",
+        "pattern": "\"collectionGroup\": \"purchases\"",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "firestore.indexes.json",
+        "pattern": "\"queryScope\": \"COLLECTION_GROUP\"",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/firestoreRulesShape.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "weekid-year-boundary-splits-week-and-skips-reward-bucket",
+    "title": "Sunday-anchored week ids: year-boundary week stays one 7-day bucket",
+    "file": "src/utils/weekId.ts",
+    "klass": "C4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/utils/weekId.ts",
+        "pattern": "const year = date\\.getUTCFullYear\\(\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/weekId.ts",
+        "pattern": "sunday\\.getUTCFullYear\\(\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/weekId.ts",
+        "pattern": "utcMidnight - date\\.getUTCDay\\(\\) \\* DAY_MS",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/weekId.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "weekly-payout-orphans-year-boundary-week",
+    "title": "Payout runs now name every week bucket: server week-id helpers Sunday-anchored in lockstep",
+    "file": "functions/src/social.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "functions/src/social.ts",
+        "pattern": "const days = Math\\.floor\\(\\(now\\.getTime\\(\\) - startOfYear\\.getTime\\(\\)\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "const sunday = new Date\\(utcMidnight - ",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "sunday\\.getTime\\(\\) - startOfYear\\.getTime\\(\\)",
+        "count": 2
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/weekId.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "validated-score-callable-no-retry-no-fallback",
+    "title": "Validated-score callables retry transient failures, short-circuit validator rejections",
+    "file": "src/services/firestore.ts",
+    "klass": "C2",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/firestore.ts",
+        "pattern": "callableWithRetry",
+        "count": 4
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/firestore.ts",
+        "pattern": "code\\.slice\\('functions/'\\.length\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/firestore.ts",
+        "pattern": "await submitValidatedScoreCallable\\(\\{"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/validatedScoreRetry.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "cloud-lww-fresh-state-clobbers-save",
+    "title": "Fresh/default local state stamped and pushed over cloud save; failed pull disabled for session",
+    "file": "src/contexts/PlayerContext.tsx",
+    "klass": "C7",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "if \\(user && cloudReconciledRef\\.current\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "isInitialLoadDone\\.current = false;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "return \\{ \\.\\.\\.DEFAULT_PLAYER_DATA, \\.\\.\\.cloudData \\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/playerDataSync.ts",
+        "pattern": "cloudHasProgress && !localHasProgress"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/playerSyncGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "shallow-hydration-clobbers-nested-defaults",
+    "title": "Shallow hydration dropped nested defaults added after a save was written",
+    "file": "src/contexts/PlayerContext.tsx",
+    "klass": "C7",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "\\.\\.\\.prev, \\.\\.\\.parsed"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "hydratePlayerData\\(prev, parsed\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/playerDataSync.ts",
+        "pattern": "export function hydratePlayerData"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/playerSyncGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "hydration-failure-stamps-defaults-fresher-than-cloud",
+    "title": "Failed hydration stamped defaults lastModified=now, permanently outranking cloud",
+    "file": "src/contexts/PlayerContext.tsx",
+    "klass": "C7",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "lastModified: cloudReconciledRef\\.current \\? now : data\\.lastModified \\|\\| 0"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "const dataWithTimestamp: PlayerData = \\{ \\.\\.\\.data, lastModified: now \\};"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "CLOUD_PULL_RETRY_MS",
+        "count": 2
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/playerSyncGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "referral-milestone-currency-never-granted",
+    "title": "Referral milestone coins/gems never credited despite permanent claimed flag",
+    "file": "src/contexts/PlayerContext.tsx",
+    "klass": "C1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "economyActionsRef\\.current\\?\\.addCoins\\(rewards\\.coins\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "economyActionsRef\\.current\\?\\.addGems\\(rewards\\.gems\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "referral_milestone_claimed"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "prestige-keeps-per-level-difficulty-state",
+    "title": "performPrestige retained levelAttempts/fail counts, pinning New-Game+ to 'easier'",
+    "file": "src/contexts/PlayerContext.tsx",
+    "klass": "C3",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "performanceMetrics: \\{\\s*\\.\\.\\.DEFAULT_PLAYER_METRICS"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "failCountByLevel: \\{\\},\\s*consecutiveFailures: 0,\\s*lastLevelStars: 0,",
+        "count": 2
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "segments-spending-overwritten-to-nonpayer",
+    "title": "Provider's zero-spend recompute overwrote spending segment to non_payer",
+    "file": "src/contexts/PlayerContext.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "segments\\.spending = prev\\.segments\\.spending"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "totalSpendCents: totalSpendCents \\?\\? 0"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "club-discovery-race-clobbers-fresh-join",
+    "title": "Stale membership discovery result wiped a join completed while query in flight",
+    "file": "src/contexts/PlayerContext.tsx",
+    "klass": "C2",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "clubMutationCounter\\.current \\+= 1"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "reconcileDiscoveredClub\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "setClubId\\(club \\? \\(club\\.id as string\\) : null\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/playerDataSync.ts",
+        "pattern": "export function reconcileDiscoveredClub"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/playerSyncGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mode-level-cross-writes-global-progression",
+    "title": "Non-classic wins wrote global classic progression (stars, levels, chapters, wing bonuses)",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "C6",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "const isClassicProgression = mode === 'classic' && level > 0;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "isClassicProgression \\? Math\\.max\\(level \\+ 1, prevLevel\\) : prevLevel",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "puzzlesSolved: player\\.puzzlesSolved \\+ 1,",
+        "count": 2
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-replay-reward-farm",
+    "title": "Daily rewards (150c/2g/200XP/streak/leaderboard) repeatable via daily replays",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "C1",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "const isFirstDailyToday = isDaily && !\\(player\\.dailyCompleted \\?\\? \\[\\]\\)\\.includes\\(todayUtc\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "\\(isDaily \\? 200 : 0\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "\\(isFirstDailyToday \\? 200 : 0\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "if \\(isFirstDailyToday && userId\\)",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mastery-premium-lane-never-granted",
+    "title": "$4.99 Premium Pass mastery lane displayed as earned but never credited",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "C1",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "economy\\.isPremiumPassFlag && tierReward\\.premium",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "tierReward\\.premium\\.coins",
+        "count": 3
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "win-streak-never-resets-on-loss",
+    "title": "Win streak never reset on loss \u2014 milestones paid on cumulative lifetime wins",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "player\\.updateWinStreak\\(false\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "hadFailuresSinceLastWin",
+        "count": 3
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "last-level-stars-only-written-on-recovery-wins",
+    "title": "lastLevelStars only written on recovery wins \u2014 breather config pinned or never triggered",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "C3",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "player\\.updateProgress\\(\\{ consecutiveFailures: 0, lastLevelStars: stars \\}\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "lastLevelStars: stars,",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "achievement-tiers-detected-one-puzzle-late",
+    "title": "checkAchievements read stale pre-completion counters \u2014 tiers detected/paid one puzzle late",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "player\\.checkAchievements\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "player\\.checkAchievements\\(\\{",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "puzzle_solver: player\\.puzzlesSolved \\+ 1,",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "seasonal-quest-modes-played-counts-puzzles",
+    "title": "Seasonal 'modes_played' quest step counted every puzzle instead of distinct modes",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "C6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "trackingKey === 'modes_played'\\) increment = 1;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "increment = isNewModeThisWeek \\? 1 : 0;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "modesPlayedThisWeek: \\[\\.\\.\\.modesThisWeek, mode\\]",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "weekly-goal-rewards-never-granted",
+    "title": "Weekly goal rewards (and all-complete bonus) displayed but never credited",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "title: 'Weekly Goal Complete!'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "weeklyGoalId: 'weekly_all_complete'"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/progressMethods.test.ts"
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/ceremonyGrants.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "stale-streak-shield-never-cleared-blocks-offers",
+    "title": "Purchased streak shield expired after 72h yet flag never cleared, blocking re-offers",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "SHIELD_WINDOW_MS"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "shieldFresh"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "const shieldUsable = streaks\\.streakShieldAvailable;"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/progressMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "shield-consume-drops-todays-play-day",
+    "title": "Shield consume preserved streak without counting the comeback day's play",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "newStreak = streaks\\.currentStreak \\+ 1;\\s*shieldConsumed = true;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "newStreak = streaks\\.currentStreak;\\s*shieldConsumed"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/progressMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "restore-streak-next-day-off-by-one",
+    "title": "Paid streak restore hardcoded prevStreak+1, discarding a next-day played day",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "const postBreakRun = Math\\.max\\(prev\\.streaks\\.currentStreak, 1\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "restoredCount = br\\.prevStreak \\+ 1;"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/progressMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-missions-panel-never-completes",
+    "title": "Missions never flip completed; two untracked templates generated dead bars",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "MISSION_TARGETS"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "const completed = m\\.completed \\|\\| newProgress >= target;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "'collect_rare_tile',"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "'play_5_minutes',"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/progressMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "weekly-goals-dead-tracking-keys",
+    "title": "Six weekly-goal templates used tracking keys nothing ever updated",
+    "file": "src/data/weeklyGoals.ts",
+    "klass": "C6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/data/weeklyGoals.ts",
+        "pattern": "trackingKey: 'words_found'"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/weeklyGoals.ts",
+        "pattern": "trackingKey: 'modes_played'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/weeklyGoals.ts",
+        "pattern": "id: 'weekly_puzzles_40'"
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/weeklyGoals.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "seasonal-quest-final-reward-never-granted",
+    "title": "Seasonal quest finalReward (2000c/50g + exclusive frame) never granted on completion",
+    "file": "src/data/seasonalQuests.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/data/seasonalQuests.ts",
+        "pattern": "export function getQuestFinalReward"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/ceremonyGrants.ts",
+        "pattern": "getQuestFinalReward\\(ceremony\\.data\\?\\.questId"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "if \\(isProfileCosmeticId\\(resolved\\)\\) finalCosmeticId = resolved;"
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/ceremonyGrants.test.ts"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/progressMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "tile-collector-achievement-metric-unreachable",
+    "title": "tile_collector counted distinct letters (max 26), making gold (52) unreachable",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "tile_collector: Object\\.keys\\(data\\.collections\\.rareTiles\\)\\.length"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "tile_collector: Object\\.values\\(data\\.collections\\.rareTiles\\)\\.reduce"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/progressMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "atlas-scholar-counts-touched-not-completed-pages",
+    "title": "atlas_scholar counted pages touched (1+ words) instead of completed pages",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "atlas_scholar: Object\\.keys\\(data\\.collections\\.atlasPages\\)\\.length"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "atlas_scholar: ATLAS_PAGES\\.filter"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/progressMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-value-pack-drip-never-claimed",
+    "title": "Daily Value Pack drip auto-claimed on load/foreground/purchase",
+    "file": "src/contexts/EconomyContext.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "claimDailyValuePackDrip\\(\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "dailyValuePackExpiry > Date\\.now\\(\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/economyGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "consume-before-fulfillment-persist",
+    "title": "IAP delivers + flushes grant to durable storage before consume",
+    "file": "src/services/iap.ts",
+    "klass": "C1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/services/iap.ts",
+        "pattern": "consumePurchaseAndroid[\\s\\S]*resolvePendingPurchase\\(storeId, successResult\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/iap.ts",
+        "pattern": "resolvePendingPurchase\\(storeId, successResult\\)[\\s\\S]*?flushFulfillment\\(\\)[\\s\\S]*?consumePurchaseAndroid"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/iap.ts",
+        "pattern": "onFulfillmentFlush"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/economyGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "season-pass-rare-tile-mystery-box-not-delivered",
+    "title": "Season-pass rare_tile/mystery_box tiers deliver real goods at claim",
+    "file": "src/contexts/EconomyContext.tsx",
+    "klass": "C6",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "Inventory-only rewards surface"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "settleSeasonPassReward\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/economySync.ts",
+        "pattern": "case 'mystery_box'"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/economyGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "economy-local-persist-blocked-by-offline-firestore",
+    "title": "Economy local persist decoupled from never-settling offline setDoc",
+    "file": "src/contexts/EconomyContext.tsx",
+    "klass": "C7",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "'economy-local'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "persistLocalQueueRef"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "'economy'\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/economyGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "economy-cloud-adopt-reverts-fresh-session-state",
+    "title": "Cloud economy adopt is strict recency (no equal-stamp re-adopt)",
+    "file": "src/contexts/EconomyContext.tsx",
+    "klass": "C7",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "cloudModified >= localModified"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "shouldAdoptCloudEconomy\\("
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/economyGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "ad-life-grant-resets-refill-timer",
+    "title": "Life grants bank accrued refills and keep the refill anchor",
+    "file": "src/contexts/EconomyContext.tsx",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "creditLives\\(prev\\.lives,",
+        "count": 2
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "current: Math\\.min\\(prev\\.lives\\.current \\+"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/economyGuards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "gift-tile-claim-grants-different-item-per-surface",
+    "title": "Gift claim grants same goods on both surfaces via shared applyGiftGrant mapper",
+    "file": "App.tsx",
+    "klass": "C1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "applyGiftGrant\\(gift, economy\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "App.tsx",
+        "pattern": "gift\\.type === 'hint'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GiftInbox.tsx",
+        "pattern": "applyGiftGrant\\(gift, \\{ addHintTokens, addBoosterToken, addLives \\}\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/giftGrants.ts",
+        "pattern": "case 'life':\\s*actions\\.addLives\\(amount\\);",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/giftGrants.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "energy-ad-refill-without-ad",
+    "title": "Energy 'Watch Ad (+5)' now shows rewarded ad, refills only on reward",
+    "file": "App.tsx",
+    "klass": "C1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "App.tsx",
+        "pattern": "onPress: \\(\\) => \\{ player\\.refillEnergy\\('ad'\\); \\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "void watchAdForEnergyRefill\\(player\\)",
+        "count": 3
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const result = await adManager\\.showRewardedAd\\('life_reward'\\);\\s*if \\(result\\.rewarded\\) \\{\\s*player\\.refillEnergy\\('ad'\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "comeback-reward-tier-mismatch-30day",
+    "title": "Comeback tiers branch on emitted 3day/7day/30day ids; 500/15 tier reachable",
+    "file": "App.tsx",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "App.tsx",
+        "pattern": "is14day"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "comebackAmounts\\(rewards\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/comebackRewards.ts",
+        "pattern": "includes\\('30day'\\)",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/comebackRewards.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "hard-energy-level-never-debited-after-refill-or-ad",
+    "title": "Hard-energy guard key claimed only after successful debit; refill/ad recovery debits",
+    "file": "App.tsx",
+    "klass": "C1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const \\{ started \\} = hardEnergy\\.startLevel\\(\\);[\\s\\S]{0,600}debitedLevelRef\\.current = key;",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "App.tsx",
+        "pattern": "debitedLevelRef\\.current = key;\\s*if \\(!hardEnergy\\.canPlay\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "if \\(showNoLives\\) return;",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "spin-prompt-fires-for-preexisting-spins",
+    "title": "Spin prompt gated on a completion-recorded baseline, not mount-time ref of 0",
+    "file": "App.tsx",
+    "klass": "C5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "hasCompletedThisLevelRef",
+        "count": 3
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "if \\(!hasCompletedThisLevelRef\\.current\\) return;",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "flash-sale-advertises-undeliverable-price",
+    "title": "Flash sale advertised a price the store never charges",
+    "file": "src/data/dynamicPricing.ts",
+    "klass": "C1",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/data/dynamicPricing.ts",
+        "pattern": "item\\.originalPriceAmount \\* \\(1 - item\\.discountPercent"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/dynamicPricing.ts",
+        "pattern": "override\\.originalPriceAmount \\* \\(1 - override\\.discountPercent"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/dynamicPricing.ts",
+        "pattern": "function resolveSalePricing"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/dynamicPricing.ts",
+        "pattern": "originalPriceAmount: 7\\.99,\\s*discountPercent: 38"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "iapManager\\.getPrice\\(flashSale\\.productId\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "BUY NOW \\$\\{flashSaleBuyPrice\\}"
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/dynamicPricing.test.ts"
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/dynamicPricing.override.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mega-bundle-offers-unfulfillable",
+    "title": "Churned/dolphin offers pointed at unpurchasable mega_bundle_gold",
+    "file": "src/data/dynamicPricing.ts",
+    "klass": "C1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/data/dynamicPricing.ts",
+        "pattern": "productId: 'mega_bundle_gold'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/dynamicPricing.ts",
+        "pattern": "productId: 'champion_pack'",
+        "count": 2
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "product\\?\\.fallbackPrice \\?\\? '\\$1\\.99'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "if \\(!product\\) return null;"
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/dynamicPricing.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "vip-cosmetics-missing-from-catalog",
+    "title": "VIP monthly/annual promised cosmetics that exist in no catalog",
+    "file": "src/data/shopProducts.ts",
+    "klass": "C1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/data/shopProducts.ts",
+        "pattern": "'frame_vip_monthly'"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/shopProducts.ts",
+        "pattern": "'frame_vip_annual'"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/shopProducts.ts",
+        "pattern": "'decoration_vip_annual_trophy'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/shopProducts.ts",
+        "pattern": "decorations: \\['frame_vip_exclusive', 'vip_trophy'\\]"
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/shopProducts.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "shop-ad-spin-grants-no-spin",
+    "title": "Watch-ad-for-spin called the puzzle ticker, granting no spin",
+    "file": "src/screens/ShopScreen.tsx",
+    "klass": "C6",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "awardFreeSpin\\(\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "awardFreeSpin \\} = usePlayerActions"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "updateMysteryWheel\\(\\{ spinsAvailable: mysteryWheelSpins \\+ 1 \\}\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "vip-daily-claim-alert-hardcodes-weekly-amounts",
+    "title": "VIP claim alert hardcoded weekly 50/3 for all tiers",
+    "file": "src/screens/ShopScreen.tsx",
+    "klass": "C5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "You received 50 gems and 3 hints"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "getVipDailyDrip"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/shopProducts.ts",
+        "pattern": "export function getVipDailyDrip"
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/shopProducts.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-value-pack-30-day-copy",
+    "title": "Daily Value Pack card claimed 30 days for a 7-day drip",
+    "file": "src/screens/ShopScreen.tsx",
+    "klass": "C5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "every day for 30 days"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "Bonus rewards every day for 7 days"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ShopScreen.tsx",
+        "pattern": "bonus rewards every day for 7 days"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "analytics-flush-no-concurrency-guard",
+    "title": "flush() single-flight + per-batch clearing prevents duplicate Firestore analytics docs",
+    "file": "src/services/analytics.ts",
+    "klass": "C8",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "if \\(this\\.flushPromise\\) return this\\.flushPromise;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "private async flushInternal\\(\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "bufferedEvents\\.filter\\(e => !batchIds\\.has\\(e\\.id\\)\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/analytics.ts",
+        "pattern": "Firestore flush failed, events retained locally"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/analyticsIntegrity.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "analytics-optout-not-applied-natively-on-boot-race",
+    "title": "initFirebase re-applies analytics opt-out to native SDK after wiring",
+    "file": "src/services/analytics.ts",
+    "klass": "C8",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "setAnalyticsCollectionEnabled\\(this\\.analyticsEnabled\\)",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/analyticsIntegrity.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "analytics-event-load-race-drops-boot-events",
+    "title": "Single-flight event/state loads; disk events merged, not assigned over pushes",
+    "file": "src/services/analytics.ts",
+    "klass": "C8",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "eventsLoadPromise",
+        "count": 4
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "\\[\\.\\.\\.parsed, \\.\\.\\.this\\.bufferedEvents\\]"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/analytics.ts",
+        "pattern": "this\\.bufferedEvents = JSON\\.parse\\(raw\\) as StoredEvent\\[\\];"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "stateLoadPromise"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/analyticsIntegrity.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "stale-session-survives-crash-corrupts-durations",
+    "title": "sessionId/sessionStartedAt never persisted nor restored \u2014 crash cannot resurrect a dead session",
+    "file": "src/services/analytics.ts",
+    "klass": "C8",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "sessionId: null,\\s*sessionStartedAt: null,"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "sessionId: this\\.state\\.sessionId,"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/analytics.ts",
+        "pattern": "JSON\\.stringify\\(this\\.state\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/analyticsIntegrity.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "retention-day-markers-local-setdate-dst-skew",
+    "title": "D1/D7/D30 retention day markers computed in pure UTC (retentionDayDate)",
+    "file": "src/services/analytics.ts",
+    "klass": "C4",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "export function retentionDayDate\\(installDate: string, days: number\\): string"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/analytics.ts",
+        "pattern": "retentionDayDate\\(retention\\.installDate, 30\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/analytics.ts",
+        "pattern": "d\\.setDate\\(d\\.getDate\\(\\) \\+ days\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/analyticsIntegrity.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mini-event-tiers-reached-by-score-unit-mismatch",
+    "title": "Mini-event progress fed raw score against star/puzzle/rare-tile thresholds",
+    "file": "src/services/eventManager.ts",
+    "klass": "C1",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/eventManager.ts",
+        "pattern": "this\\.updateEventProgress\\(event\\.id, 'stars', stars\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/eventManager.ts",
+        "pattern": "updateEventProgress\\(event\\.id, 'puzzles', 1\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/eventManager.ts",
+        "pattern": "Mini events track based on their bonus type"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/eventManager.ts",
+        "pattern": "onRareTileEarned"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/eventManagerProgress.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mini-event-hints-key-mismatch",
+    "title": "Mini tier `hints` rewards silently dropped by hintTokens-only claim path",
+    "file": "src/services/eventManager.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/eventManager.ts",
+        "pattern": "hintTokens: r\\.reward\\.hints"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/eventManager.ts",
+        "pattern": "rewards: r\\.reward,"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/eventManagerProgress.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mini-event-bonus-types-not-implemented",
+    "title": "Hint Frenzy / Star Shower advertised mechanics that never existed",
+    "file": "src/data/eventLayers.ts",
+    "klass": "C6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/data/eventLayers.ts",
+        "pattern": "description: 'Earn double stars on every puzzle!'"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/eventLayers.ts",
+        "pattern": "description: 'Free bonus hints every puzzle"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/eventLayers.ts",
+        "pattern": "Double XP all day"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/eventLayers.ts",
+        "pattern": "Solve puzzles today to earn free hint tokens"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mini-bonus-types-unimplemented",
+    "title": "bonus_hints/double_stars copy rewritten to delivered bonuses + unit contract documented",
+    "file": "src/data/eventLayers.ts",
+    "klass": "C5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/data/eventLayers.ts",
+        "pattern": "Tier thresholds are authored in the unit implied by bonusType"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/eventLayers.ts",
+        "pattern": "Earn double stars on every puzzle"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/eventManagerProgress.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "main-event-dates-local-setdate-dst-drift",
+    "title": "Weekly event dates computed with local setDate drifted a UTC day in DST zones",
+    "file": "src/data/events.ts",
+    "klass": "C4",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/data/events.ts",
+        "pattern": "setDate\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/events.ts",
+        "pattern": "getDate\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/events.ts",
+        "pattern": "Date\\.UTC\\(2026, 0, 5\\)",
+        "count": 2
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/eventDatesUtc.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "tier-badge-decoration-never-granted",
+    "title": "Diamond-tier decorations now granted at claim; ungrantable badges stripped from data",
+    "file": "src/screens/EventScreen.tsx",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EventScreen.tsx",
+        "pattern": "if \\(reward\\.decoration\\) unlockDecoration\\(reward\\.decoration\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/events.ts",
+        "pattern": "badge:"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/eventManagerProgress.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "club-goal-fallback-template-picked-by-local-date",
+    "title": "Club goal fallback template hashed on local date while goalId used UTC",
+    "file": "src/data/clubEvents.ts",
+    "klass": "C4",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/data/clubEvents.ts",
+        "pattern": "getUTCFullYear\\(\\) \\* 10000"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/clubEvents.ts",
+        "pattern": "now\\.getFullYear\\(\\) \\* 10000"
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/clubGoalUtc.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "notification-cancel-registry-lost-on-process-restart",
+    "title": "Scheduled-notification cancel registry persisted across process restarts",
+    "file": "src/services/notifications.ts",
+    "klass": "C7",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/notifications.ts",
+        "pattern": "SCHEDULED_IDS_STORAGE_KEY = '@wordfall_notif_scheduled_ids'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/notifications.ts",
+        "pattern": "ensureScheduledIdsHydrated\\(",
+        "count": 5
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/notifications.ts",
+        "pattern": "persistScheduledIds\\(",
+        "count": 4
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/notificationManager.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "comeback-notification-filtered-for-its-target-cohorts",
+    "title": "Comeback ping exempted from segment filter that blocked its target cohorts",
+    "file": "src/services/notifications.ts",
+    "klass": "C5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/notifications.ts",
+        "pattern": "if \\(category === 'comeback'\\) return true;",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/notificationManager.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "friend-activity-template-body-random-across-event-types",
+    "title": "friend_activity title/body pinned to deterministic row matching the event",
+    "file": "src/services/notifications.ts",
+    "klass": "C5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/notifications.ts",
+        "pattern": "resolveTemplateIndex\\(category, templateVars\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/notifications.ts",
+        "pattern": "FRIEND_ACTIVITY_ROWS"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/notifications.ts",
+        "pattern": "const titleIdx = Math\\.floor"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/notificationManager.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-deep-link-navigates-to-game-without-board",
+    "title": "Daily deep link navigated to Game with no board (dead 'No puzzle loaded' screen + phantom life debit)",
+    "file": "src/App/useDeepLinks.ts",
+    "klass": "C5",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/App/useDeepLinks.ts",
+        "pattern": "params: \\{ mode: 'daily' \\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/App/deepLinkRouter.ts",
+        "pattern": "generateDailyBoard"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/App/deepLinkRouter.ts",
+        "pattern": "board, level: 0, mode: 'daily', isDaily: true"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/App/deepLinkRouter.ts",
+        "pattern": "initial: false"
+      },
+      {
+        "type": "test",
+        "suite": "src/App/__tests__/deepLinkRouter.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "initial-deep-link-dropped-behind-consent-and-onboarding",
+    "title": "Initial deep link dropped when cold start lands behind ConsentGate/onboarding; now buffered and replayed once MainTabs mounts",
+    "file": "src/App/useDeepLinks.ts",
+    "klass": "C5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/App/useDeepLinks.ts",
+        "pattern": "createPendingLinkReplayer",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/App/useDeepLinks.ts",
+        "pattern": "isNavReadyForLinks"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/App/useDeepLinks.ts",
+        "pattern": "name === 'MainTabs'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/App/useDeepLinks.ts",
+        "pattern": "replayer\\.flush\\(\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/App/__tests__/deepLinkRouter.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "dead-end-timeout-reported-as-stuck",
+    "title": "Dead-end checks report stuck on solver budget/timeout exhaustion",
+    "file": "src/engine/solver.ts",
+    "klass": "C3",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/engine/solver.ts",
+        "pattern": "function solveBudgetExhausted",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/solver.ts",
+        "pattern": "proven && !solveBudgetExhausted\\(solveBudget\\)",
+        "count": 3
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/engine/solver.ts",
+        "pattern": "return solve\\(cloneGrid\\(grid\\), remainingWords, budget\\) === null"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/engine/solver.ts",
+        "pattern": "return solveWithRotatingGravity\\(cloneGrid\\(grid\\), remainingWords, currentDirection, 0, budget\\) === null"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/engine/solver.ts",
+        "pattern": "return !isSolvableShrinkingBoard"
+      },
+      {
+        "type": "test",
+        "suite": "src/engine/__tests__/solver.test.ts"
+      },
+      {
+        "type": "test",
+        "suite": "src/engine/__tests__/stuckRate.test.ts"
+      },
+      {
+        "type": "test",
+        "suite": "src/engine/__tests__/skilledPlay.test.ts"
+      },
+      {
+        "type": "test",
+        "suite": "src/engine/__tests__/modeSolvability.test.ts"
+      },
+      {
+        "type": "test",
+        "suite": "src/engine/__tests__/gravityFlipPhase.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "procedural-chapter-boundary-off-by-one",
+    "title": "Procedural chapter boundary off-by-one bypasses post-600 star gates",
+    "file": "src/data/chapters.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/data/chapters.ts",
+        "pattern": "Math\\.floor\\(\\(proceduralLevel - 1\\) / 15\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/data/chapters.ts",
+        "pattern": "Math\\.floor\\(proceduralLevel / 15\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/proceduralCurve.test.ts"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/curveProfile.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "referral-code-collision-silently-misdirects-rewards",
+    "title": "Referral code collisions left the loser with a code resolving to another user (their referral rewards paid that user)",
+    "file": "src/data/referralSystem.ts",
+    "klass": "C2",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/data/referralSystem.ts",
+        "pattern": "REFERRAL_CODE_MAX_REGEN_ATTEMPTS"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/referralSystem.ts",
+        "pattern": "generateReferralCode\\(userId: string, salt: number = 0\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/firestore.ts",
+        "pattern": "Promise<'ok' \\| 'collision' \\| 'error'>"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "generateReferralCode\\(user\\.uid, salt\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/data/__tests__/referralSystem.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "vipactive-written-never-read",
+    "title": "Server VIP renewals/expiries (vipActive/vipExpiresAt) were written by onSubscriptionRenew and read by nothing",
+    "file": "src/contexts/EconomyContext.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/firestore.ts",
+        "pattern": "async getServerVipStatus"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "firestoreService\\.getServerVipStatus\\(user\\.uid\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/EconomyContext.tsx",
+        "pattern": "newestLocalVipPurchase"
+      }
+    ]
+  },
+  {
+    "id": "prestige-rare-tile-bonus-never-applied",
+    "title": "Prestige tier-3 rare-tile bonus displayed as permanent but absent from the drop roll",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "getPrestigeRareTileBonus"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "baseDropChance \\+ prestigeRareTileBonus"
+      }
+    ]
+  },
+  {
+    "id": "google-recovery-signin-clobbers-cloud-account",
+    "title": "credential-already-in-use recovery signed into the existing account and let this device's anonymous data overwrite its cloud save",
+    "file": "src/services/googleAuth.ts",
+    "klass": "C7",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/googleAuth.ts",
+        "pattern": "export async function recoverExistingGoogleAccount"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/googleAuth.ts",
+        "pattern": "code: 'CREDENTIAL_IN_USE'"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/googleAuth.ts",
+        "pattern": "already-in-use'\\)[\\s\\S]{0,300}signInWithCredential"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SettingsScreen.tsx",
+        "pattern": "recoverExistingGoogleAccount"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/googleAccountRecovery.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "securestore-keys-invalid-migration-dead",
+    "title": "SecureStore rejected the '@'-prefixed caller keys, so the receipt migration silently fell back to plaintext AsyncStorage forever",
+    "file": "src/services/secureStorage.ts",
+    "klass": "C7",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "function toSecureKey\\(key: string\\): string"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "secureSet\\(toSecureKey\\(key\\), value\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "secureGet\\(toSecureKey\\(key\\)\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/secureStorageActive.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "settings-issignedin-never-cleared-on-signout",
+    "title": "Persisted isSignedIn flag was never cleared, so Settings claimed 'Cloud backup active' after sign-out and hid the Sign In row forever",
+    "file": "src/screens/SettingsScreen.tsx",
+    "klass": "C5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SettingsScreen.tsx",
+        "pattern": "onUpdateSetting\\('isSignedIn', false\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SettingsScreen.tsx",
+        "pattern": "linkedEmail != null \\|\\| \\(settings\\?\\.isSignedIn \\?\\? false\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/SettingsScreen.tsx",
+        "pattern": "const isSignedIn = settings\\?\\.isSignedIn \\?\\? false;"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "inbox-claim-before-credit-loses-reward-on-kill",
+    "title": "Inbox sweep burned the irreversible server claim before the economy credit was durable, destroying the reward on a crash",
+    "file": "src/hooks/useRewardInbox.ts",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardInbox.ts",
+        "pattern": "export function planJournalReplay"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardInbox.ts",
+        "pattern": "CLAIM_JOURNAL_KEY"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardInbox.ts",
+        "pattern": "if \\(!\\(await writeJournal\\(journal\\)\\)\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardInboxJournal.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "securestore-torn-chunk-write-corruption",
+    "title": "Multi-chunk rewrite overwrote live shards in place under a stale count, so a crash mid-write yielded a corrupt new/old string",
+    "file": "src/services/secureStorage.ts",
+    "klass": "C7",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "__g\\$\\{generation\\}__chunk_"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "function parseChunkPointer"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "\\$\\{generation\\}:\\$\\{chunks\\.length\\}"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "String\\(chunks\\.length\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/secureStorageActive.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "gamescreen-streak-shield-offer-fires-on-utc-clock-not-risk",
+    "title": "In-game streak-shield upsell fired on the UTC clock instead of real streak risk",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "new Date\\(streaks\\.lastPlayDate\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "diffHours"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "streakShieldOfferDue\\(playerStreaks, new Date\\(\\)\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/gameMotion.ts",
+        "pattern": "export function streakShieldOfferDue",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/gameMotion.ts",
+        "pattern": "lastPlayDate >= utcDayStamp\\(now\\)",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/gameMotion.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "offer-funnel-param-name-mismatch",
+    "title": "Offer funnel events emitted offerType in GameScreen and offer_type everywhere else",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C8",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "offerType\\s*:"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "offer_type:",
+        "count": 3
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/offerFunnelSchema.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "experiment-fallback-variant-not-control-and-exposure-ignores-segments",
+    "title": "Not-enrolled users got variants[0] (a paid treatment) instead of the control, and exposure logging re-assigned without segments",
+    "file": "src/services/experiments.ts",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/experiments.ts",
+        "pattern": "return getControlVariant\\(experiment\\);",
+        "count": 4
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/experiments.ts",
+        "pattern": "controlVariantId: 'C'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/experiments.ts",
+        "pattern": "getAssignedVariant\\(experimentId, userId, segmentsForTargeting\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/experiments.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "unmute-never-resumes-bgm",
+    "title": "Raising a volume slider off zero never resumed BGM \u2014 music stayed dead until the next screen/level transition",
+    "file": "src/services/sound.ts",
+    "klass": "C5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/sound.ts",
+        "pattern": "lastRequestedTrack"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/sound.ts",
+        "pattern": "wasMuted && this\\.lastRequestedTrack"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/sound.ts",
+        "pattern": "getCurrentTrack\\(\\): MusicTrack \\| null"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/soundMute.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "rc-interstitial-seconds-dead-mirror",
+    "title": "Remote Config key interstitialIntervalSeconds was documented as a live mirror but nothing read it",
+    "file": "src/services/remoteConfig.ts",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/services/remoteConfig.ts",
+        "pattern": "interstitialIntervalSeconds:"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/remoteConfigInit.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "login-calendar-7day-variant-display-grant-mismatch",
+    "title": "Login calendar grid rendered the hardcoded 30-day table while the claim path granted from the active variant",
+    "file": "src/screens/HomeScreen.tsx",
+    "klass": "C6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "getActiveLoginCalendar\\(\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "ECONOMY\\.loginRewards"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "Math\\.min\\(Math\\.max\\(loginCycleDay, 1\\), 30\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/screens/__tests__/homeWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "home-shield-offer-props-never-wired",
+    "title": "Streak-shield upsell keyed on props App.tsx never passed \u2014 grace trigger dead, shield owners upsold again",
+    "file": "src/screens/HomeScreen.tsx",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "streakShieldActive\\?: boolean"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "streakShieldActive = false"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "streakGraceDaysUsed\\?: number"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "export function homeStreakShieldRisk"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "streakShieldAvailable: playerStreaks\\.streakShieldAvailable"
+      },
+      {
+        "type": "test",
+        "suite": "src/screens/__tests__/homeWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "friend-challenges-send-only-dead-delivery",
+    "title": "Friend challenges are send-only: undeliverable challenges no longer persist or write to other users, and the sent list is pruned/capped",
+    "file": "src/contexts/PlayerSocialContext.tsx",
+    "klass": "C7",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerSocialContext.tsx",
+        "pattern": "getRemoteBoolean\\('friendChallengesEnabled'\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerSocialContext.tsx",
+        "pattern": "MAX_SENT_CHALLENGES"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/remoteConfig.ts",
+        "pattern": "friendChallengesEnabled: false"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/socialMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
+  }
+]

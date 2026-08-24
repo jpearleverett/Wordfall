@@ -31,6 +31,7 @@ import {
   clearLocalUserData,
   isAccountDeletionConfigured,
 } from '../services/accountDeletion';
+import { recoverExistingGoogleAccount } from '../services/googleAuth';
 import { analytics } from '../services/analytics';
 import type { ColorblindMode } from '../contexts/SettingsContext';
 import { COLORBLIND_MODE_LABELS } from '../services/colorblind';
@@ -1094,6 +1095,25 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     try {
       const result = await linkGoogle();
       if (!result.ok) {
+        if (result.code === 'CREDENTIAL_IN_USE') {
+          // The Google account already owns a cloud profile (linked on
+          // another device). Per the documented recovery contract, the
+          // switch ADOPTS that cloud save and abandons this device's
+          // anonymous progress — warn before proceeding.
+          Alert.alert(
+            'Account Already Exists',
+            'This Google account already has Wordfall progress saved in the cloud. Switch to that account? Progress made on this device will be replaced by your cloud save.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Switch Account',
+                style: 'destructive',
+                onPress: () => void handleRecoverExistingAccount(),
+              },
+            ],
+          );
+          return;
+        }
         if (result.code !== 'CANCELLED') {
           Alert.alert('Sign-In Failed', result.error);
         }
@@ -1111,11 +1131,39 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
+  // Confirmed switch to the existing cloud account behind a Google
+  // credential (see handleSignIn's CREDENTIAL_IN_USE branch). On builds
+  // that support it the app reloads into the recovered account before the
+  // success alert can render.
+  const handleRecoverExistingAccount = async () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    try {
+      const result = await recoverExistingGoogleAccount();
+      if (!result.ok) {
+        Alert.alert('Account Switch Failed', result.error);
+        return;
+      }
+      await Promise.resolve(onUpdateSetting('isSignedIn', true));
+      Alert.alert(
+        'Account Recovered',
+        result.email ? `Signed in as ${result.email}.` : 'Signed in.',
+      );
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   const handleSignOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
     try {
       await Promise.resolve(onSignOut());
+      // The auth session is gone — clear the persisted flag, or the hero
+      // strip keeps claiming "Cloud backup active" for a device-only player
+      // and the Account panel keeps showing Sign Out (a no-op against the
+      // fresh anonymous session), making re-linking impossible.
+      await Promise.resolve(onUpdateSetting('isSignedIn', false));
     } finally {
       setSigningOut(false);
     }
@@ -1128,7 +1176,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const notificationsEnabled = settings?.notificationsEnabled ?? settings?.notifications ?? true;
   const selectedTheme = settings?.theme ?? 'dark';
   const colorblindMode: ColorblindMode = settings?.colorblindMode ?? 'off';
-  const isSignedIn = settings?.isSignedIn ?? false;
+  // Live auth state wins over the persisted flag: after a recovery reload
+  // the flag was never written, and the flag alone can go stale (it is now
+  // cleared on sign-out and account deletion, but old saves may carry it).
+  const isSignedIn = linkedEmail != null || (settings?.isSignedIn ?? false);
   const adsRemoved = isAdFreeComputed ?? false;
   const premiumPass = isPremiumPassFlag ?? false;
   const appVersion = settings?.version ?? '1.0.0';
@@ -1158,6 +1209,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       } catch {
         // signOut errors are non-fatal — auth state will settle on next launch
       }
+      // Same as handleSignOut: the account is gone, so the persisted
+      // signed-in flag must not survive it.
+      await Promise.resolve(onUpdateSetting('isSignedIn', false));
       Alert.alert(
         'Account Deleted',
         'Your account and all associated data have been deleted. We are sorry to see you go.',

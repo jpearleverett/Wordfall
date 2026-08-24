@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
 import { bentoPanel } from '../styles/bentoPanel';
 import { SeasonalQuest, SeasonalQuestState, getQuestProgress } from '../data/seasonalQuests';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface SeasonalQuestCardProps {
   quest: SeasonalQuest;
@@ -18,25 +19,29 @@ const SeasonalQuestCard: React.FC<SeasonalQuestCardProps> = ({
   onClaimStep,
 }) => {
   const pulse = useSharedValue(1);
+  const reduceMotion = useReduceMotion();
   const { currentStep, progress, isComplete } = getQuestProgress(state, quest);
 
   const fillPct = Math.min(100, (progress / currentStep.target) * 100);
   const stepReady = progress >= currentStep.target && !isComplete;
 
   useEffect(() => {
-    if (stepReady) {
-      pulse.value = withRepeat(
-        withSequence(
-          withTiming(1.04, { duration: 700 }),
-          withTiming(1, { duration: 700 }),
-        ),
-        -1,
-      );
-      return () => cancelAnimation(pulse);
-    } else {
+    if (reduceMotion || !stepReady) {
       pulse.value = 1;
+      return;
     }
-  }, [stepReady]);
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1.04, { duration: 700 }),
+        withTiming(1, { duration: 700 }),
+      ),
+      -1,
+    );
+    return () => {
+      cancelAnimation(pulse);
+      pulse.value = 1;
+    };
+  }, [stepReady, reduceMotion, pulse]);
 
   const cardStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],

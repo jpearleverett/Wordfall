@@ -83,6 +83,13 @@ interface GridProps {
    */
   onGravitySettled?: () => void;
   /**
+   * Whether the ambient idle glint may run. The layer self-schedules an
+   * infinite timeout chain, so callers must switch this off whenever the
+   * board is not actually visible gameplay (result overlay up, screen
+   * blurred under a pushed route) — freezeOnBlur does not stop timers.
+   */
+  glintActive?: boolean;
+  /**
    * Chapter accent color (#rrggbb). Tints the neon frame + outer glow so
    * the board chrome harmonizes with the chapter's tile ramp instead of
    * always being pink — the blind design review flagged green nature tiles
@@ -372,6 +379,7 @@ function GameGridImpl({
   validWord = false,
   maxHeight,
   onGravitySettled,
+  glintActive = true,
   frameAccent,
   wildcardMode = false,
   bonusCellId = null,
@@ -524,6 +532,18 @@ function GameGridImpl({
         liveOffsetRef.current,
       );
       for (const fall of transition.falls) {
+        // A tile re-falling while its previous fall is still in flight (or
+        // still in its hold/stagger delay): stop the superseded sequence
+        // BEFORE seeding the value. Left running, a predecessor still in
+        // its delay phase would start after the successor and clobber the
+        // shared Animated.ValueXY with stale timing — and its not-finished
+        // completion meant the successor run's settle accounting never
+        // reached zero, dropping onGravitySettled (the landing haptic).
+        const superseded = activeFallsRef.current.get(fall.id);
+        if (superseded) {
+          superseded.stop();
+          activeFallsRef.current.delete(fall.id);
+        }
         const existing = fallAnimMapRef.current.get(fall.id);
         if (existing) {
           existing.setValue({ x: fall.dx, y: fall.dy });
@@ -1002,8 +1022,11 @@ function GameGridImpl({
 
           {/* Ambient idle glint — a periodic one-shot sparkle on a random
               occupied tile so an untouched board still shimmers. Unmounted
-              entirely under reduce motion (no timer, no loop). */}
-          {!reduceMotion && (
+              entirely under reduce motion (no timer, no loop), and whenever
+              the board is not visible gameplay (glintActive false: result
+              overlay covering the grid, or the screen blurred in the stack)
+              so its self-rescheduling timer chain stops. */}
+          {!reduceMotion && glintActive && (
             <IdleGlintLayer cellBounds={geometry.bounds} cellSize={cellSize} />
           )}
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,6 @@ import PrimaryButton from '../components/common/PrimaryButton';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel, bentoDividerColor } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-import { Skeleton, SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import {
   usePlayerStore,
   usePlayerActions,
@@ -1284,7 +1283,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onOpenClub: onOpenClubProp,
   onOpenMastery: onOpenMasteryProp,
 }) => {
-  const [loading, setLoading] = useState(true);
   // Narrow zustand subscriptions — ProfileScreen reads many slices but rarely
   // triggers writes; selector-based subscription drops re-renders on
   // unrelated player state churn (currency, ceremonies, etc.).
@@ -1310,10 +1308,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const clubsVisible = Boolean(onOpenClub) && getRemoteBoolean('clubsEnabled');
   const onOpenMastery = onOpenMasteryProp ?? (() => {});
 
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 400);
-    return () => clearTimeout(timer);
-  }, []);
   const achievementIdsSet = useMemo(
     () => new Set(achievementIds),
     [achievementIds],
@@ -1510,28 +1504,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     </Pressable>
   );
 
-  if (loading) {
-    return (
-      <ScreenScaffold title="PROFILE" backdrop="profile" headerRight={settingsButton}>
-        {/* Avatar skeleton */}
-        <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-          <Skeleton width={100} height={100} borderRadius={50} style={{ marginBottom: 12 }} />
-          <Skeleton width={80} height={20} borderRadius={10} style={{ marginBottom: 10 }} />
-          <Skeleton width={120} height={16} borderRadius={8} />
-        </View>
-        {/* Stats skeleton */}
-        <Skeleton width="40%" height={18} borderRadius={8} style={{ marginTop: 24, marginBottom: 12 }} />
-        <SkeletonGrid rows={2} cols={3} itemHeight={80} />
-        {/* Achievements skeleton */}
-        <Skeleton width="50%" height={18} borderRadius={8} style={{ marginTop: 24, marginBottom: 12 }} />
-        <SkeletonGrid rows={2} cols={3} itemHeight={90} />
-        {/* Collections skeleton */}
-        <Skeleton width="55%" height={18} borderRadius={8} style={{ marginTop: 24, marginBottom: 12 }} />
-        <SkeletonCard />
-      </ScreenScaffold>
-    );
-  }
-
+  // No loading branch: every value on this screen comes synchronously from
+  // zustand selectors at mount, so a skeleton phase here would be fabricated
+  // (it used to be a hardcoded 400ms setTimeout gating 22 shimmer loops).
   return (
     <ScreenScaffold title="PROFILE" backdrop="profile" headerRight={settingsButton}>
       {/* Hero identity card — avatar + frame + title + prestige badge in one

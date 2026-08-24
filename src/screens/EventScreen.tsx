@@ -18,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getCurrentEvent } from '../data/events';
 import { EventExclusiveReward } from '../types';
 import { eventManager, ActiveEvent, EventRewardTierDisplay } from '../services/eventManager';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useEconomyActions } from '../stores/economyStore';
 import {
   usePlayerStore,
@@ -825,6 +826,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
   const onOpenEventShop = onOpenEventShopProp ?? (() => {});
   const [activeEvents, setActiveEvents] = useState<ActiveEvent[]>([]);
   const [claimAnim] = useState(new Animated.Value(1));
+  const reduceMotion = useReduceMotion();
 
   // Fetch active events from the event manager
   useEffect(() => {
@@ -842,18 +844,25 @@ const EventScreen: React.FC<EventScreenProps> = ({
       if (reward.coins) addCoins(reward.coins);
       if (reward.gems) addGems(reward.gems);
       if (reward.hintTokens) addHintTokens(reward.hintTokens);
+      // Diamond tiers carry a decoration — grant it like the exclusive
+      // reward below does. It used to be silently dropped here while the
+      // tier was still marked claimed, permanently losing the cosmetic.
+      if (reward.decoration) unlockDecoration(reward.decoration);
 
-      // Animate claim
-      Animated.sequence([
-        Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
-        Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
-      ]).start();
+      // Animate claim (skipped under reduce motion — claimed styling is
+      // the durable signal; the bounce is decoration)
+      if (!reduceMotion) {
+        Animated.sequence([
+          Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
+          Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+        ]).start();
+      }
 
       // Refresh events and persist claimed state to PlayerContext/AsyncStorage
       setActiveEvents(eventManager.getActiveEvents());
       updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
     }
-  }, [addCoins, addGems, addHintTokens, claimAnim, updateProgress]);
+  }, [addCoins, addGems, addHintTokens, unlockDecoration, claimAnim, updateProgress, reduceMotion]);
 
   // Get the current event's exclusive reward (must be declared before the claim callback
   // that closes over it, otherwise TS flags a "used before declaration" error).
@@ -873,14 +882,16 @@ const EventScreen: React.FC<EventScreenProps> = ({
     }
     eventManager.claimExclusiveReward(primaryEvent.id);
 
-    Animated.sequence([
-      Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
-      Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
-    ]).start();
+    if (!reduceMotion) {
+      Animated.sequence([
+        Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
+        Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+      ]).start();
+    }
 
     setActiveEvents(eventManager.getActiveEvents());
     updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
-  }, [exclusiveReward, primaryEvent, unlockCosmetic, unlockDecoration, updateProgress, claimAnim]);
+  }, [exclusiveReward, primaryEvent, unlockCosmetic, unlockDecoration, updateProgress, claimAnim, reduceMotion]);
 
   // Exclusive reward claim state
   const goldTierReached = primaryEvent?.rewards?.find(r => r.tier === 'gold')?.reached ?? false;

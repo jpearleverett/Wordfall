@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, RADIUS, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
-import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+import { getRemoteBoolean, getRemoteNumberClamped } from '../services/remoteConfig';
 import {
   economyDifficultyForLevel,
   perfectClearGems,
@@ -1128,7 +1128,7 @@ export function PuzzleComplete({
       cardOpacityAnim.setValue(motionPolicy.state.cardOpacity);
       return;
     }
-    const entrance = Animated.parallel([
+    const cardEntrance = Animated.parallel([
       Animated.timing(cardOpacityAnim, {
         toValue: 1,
         duration: 220,
@@ -1142,8 +1142,8 @@ export function PuzzleComplete({
         useNativeDriver: true,
       }),
     ]);
-    entrance.start();
-    return () => entrance.stop();
+    cardEntrance.start();
+    return () => cardEntrance.stop();
   }, [
     cardOpacityAnim,
     cardScaleAnim,
@@ -1167,7 +1167,10 @@ export function PuzzleComplete({
       setAutoAdvanceRemainingMs(null);
       return;
     }
-    const base = getRemoteNumber('autoAdvanceDelayMs');
+    // Clamped read: a blanked/typo'd Remote Config value parses to 0/NaN,
+    // and an unclamped 0 here would auto-navigate off every victory screen
+    // the frame it mounts — no build to roll back. 1.5-15s is the sane band.
+    const base = getRemoteNumberClamped('autoAdvanceDelayMs', 3500, 1500, 15000);
     const delayMs = suppressMotion ? Math.min(2000, base) : base;
     setAutoAdvanceRemainingMs(delayMs);
   }, [autoAdvanceCancelled, isDaily, perfectRun, mode, suppressMotion]);

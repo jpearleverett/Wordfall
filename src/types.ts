@@ -82,6 +82,13 @@ export interface GameState {
      * because snapshots persisted before this field existed lack it.
      */
     score?: number;
+    /**
+     * One-shot purchased effects active BEFORE the clear. Undo restores
+     * them so a doubler/freeze consumed by an undone move isn't silently
+     * eaten. Optional for the same legacy-snapshot reason as `score`.
+     */
+    scoreDoubler?: boolean;
+    boardFreezeActive?: boolean;
   }[];
   status: GameStatus;
   level: number;
@@ -157,7 +164,7 @@ export type GameAction =
   | { type: 'USE_HINT' }
   | { type: 'UNDO_MOVE' }
   | { type: 'NEW_GAME'; board: Board; level: number; mode?: GameMode; maxMoves?: number; timeRemaining?: number }
-  | { type: 'TICK_TIMER' }
+  | { type: 'TICK_TIMER'; elapsedSeconds?: number }
   | { type: 'USE_BOOSTER'; booster: string }
   | { type: 'WILDCARD_PLACE'; position: CellPosition }
   | { type: 'SPOTLIGHT_ACTIVATE' }

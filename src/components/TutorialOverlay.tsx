@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { TutorialGuideStep } from '../data/tutorialBoards';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { VB, BodyGrad, gradId, rim, HILITE } from './icons/IconBase';
 
 /**
@@ -37,6 +38,7 @@ interface TutorialOverlayProps {
 }
 
 export function TutorialOverlay({ step, visible }: TutorialOverlayProps) {
+  const reduceMotion = useReduceMotion();
   const fade = useSharedValue(0);
   const slide = useSharedValue(20);
   const hand = useSharedValue(0);
@@ -45,9 +47,15 @@ export function TutorialOverlay({ step, visible }: TutorialOverlayProps) {
     if (visible) {
       const delayMs = step.delay || 0;
       fade.value = withDelay(delayMs, withTiming(1, { duration: 300 }));
-      slide.value = withDelay(delayMs, withSpring(0, { damping: 14, stiffness: 80 }));
+      if (reduceMotion) {
+        // Reduce motion: skip the slide spring — the bubble sits at its
+        // settled position and only the plain fade plays.
+        slide.value = 0;
+      } else {
+        slide.value = withDelay(delayMs, withSpring(0, { damping: 14, stiffness: 80 }));
+      }
 
-      if (step.showHandPointer) {
+      if (step.showHandPointer && !reduceMotion) {
         hand.value = withDelay(
           delayMs,
           withRepeat(
@@ -58,12 +66,27 @@ export function TutorialOverlay({ step, visible }: TutorialOverlayProps) {
             -1,
           ),
         );
+      } else {
+        // The overlay stays mounted across tutorial steps (OnboardingScreen
+        // passes visible={true} throughout), so a step without the pointer
+        // must stop the loop the previous step started; under reduce motion
+        // the pointer is pinned static at its fully-visible pose.
+        cancelAnimation(hand);
+        hand.value = step.showHandPointer ? 1 : 0;
       }
     } else {
-      fade.value = withTiming(0, { duration: 200 });
+      // Hidden renders null in the same commit (see below), so snap straight
+      // back to the initial values for the next entrance — a fade-out here
+      // could never be seen.
       cancelAnimation(hand);
+      hand.value = 0;
+      fade.value = 0;
+      slide.value = 20;
     }
-  }, [visible, step]);
+    return () => {
+      cancelAnimation(hand);
+    };
+  }, [visible, step, reduceMotion]);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
   const slideStyle = useAnimatedStyle(() => ({ transform: [{ translateY: slide.value }] }));

@@ -30,6 +30,7 @@ import {
   getBreatherConfigExtended,
   generateProceduralChapter,
 } from '../engine/puzzleGenerator';
+import { getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
 import { generateBoard } from '../engine/boardGenerator';
 import { getLevelConfig, getBreatherConfig } from '../constants';
 import { parseRemoteChapters } from '../utils/chapterSchema';
@@ -213,6 +214,35 @@ describe('pre-staged RC payload (chapters 41-48)', () => {
     for (const chapter of parsed) {
       expect(chapter.profile).toBeDefined();
       expect(chapter.palette).toBeDefined();
+    }
+  });
+});
+
+describe('procedural chapter boundaries — getChapterForLevel agrees with getLastLevelOfChapter', () => {
+  // Both sides of the star-gate clamp must see the same boundary: the clamp
+  // holds a gated player at getLastLevelOfChapter(current), which only gates
+  // anything if getChapterForLevel still maps that level into the CURRENT
+  // chapter. An off-by-one here made every post-600 star gate a no-op.
+  it('chapter 41 spans exactly levels 601-615 (no RC overlay)', () => {
+    expect(getChapterForLevel(601)!.id).toBe(41);
+    expect(getChapterForLevel(615)!.id).toBe(41);
+    expect(getChapterForLevel(616)!.id).toBe(42);
+    expect(getLastLevelOfChapter(41)).toBe(615);
+  });
+
+  it('last level of every procedural chapter belongs to that chapter (ids 41-60)', () => {
+    for (let id = 41; id <= 60; id++) {
+      const last = getLastLevelOfChapter(id);
+      expect(getChapterForLevel(last)!.id).toBe(id);
+      expect(getChapterForLevel(last + 1)!.id).toBe(id + 1);
+      expect(getChapterForLevel(last - 14)!.id).toBe(id); // first level of the chapter
+    }
+  });
+
+  it('matches puzzleGenerator\'s chapter indexing for sampled deep levels', () => {
+    for (const level of [601, 615, 616, 630, 631, 1000, 5000]) {
+      const expectedId = 41 + Math.floor((level - 601) / 15);
+      expect(getChapterForLevel(level)!.id).toBe(expectedId);
     }
   });
 });

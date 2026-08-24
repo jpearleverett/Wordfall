@@ -155,56 +155,6 @@ function RisingParticle({ color, startX, startY, size, delay, duration }: Rising
   );
 }
 
-// ─── Shimmer Line (light sweep across surfaces) ─────────────────────────
-interface ShimmerProps {
-  width: number;
-  height: number;
-  color?: string;
-  duration?: number;
-  delay?: number;
-}
-
-export function ShimmerEffect({ width, height, color = 'rgba(255,255,255,0.08)', duration = 3000, delay = 0 }: ShimmerProps) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const reduceMotion = useReduceMotion();
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-        Animated.delay(1000),
-      ]),
-    );
-    animation.start();
-    return () => {
-      animation.stop();
-    };
-  }, [anim, delay, duration, reduceMotion]);
-
-  if (reduceMotion) return null;
-
-  return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          width: width * 0.4,
-          height,
-          backgroundColor: color,
-          transform: [
-            { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.4, width * 1.4] }) },
-            { skewX: '-20deg' },
-          ],
-          opacity: 0.6,
-        }}
-      />
-    </View>
-  );
-}
-
 // ─── Image-based Sparkle (uses sparkle-sprites asset) ───────────────────
 function ImageSparkle({
   top,
@@ -323,7 +273,7 @@ export function SparkleField({
   );
 
   // Sparkles are pure decoration — under reduce motion the field simply
-  // doesn't render, matching CelebrationBurst / PulsingGlowRing below.
+  // doesn't render, matching CelebrationBurst below.
   if (reduceMotion) return null;
 
   return (
@@ -400,51 +350,6 @@ export function CelebrationBurst({
   );
 }
 
-// ─── Pulsing Glow Ring ──────────────────────────────────────────────────
-interface GlowRingProps {
-  size: number;
-  color: string;
-  pulseScale?: number;
-}
-
-export function PulsingGlowRing({ size, color, pulseScale = 1.15 }: GlowRingProps) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const reduceMotion = useReduceMotion();
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 1400, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration: 1400, useNativeDriver: true }),
-      ]),
-      { iterations: 4 },
-    );
-    animation.start();
-    return () => {
-      animation.stop();
-    };
-  }, [anim, reduceMotion]);
-
-  if (reduceMotion) return null;
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: 2,
-        borderColor: color,
-        opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.2, 0.6, 0.2] }),
-        transform: [
-          { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, pulseScale, 1] }) },
-        ],
-      }}
-    />
-  );
-}
 
 const styles = StyleSheet.create({
   sparkleWrap: {

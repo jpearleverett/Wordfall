@@ -12,6 +12,7 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
 import { Animated, View, StyleSheet } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
+import { useIsFocused } from '@react-navigation/native';
 import { GameGrid } from '../../components/Grid';
 import { WordBank } from '../../components/WordBank';
 import { useGameStore, useGameDispatch } from '../../stores/gameStore';
@@ -93,6 +94,12 @@ function PlayFieldImpl({
   const wildcardCells = useGameStore(useShallow((s: GameState) => s.wildcardCells));
   const wildcardMode = useGameStore(s => s.wildcardMode);
   const gravityDirection = useGameStore(s => s.gravityDirection);
+  // Idle-glint gate: the layer's self-rescheduling timer chain must stop
+  // when the board isn't visible gameplay — result overlay up (status not
+  // 'playing') or GameScreen blurred under a pushed route (freezeOnBlur
+  // suspends rendering but not timers).
+  const isFocused = useIsFocused();
+  const glintActive = useGameStore(s => s.status) === 'playing' && isFocused;
 
   // ── Derived state ─────────────────────────────────────────────────────
   const currentWord = useMemo(
@@ -193,20 +200,44 @@ function PlayFieldImpl({
     [dispatch, onCellInteraction],
   );
 
-  // ── Release a dead trace on finger lift ────────────────────────────────
+  // ── Release a DEAD trace on finger lift ────────────────────────────────
   // A drag that ends without matching a word used to leave the tiles lit
   // indefinitely; the only ways out were a non-adjacent tap (which fired the
   // invalid-word error treatment — a punishment for normal exploratory play)
-  // or an adjacent tap that silently APPENDED to the dead trace. Now a
-  // multi-cell drag releases ~180ms after lift: long enough that the 50ms
-  // auto-submit timer always wins on a valid word, short enough to read as a
-  // clean release. Single taps never release (didTraceMultiple=false) so
-  // tap-by-tap selection keeps working, and a new gesture cancels the timer
-  // so fast consecutive traces are never clipped.
+  // or an adjacent tap that silently APPENDED to the dead trace. A lifted
+  // multi-cell drag releases ~180ms after lift — but ONLY when the trace is
+  // actually dead. A trace that is still a viable prefix of an unfound word
+  // (drag C-A, lift, tap T to finish "CAT") is deliberate partial input and
+  // stays lit for tap-to-extend; releasing it clipped the long-supported
+  // drag-then-tap pattern. Single taps never release (didTraceMultiple=
+  // false) and a new gesture cancels the timer, so tap-by-tap play and fast
+  // consecutive traces are never clipped.
   const isValidWordRef = useRef(false);
   useEffect(() => {
     isValidWordRef.current = isValidWord;
   }, [isValidWord]);
+  // Latest "could this selection still become an unfound word?" — read by
+  // the release timer without re-rendering anything. Wildcard cells match
+  // any letter, mirroring matchesWord's semantics.
+  const selectionIsLivePrefixRef = useRef(false);
+  useEffect(() => {
+    const cells = selectedCells;
+    if (cells.length === 0) {
+      selectionIsLivePrefixRef.current = false;
+      return;
+    }
+    const wildcardKeys = new Set(wildcardCells.map((c) => `${c.row},${c.col}`));
+    selectionIsLivePrefixRef.current = words.some(({ word, found }) => {
+      if (found || word.length <= cells.length) return false;
+      for (let i = 0; i < cells.length; i++) {
+        const cell = grid[cells[i].row]?.[cells[i].col];
+        if (!cell) return false;
+        if (wildcardKeys.has(`${cells[i].row},${cells[i].col}`)) continue;
+        if (cell.letter.toUpperCase() !== word[i].toUpperCase()) return false;
+      }
+      return true;
+    });
+  }, [selectedCells, grid, words, wildcardCells]);
   const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleDragStart = useCallback(() => {
     if (releaseTimerRef.current) {
@@ -223,6 +254,9 @@ function PlayFieldImpl({
         // A valid word is mid-auto-submit — SUBMIT_WORD clears the selection.
         if (isValidWordRef.current) return;
         if (selectionLenRef.current === 0) return;
+        // Still extendable toward an unfound word: deliberate partial
+        // input, keep it lit for drag-then-tap-to-extend.
+        if (selectionIsLivePrefixRef.current) return;
         // Silent by design: releasing an exploratory trace is normal play,
         // not an error (game_mechanics.md — invalid submissions don't exist).
         dispatch({ type: 'CLEAR_SELECTION' });
@@ -257,6 +291,7 @@ function PlayFieldImpl({
             bonusCellId={bonusCellId}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
             onGravitySettled={onGravitySettled}
+            glintActive={glintActive}
             frameAccent={frameAccent}
             wildcardMode={wildcardMode}
           />

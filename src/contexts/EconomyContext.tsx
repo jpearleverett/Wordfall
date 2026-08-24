@@ -41,6 +41,14 @@ import {
 import { computeRefilledLives } from '../utils/lives';
 import { createPersistQueue } from '../utils/persistQueue';
 import { stripUndefinedDeep } from '../utils/firestoreSanitize';
+import { iapManager } from '../services/iap';
+import { firestoreService } from '../services/firestore';
+import {
+  creditLives,
+  settleSeasonPassReward,
+  shouldAdoptCloudEconomy,
+  type SeasonPassClaimGrant,
+} from './economySync';
 
 interface Economy {
   coins: number;
@@ -184,13 +192,14 @@ export interface EconomyContextType extends Economy {
   /**
    * Claim a tier's reward in one of the two lanes. Returns the reward that
    * was granted (for UI ceremony), or null if the tier wasn't claimable.
-   * Currency/consumable rewards are credited automatically; cosmetic rewards
-   * surface via the returned descriptor for PlayerContext.unlockCosmetic().
+   * Currency/consumable rewards (including rolled mystery-box contents) are
+   * credited automatically; cosmetic and rare-tile rewards surface via the
+   * returned descriptor for PlayerContext.unlockCosmetic() / addRareTile().
    */
   claimSeasonPassTier: (
     tier: number,
     lane: 'free' | 'premium',
-  ) => { cosmetic?: { type: string; id: string } } | null;
+  ) => SeasonPassClaimGrant | null;
   /** Unlock the premium lane for the current season (after IAP validated). */
   unlockSeasonPassPremium: () => void;
   /** Replace the season state (used by season rotation on expiry). */
@@ -342,6 +351,52 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     loadEconomy();
   }, []);
 
+  // ── Server-authoritative VIP reconciliation ────────────────────────────
+  // onSubscriptionRenew writes vipActive/vipExpiresAt/vipUpdatedAt on every
+  // Apple SSN v2 + Google RTDN event, and until now NOTHING read them: a
+  // subscription renewed while the app was closed never extended locally,
+  // and one that lapsed, cancelled, or was refunded server-side kept its
+  // benefits until the stale local expiry ran out. Runs once per sign-in
+  // after local state has loaded, so it can never race the AsyncStorage
+  // hydrate and revive a cleared flag.
+  useEffect(() => {
+    if (!loaded || !user?.uid) return;
+    let cancelled = false;
+    (async () => {
+      const server = await firestoreService.getServerVipStatus(user.uid);
+      if (cancelled || !server) return;
+      setState((prev) => {
+        if (server.vipActive) {
+          // Extend only — a server expiry BEHIND the local one means the
+          // local record is fresher (a purchase this session that the
+          // server hasn't processed yet).
+          if (server.vipExpiresAt <= prev.vipExpiresAt && prev.isVipSubscriber) return prev;
+          return {
+            ...prev,
+            isVipSubscriber: true,
+            vipExpiresAt: Math.max(prev.vipExpiresAt, server.vipExpiresAt),
+          };
+        }
+        // Server says inactive. Only revoke when the server's decision is
+        // NEWER than the newest local VIP purchase, so an in-flight local
+        // purchase is never wiped by a stale server record.
+        if (!prev.isVipSubscriber) return prev;
+        const newestLocalVipPurchase = prev.purchaseHistory.reduce(
+          (latest, r) =>
+            typeof r?.item === 'string' && r.item.startsWith('vip_')
+              ? Math.max(latest, r.timestamp ?? 0)
+              : latest,
+          0,
+        );
+        if (server.vipUpdatedAtMs <= newestLocalVipPurchase) return prev;
+        return { ...prev, isVipSubscriber: false, vipExpiresAt: 0 };
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded, user?.uid]);
+
   // Periodically recalculate lives (every 60 seconds)
   useEffect(() => {
     if (!loaded) return;
@@ -372,13 +427,17 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           // Use whichever data is more recent (PlayerContext convention).
           // The old blind spread let a stale cloud snapshot (written before
           // the previous session's last local save) silently revert coins,
-          // gems, entitlement flags, and purchaseHistory. `>=` keeps the
-          // unstamped-vs-unstamped migration case and the reinstall case
-          // (local unstamped, cloud stamped) behaving like before: cloud wins.
+          // gems, entitlement flags, and purchaseHistory. Adoption is
+          // STRICT recency (see shouldAdoptCloudEconomy): the writer stamps
+          // one Date.now() into both stores, so on `>=` the byte-equal
+          // stamps re-adopted the previous snapshot on every launch and
+          // reverted any mutation made between hydration and this getDoc
+          // resolving. An unstamped local blob (fresh install / legacy
+          // save) still lets cloud win, keeping the migration behavior.
           setState((prev) => {
             const localModified = prev.lastModified || 0;
             const cloudModified = firestoreData.lastModified || 0;
-            if (cloudModified >= localModified) {
+            if (shouldAdoptCloudEconomy(localModified, cloudModified)) {
               const next = { ...prev, ...firestoreData };
               // Never adopt a stale cloud lives block verbatim — recompute
               // refills for the time elapsed since it was written.
@@ -431,35 +490,62 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
 
   const userRef = useRef(user);
   userRef.current = user;
-  const persistQueueRef = useRef(
-    createPersistQueue<EconomyState>(async (payload) => {
-      // Stamp once here so both the debounced path and the AppState flush
-      // carry the recency marker the Firestore sync-in compares against.
-      const stamped = { ...payload, lastModified: Date.now() };
+  // TWO queues, deliberately (PlayerContext convention: 'player-local' vs
+  // 'player-firestore'). Offline, the Firebase JS SDK's setDoc promise never
+  // settles — it resolves only on backend ack — so a fused writer wedged the
+  // single serialized queue forever after the first offline persist: every
+  // later snapshot of the offline session silently skipped AsyncStorage and
+  // the whole session's economy rolled back on the next launch.
+  const persistLocalQueueRef = useRef(
+    createPersistQueue<EconomyState>(async (stamped) => {
+      // AsyncStorage-only writer — MUST never await a network promise.
       try {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stamped));
       } catch (e) {
         logger.warn('Failed to save economy to AsyncStorage:', e);
       }
+    }, 'economy-local'),
+  );
+  const persistCloudQueueRef = useRef(
+    createPersistQueue<EconomyState>(async (stamped) => {
       const u = userRef.current;
-      if (u) {
-        try {
-          const docRef = doc(db, 'users', u.uid, 'economy', 'current');
-          // Route through withRetry so transient network errors are
-          // retried with exponential backoff AND the sync-status bus
-          // lights up NotSyncedBanner when writes keep failing.
-          // Same guard as the player payload: setDoc throws on nested
-          // undefined and the throw lands in a fire-and-forget queue, so an
-          // optional field hydrating as undefined would silently stop every
-          // economy save.
-          await withRetry(() => setDoc(docRef, stripUndefinedDeep(stamped), { merge: true }), {
-            label: 'economy-firestore',
-          });
-        } catch (e) {
-          logger.warn('Failed to sync economy to Firestore:', e);
-        }
+      if (!u) return;
+      try {
+        const docRef = doc(db, 'users', u.uid, 'economy', 'current');
+        // Route through withRetry so transient network errors are
+        // retried with exponential backoff AND the sync-status bus
+        // lights up NotSyncedBanner when writes keep failing.
+        // Same guard as the player payload: setDoc throws on nested
+        // undefined and the throw lands in a fire-and-forget queue, so an
+        // optional field hydrating as undefined would silently stop every
+        // economy save.
+        await withRetry(() => setDoc(docRef, stripUndefinedDeep(stamped), { merge: true }), {
+          label: 'economy-firestore',
+        });
+      } catch (e) {
+        logger.warn('Failed to sync economy to Firestore:', e);
       }
-    }, 'economy'),
+    }, 'economy-firestore'),
+  );
+
+  // Stamp ONCE per snapshot so the local blob and the cloud doc carry the
+  // identical recency marker the Firestore sync-in compares against, then
+  // hand the same stamped payload to both queues. Returns when the LOCAL
+  // write has drained (flush mode); the cloud flush is fire-and-forget —
+  // offline it may never settle and must not gate the local write.
+  const persistEconomy = useCallback(
+    (payload: EconomyState, flush = false): Promise<void> => {
+      const stamped = { ...payload, lastModified: Date.now() };
+      if (flush) {
+        const localDone = persistLocalQueueRef.current.flush(stamped);
+        void persistCloudQueueRef.current.flush(stamped);
+        return localDone;
+      }
+      persistLocalQueueRef.current.enqueue(stamped);
+      persistCloudQueueRef.current.enqueue(stamped);
+      return Promise.resolve();
+    },
+    [],
   );
 
   useEffect(() => {
@@ -467,12 +553,12 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
 
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(() => {
-      persistQueueRef.current.enqueue(latestStateRef.current);
+      void persistEconomy(latestStateRef.current);
     }, 1000);
 
     // Intentionally no cleanup here — we want the timer to persist across
     // rapid state changes so writes coalesce. Background/unmount flush below.
-  }, [state, loaded, user]);
+  }, [state, loaded, user, persistEconomy]);
 
   // Crash-safety: flush any pending write on backgrounding or unmount.
   useEffect(() => {
@@ -482,7 +568,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
         persistTimerRef.current = null;
-        void persistQueueRef.current.flush(latestStateRef.current);
+        void persistEconomy(latestStateRef.current, true);
       }
     };
 
@@ -496,7 +582,23 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       subscription.remove();
       flushPendingPersist();
     };
-  }, [loaded]);
+  }, [loaded, persistEconomy]);
+
+  // IAP fulfilment durability: give the IAP layer a hook that forces the
+  // just-granted economy state into AsyncStorage BEFORE it consumes the
+  // store-side purchase. Without it, a crash in the 1s debounce window
+  // after a consumable grant lost the purchase unrecoverably — consumed
+  // purchases vanish from getAvailablePurchases, so Restore and the
+  // pending-purchase recovery pass both come up empty.
+  const loadedRef = useRef(loaded);
+  loadedRef.current = loaded;
+  useEffect(() => {
+    return iapManager.onFulfillmentFlush(async () => {
+      // Never flush pre-hydration defaults over a real stored blob.
+      if (!loadedRef.current) return;
+      await persistEconomy(latestStateRef.current, true);
+    });
+  }, [persistEconomy]);
 
   // Season rotation: on load and on every foreground, check if the stored
   // season has expired; if so, install the fresh default season state.
@@ -627,80 +729,81 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const claimSeasonPassTier = useCallback(
-    (tier: number, lane: 'free' | 'premium') => {
-      let grant: { cosmetic?: { type: string; id: string } } | null = null;
-      setState((prev) => {
-        const pass = prev.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
-        if (tier < 1 || tier > SEASON_PASS_TIERS.length) return prev;
-        if (tier > pass.currentTier) return prev;
-        if (lane === 'premium' && !pass.isPremium) return prev;
-        const claimedList =
-          lane === 'free' ? pass.claimedFreeTiers : pass.claimedPremiumTiers;
-        if (claimedList.includes(tier)) return prev;
+    (tier: number, lane: 'free' | 'premium'): SeasonPassClaimGrant | null => {
+      // Decide claimability synchronously from the latest committed state
+      // (the file's latestStateRef pattern, same as claimVipDailyRewards) —
+      // the old version derived the return value from a variable mutated
+      // inside the setState updater, which React only runs eagerly on an
+      // empty queue, so a claim landing in a busy batch returned null and
+      // dropped its item grants.
+      const cur = latestStateRef.current;
+      const pass = cur.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
+      if (tier < 1 || tier > SEASON_PASS_TIERS.length) return null;
+      if (tier > pass.currentTier) return null;
+      if (lane === 'premium' && !pass.isPremium) return null;
+      const claimedList =
+        lane === 'free' ? pass.claimedFreeTiers : pass.claimedPremiumTiers;
+      if (claimedList.includes(tier)) return null;
 
-        const tierDef = SEASON_PASS_TIERS[tier - 1];
-        const reward = lane === 'free' ? tierDef.freeReward : tierDef.premiumReward;
+      const tierDef = SEASON_PASS_TIERS[tier - 1];
+      const reward = lane === 'free' ? tierDef.freeReward : tierDef.premiumReward;
 
-        const next: EconomyState = {
+      // Settle ONCE outside the updater so mystery-box rolls are pinned
+      // (updaters can re-run) and item rewards actually reach the caller:
+      // 'rare_tile' and 'mystery_box' previously fell through an empty
+      // switch arm — the tier was marked claimed, analytics logged a claim,
+      // and nothing was delivered (ten premium tiers behind the 500-gem
+      // pass, plus the free mystery-box tiers 30/50).
+      const { credit, grant } = settleSeasonPassReward(reward);
+
+      const applyClaim = (prev: EconomyState): EconomyState => {
+        const prevPass = prev.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
+        const prevClaimed =
+          lane === 'free' ? prevPass.claimedFreeTiers : prevPass.claimedPremiumTiers;
+        // Double-claim safety net if state moved between check and commit.
+        if (prevClaimed.includes(tier)) return prev;
+        return {
           ...prev,
-          totalEarned: { ...prev.totalEarned },
-          boosterTokens: { ...prev.boosterTokens },
+          coins: prev.coins + credit.coins,
+          gems: prev.gems + credit.gems,
+          hintTokens: prev.hintTokens + credit.hintTokens,
+          boosterTokens: {
+            wildcardTile:
+              (prev.boosterTokens?.wildcardTile ?? 0) + credit.boosterTokens.wildcardTile,
+            spotlight:
+              (prev.boosterTokens?.spotlight ?? 0) + credit.boosterTokens.spotlight,
+            smartShuffle:
+              (prev.boosterTokens?.smartShuffle ?? 0) + credit.boosterTokens.smartShuffle,
+          },
+          totalEarned: {
+            ...prev.totalEarned,
+            coins: prev.totalEarned.coins + credit.coins,
+            gems: prev.totalEarned.gems + credit.gems,
+            hintTokens: prev.totalEarned.hintTokens + credit.hintTokens,
+          },
+          seasonPass: {
+            ...prevPass,
+            claimedFreeTiers:
+              lane === 'free'
+                ? [...prevPass.claimedFreeTiers, tier]
+                : prevPass.claimedFreeTiers,
+            claimedPremiumTiers:
+              lane === 'premium'
+                ? [...prevPass.claimedPremiumTiers, tier]
+                : prevPass.claimedPremiumTiers,
+          },
         };
+      };
 
-        switch (reward.type) {
-          case 'coins': {
-            const amt = reward.amount ?? 0;
-            next.coins += amt;
-            next.totalEarned.coins += amt;
-            break;
-          }
-          case 'gems': {
-            const amt = reward.amount ?? 0;
-            next.gems += amt;
-            next.totalEarned.gems += amt;
-            break;
-          }
-          case 'hints': {
-            const amt = reward.amount ?? 0;
-            next.hintTokens += amt;
-            next.totalEarned.hintTokens += amt;
-            break;
-          }
-          case 'booster': {
-            const amt = reward.amount ?? 1;
-            next.boosterTokens.wildcardTile += amt;
-            break;
-          }
-          case 'rare_tile':
-          case 'mystery_box':
-            // Inventory-only rewards surface via the returned descriptor;
-            // there's no numeric slot to bump in EconomyState today. The
-            // Shop/Inventory surfaces owning these are gated on the higher
-            // premium-lane flag — wiring them is out of scope for B2.
-            break;
-          case 'cosmetic':
-            if (reward.cosmeticId) {
-              grant = { cosmetic: { type: 'frame', id: reward.cosmeticId } };
-            }
-            break;
-        }
+      // Advance the ref synchronously (applyValidatedPurchase pattern) so a
+      // second tap before the re-render can't claim the same tier again.
+      latestStateRef.current = applyClaim(latestStateRef.current);
+      setState(applyClaim);
 
-        next.seasonPass = {
-          ...pass,
-          claimedFreeTiers:
-            lane === 'free' ? [...pass.claimedFreeTiers, tier] : pass.claimedFreeTiers,
-          claimedPremiumTiers:
-            lane === 'premium'
-              ? [...pass.claimedPremiumTiers, tier]
-              : pass.claimedPremiumTiers,
-        };
-        grant = grant ?? {};
-        void analytics.logEvent('season_pass_tier_claimed', {
-          tier,
-          lane,
-          reward_type: reward.type,
-        });
-        return next;
+      void analytics.logEvent('season_pass_tier_claimed', {
+        tier,
+        lane,
+        reward_type: reward.type,
       });
       return grant;
     },
@@ -865,12 +968,12 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         // Double reward is a multiplier — caller handles the actual doubling
         break;
       case 'lives':
+        // creditLives banks accrued refills first and keeps the refill
+        // anchor below max — the old raw add + lastRefillTime reset made a
+        // rewarded-ad life cost up to a full refill interval of regen.
         setState((prev) => ({
           ...prev,
-          lives: {
-            current: Math.min(prev.lives.current + def.amount, LIVES.max),
-            lastRefillTime: Date.now(),
-          },
+          lives: creditLives(prev.lives, def.amount),
         }));
         break;
       default:
@@ -1049,6 +1152,29 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return claimed;
   }, []);
 
+  // Daily Value Pack drip auto-claim. The pack sells a 7-day daily drip,
+  // but no screen or app-open handler ever called claimDailyValuePackDrip —
+  // the $0.99 SKU charged real money and delivered nothing (the product has
+  // no immediate rewards either). Claim on load, on every foreground, and
+  // when a purchase activates the pack (the expiry dep re-fires the
+  // effect). The claim itself enforces the once-per-calendar-day and
+  // expiry gates, so re-runs are no-ops.
+  useEffect(() => {
+    if (!loaded) return;
+
+    const runDripClaim = () => {
+      if (latestStateRef.current.dailyValuePackExpiry > Date.now()) {
+        claimDailyValuePackDrip();
+      }
+    };
+
+    runDripClaim();
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') runDripClaim();
+    });
+    return () => subscription.remove();
+  }, [loaded, state.dailyValuePackExpiry, claimDailyValuePackDrip]);
+
   /** Check and update VIP streak. Increments weekly, resets if lapsed. Returns current streak weeks. */
   const checkVipStreak = useCallback((): number => {
     let currentWeeks = 0;
@@ -1196,12 +1322,11 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addLives = useCallback((count: number): void => {
+    // Bank accrued refills, then credit — mirrors spendLife's
+    // computeRefilledLives-first pattern (see creditLives in economySync).
     setState((prev) => ({
       ...prev,
-      lives: {
-        current: Math.min(prev.lives.current + count, LIVES.max),
-        lastRefillTime: Date.now(),
-      },
+      lives: creditLives(prev.lives, count),
     }));
   }, []);
 

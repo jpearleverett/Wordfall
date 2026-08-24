@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo } from 'react';
 import { DimensionValue, Image, StyleSheet, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, interpolate } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, interpolate, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useIsFocused } from '@react-navigation/native';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { COLORS } from '../../constants';
 import { LOCAL_IMAGES } from '../../utils/localAssets';
 import SynthwaveHomeBackdrop from '../home/SynthwaveHomeBackdrop';
@@ -46,6 +47,7 @@ function NebulaOrb({
       ),
       -1,
     );
+    return () => cancelAnimation(anim);
   }, [duration]);
 
   const orbStyle = useAnimatedStyle(() => ({
@@ -97,6 +99,7 @@ function TwinklingStar({
         -1,
       ),
     );
+    return () => cancelAnimation(anim);
   }, [delayMs, duration]);
 
   const starStyle = useAnimatedStyle(() => ({
@@ -139,10 +142,40 @@ function getLocalBg(variant: string) {
 }
 
 export function AmbientBackdrop({ variant = 'home', colorOverride }: AmbientBackdropProps) {
-  // Gate animated children on focus. When the screen is not focused, render a
-  // static version (just bg image + gradients) so we don't burn CPU/GPU running
-  // 3 nebula orbs + 12 twinkling stars on every inactive screen in the stack/tabs.
+  // ALL hooks run unconditionally, before the game/home variant early returns —
+  // hook order must never depend on the `variant` prop (Rules of Hooks; a
+  // conditional hook also makes React Compiler bail out of this component).
+  //
+  // Gate animated children on focus AND reduce-motion. When the screen is not
+  // focused we don't burn CPU/GPU running 3 nebula orbs + 12 twinkling stars
+  // on every inactive screen in the stack/tabs; under reduce-motion the
+  // decorative loops are skipped entirely (static gradient + bg image remain,
+  // matching the game variant's static treatment).
   const isFocused = useIsFocused();
+  const reduceMotion = useReduceMotion();
+
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, index) => ({
+        id: index,
+        top: `${4 + ((index * 17) % 88)}%` as DimensionValue,
+        left: `${2 + ((index * 23) % 94)}%` as DimensionValue,
+        color:
+          index % 5 === 0
+            ? '#ff2d95'
+            : index % 4 === 0
+            ? '#c84dff'
+            : index % 3 === 0
+            ? '#00e5ff'
+            : index % 2 === 0
+            ? 'rgba(255,255,255,0.9)'
+            : 'rgba(255,255,255,0.6)',
+        size: 1.5 + (index % 5) * 0.7,
+        delay: (index * 320) % 3000,
+        duration: 1200 + (index % 4) * 500,
+      })),
+    [],
+  );
 
   if (variant === 'game') {
     // Dim the backdrop so the grid visually pops. RC-gated so we can revert
@@ -202,29 +235,6 @@ export function AmbientBackdrop({ variant = 'home', colorOverride }: AmbientBack
 
   const localBg = getLocalBg(variant);
 
-  const stars = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, index) => ({
-        id: index,
-        top: `${4 + ((index * 17) % 88)}%` as DimensionValue,
-        left: `${2 + ((index * 23) % 94)}%` as DimensionValue,
-        color:
-          index % 5 === 0
-            ? '#ff2d95'
-            : index % 4 === 0
-            ? '#c84dff'
-            : index % 3 === 0
-            ? '#00e5ff'
-            : index % 2 === 0
-            ? 'rgba(255,255,255,0.9)'
-            : 'rgba(255,255,255,0.6)',
-        size: 1.5 + (index % 5) * 0.7,
-        delay: (index * 320) % 3000,
-        duration: 1200 + (index % 4) * 500,
-      })),
-    [],
-  );
-
   return (
     <View pointerEvents="none" style={styles.container}>
       <LinearGradient
@@ -250,7 +260,7 @@ export function AmbientBackdrop({ variant = 'home', colorOverride }: AmbientBack
         />
       )}
 
-      {isFocused && (
+      {isFocused && !reduceMotion && (
         <>
           <NebulaOrb
             color="rgba(255, 45, 149, 0.35)"

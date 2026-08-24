@@ -42,6 +42,7 @@ import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { getActiveLoginCalendar } from '../data/loginCalendar';
 import { bentoPanel } from '../styles/bentoPanel';
 import {
   usePlayerStore,
@@ -99,10 +100,10 @@ interface HomeScreenProps {
   dailyQuests?: DailyQuest[];
   onClaimDailyQuest?: (templateId: string) => void;
   recommendation?: Recommendation | null;
-  /** Streak grace days already used (0 or 1) */
-  streakGraceDaysUsed?: number;
-  /** Whether streak shield is currently active */
-  streakShieldActive?: boolean;
+  // NOTE: the streak-shield upsell used to take `streakGraceDaysUsed` /
+  // `streakShieldActive` props that App.tsx never passed, so they were
+  // permanently 0/false. Both are derived from the live streak slice now —
+  // see `homeStreakShieldRisk` below.
   /** Segment-driven list of home content sections to show */
   segmentHomeContent?: string[];
   /** Segment-driven welcome back message for at-risk/lapsed/returned players */
@@ -128,6 +129,64 @@ const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: 
   hard: { label: 'Hard', accent: COLORS.orange, icon: 'flame' },
   expert: { label: 'Expert', accent: COLORS.purple, icon: 'gem' },
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Mirrors GRACE_COOLDOWN_DAYS in PlayerProgressContext / gameMotion.ts. */
+const GRACE_COOLDOWN_DAYS = 14;
+/** Local hour after which "your streak expires tonight" is honest copy. */
+const STREAK_RISK_LOCAL_HOUR = 18;
+
+export interface HomeStreakShieldRiskInput {
+  currentStreak: number;
+  streakShieldAvailable: boolean;
+  lastGraceDate?: string;
+  recentBreak?: { brokenAtMs: number } | null;
+}
+
+/**
+ * Whether the streak-shield upsell has a real risk to point at.
+ *
+ * Both inputs used to be props (`streakShieldActive`, `streakGraceDaysUsed`)
+ * that the single App.tsx call site never passed, so they sat at false/0
+ * forever: the "grace already spent" trigger — the first one the comment
+ * below names — could never fire, and a player who already owned a shield was
+ * upsold another one. Derived from the live streak slice instead.
+ *
+ * At risk when either:
+ *  1. grace is on cooldown (the next missed day resets the streak), or
+ *  2. the streak is long, today's daily is unplayed, and the local day is
+ *     nearly over.
+ */
+export function homeStreakShieldRisk(
+  streaks: HomeStreakShieldRiskInput,
+  opts: { dailyDone: boolean; now: Date },
+): boolean {
+  if (streaks.currentStreak <= 0) return false;
+  // Already protected — selling a second shield is charging for nothing.
+  if (streaks.streakShieldAvailable) return false;
+  const nowMs = opts.now.getTime();
+  if (!Number.isFinite(nowMs)) return false;
+  // Never sell prevention on a comeback day: if the streak just BROKE
+  // (PostStreakBreakOffer's 24h restore window is live), an upsell for the
+  // shield that would have prevented it is the worst possible first
+  // impression — and the two paywalls were landing simultaneously.
+  const brokenAtMs = streaks.recentBreak?.brokenAtMs;
+  if (typeof brokenAtMs === 'number' && nowMs - brokenAtMs < DAY_MS) return false;
+
+  const lastGraceMs = streaks.lastGraceDate
+    ? new Date(streaks.lastGraceDate).getTime()
+    : NaN;
+  const graceOnCooldown =
+    Number.isFinite(lastGraceMs) &&
+    (nowMs - lastGraceMs) / DAY_MS < GRACE_COOLDOWN_DAYS;
+
+  return (
+    graceOnCooldown ||
+    (streaks.currentStreak > 7 &&
+      !opts.dailyDone &&
+      opts.now.getHours() >= STREAK_RISK_LOCAL_HOUR)
+  );
+}
 
 const MISSION_LABELS: Record<string, { label: string; target: number }> = {
   solve_3_puzzles: { label: 'Solve 3 puzzles', target: 3 },
@@ -422,8 +481,6 @@ export function HomeScreen({
   dailyQuests = [],
   onClaimDailyQuest,
   recommendation = null,
-  streakGraceDaysUsed = 0,
-  streakShieldActive = false,
   segmentHomeContent = [],
   segmentWelcomeMessage = null,
   activeEventBanners = [],
@@ -475,34 +532,28 @@ export function HomeScreen({
   }, [progress.starsByLevel, progress.currentLevel]);
 
   useEffect(() => {
-    if (streakOfferDismissed.current || streakShieldActive) return;
-    const streak = progress.currentStreak;
-    if (streak <= 0) return;
-    // Never sell prevention on a comeback day: if the streak just BROKE
-    // (PostStreakBreakOffer's 24h restore window is live), an upsell for
-    // the shield that would have prevented it is the worst possible first
-    // impression — and the two paywalls were landing simultaneously.
-    const rb = playerStreaks.recentBreak;
-    if (rb && Date.now() - rb.brokenAtMs < 24 * 60 * 60 * 1000) return;
+    if (streakOfferDismissed.current) return;
     // One overlay at a time: the login calendar auto-opens at 900ms; wait
     // until it's closed (this effect re-runs on calendarOpen change).
     if (calendarOpen) return;
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const isPastEvening = currentHour >= 18;
-
-    // Streak is at risk if:
-    // 1. Grace day was already used (next miss resets), OR
-    // 2. Streak > 7 AND daily not yet completed AND it's past 6 PM
-    const graceDayUsed = streakGraceDaysUsed >= 1;
-
-    const atRisk = graceDayUsed || (streak > 7 && !dailyDone && isPastEvening);
+    const atRisk = homeStreakShieldRisk(
+      {
+        currentStreak: progress.currentStreak,
+        streakShieldAvailable: playerStreaks.streakShieldAvailable,
+        // PlayerContext's local StreakData copy still omits the optional
+        // `lastGraceDate` that PlayerProgressContext writes (types.ts has it);
+        // read it defensively rather than widening a context we don't own.
+        lastGraceDate: (playerStreaks as { lastGraceDate?: string }).lastGraceDate,
+        recentBreak: playerStreaks.recentBreak,
+      },
+      { dailyDone, now: new Date() },
+    );
     if (atRisk) {
       const timer = setTimeout(() => setShowStreakOffer(true), 1000);
       return () => clearTimeout(timer);
     }
-  }, [progress.currentStreak, streakGraceDaysUsed, streakShieldActive, dailyDone, playerStreaks, calendarOpen]);
+  }, [progress.currentStreak, dailyDone, playerStreaks, calendarOpen]);
 
   const handleStreakOfferAccept = useCallback(() => {
     // Navigate to shop for streak shield purchase
@@ -620,7 +671,7 @@ export function HomeScreen({
 
   // Pulse animation for wheel button when spins available
   useEffect(() => {
-    if (isFocused && (mysteryWheelSpins > 0 || dailyFreeSpinAvailable)) {
+    if (ambientActive && (mysteryWheelSpins > 0 || dailyFreeSpinAvailable)) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(wheelPulse, {
@@ -638,9 +689,12 @@ export function HomeScreen({
         ])
       );
       pulse.start();
-      return () => pulse.stop();
+      return () => {
+        pulse.stop();
+        wheelPulse.setValue(1);
+      };
     }
-  }, [isFocused, mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
+  }, [ambientActive, mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
 
   // Free spin toast animation
   useEffect(() => {
@@ -710,11 +764,11 @@ export function HomeScreen({
   const mysteryWheelVisible = Boolean(showMysteryWheel);
 
   // Slow spin for the wheel disc icon (matches bento design — 8s per rotation).
-  // Runs only while Home is focused AND the wheel card is actually rendered —
-  // previously this looped unconditionally for the entire session, including
-  // behind GameScreen.
+  // Runs only while ambient motion is active (focused + motion allowed) AND
+  // the wheel card is actually rendered — previously this looped
+  // unconditionally for the entire session, including behind GameScreen.
   useEffect(() => {
-    if (!isFocused || !mysteryWheelVisible) return;
+    if (!ambientActive || !mysteryWheelVisible) return;
     const spin = Animated.loop(
       Animated.timing(wheelSpin, {
         toValue: 1,
@@ -724,8 +778,11 @@ export function HomeScreen({
       }),
     );
     spin.start();
-    return () => spin.stop();
-  }, [isFocused, mysteryWheelVisible, wheelSpin]);
+    return () => {
+      spin.stop();
+      wheelSpin.setValue(0);
+    };
+  }, [ambientActive, mysteryWheelVisible, wheelSpin]);
 
   // Auto-present the login calendar once per app session when today's
   // reward is unclaimed — the Wordscapes/Royal Match daily-sheet ritual.
@@ -1542,7 +1599,7 @@ export function HomeScreen({
         )}
 
 
-        {/* 30-day login calendar — opens via top-bar icon sheet */}
+        {/* Login calendar (active variant's cycle) — opens via top-bar icon sheet */}
         <Modal
           visible={calendarOpen && showDailyRewards}
           transparent
@@ -1555,7 +1612,15 @@ export function HomeScreen({
                 <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </Pressable>
               {(() => {
-          const calendarDay = Math.min(Math.max(loginCycleDay, 1), 30);
+          // The grid must render the SAME table the claim path grants from
+          // (App.tsx -> getLoginCalendarDay -> getActiveLoginCalendar), or the
+          // '7day' A/B arm shows one reward and pays another. Wrap the day the
+          // way getLoginCalendarDay does rather than clamping to 30.
+          const calendarTable = getActiveLoginCalendar();
+          const cycleLength = calendarTable.length;
+          const calendarDay =
+            ((Math.max(1, Math.floor(loginCycleDay)) - 1) % cycleLength) + 1;
+          const grandReward = calendarTable[cycleLength - 1].rewards;
           return (
             <LinearGradient
               colors={GRADIENTS.surfaceCard}
@@ -1566,14 +1631,14 @@ export function HomeScreen({
                 <Text style={styles.panelMeta}>{t('home.loginCalendarDay', { day: calendarDay })}</Text>
               </View>
               <View style={styles.calendarGrid}>
-                {Array.from({ length: 30 }, (_, i) => {
-                  const dayNum = i + 1;
-                  const reward = ECONOMY.loginRewards[i] || ECONOMY.loginRewards[(i) % 7];
+                {calendarTable.map((entry) => {
+                  const dayNum = entry.day;
+                  const reward = entry.rewards;
                   const isClaimed = dayNum < calendarDay;
                   const isToday = dayNum === calendarDay;
                   const isUpcoming = dayNum > calendarDay;
+                  const isGrand = dayNum === cycleLength;
                   const isSpecial = dayNum % 7 === 0;
-                  const isGrand = dayNum === 30;
 
                   const rewardIcon: GameIconName = reward.rareTile
                     ? 'sparkle'
@@ -1644,26 +1709,41 @@ export function HomeScreen({
                   );
                 })}
               </View>
-              {/* Grand prize label for day 30 */}
+              {/* Grand prize label — read from the active table's last day so
+                  the 7-day A/B arm doesn't advertise the 30-day jackpot. */}
               <View style={styles.calendarGrandRow}>
                 <Text style={styles.calendarGrandLabel}>{t('home.calendarGrandPrize')}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <GameIcon name="coin" size={11} />
-                    <Text style={styles.calendarGrandReward}>1000</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <GameIcon name="gem" size={11} />
-                    <Text style={styles.calendarGrandReward}>100</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <GameIcon name="sparkle" size={11} />
-                    <Text style={styles.calendarGrandReward}>Rare Tile</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    <GameIcon name="palette" size={11} />
-                    <Text style={styles.calendarGrandReward}>Exclusive</Text>
-                  </View>
+                  {!!grandReward.coins && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <GameIcon name="coin" size={11} />
+                      <Text style={styles.calendarGrandReward}>{grandReward.coins}</Text>
+                    </View>
+                  )}
+                  {!!grandReward.gems && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <GameIcon name="gem" size={11} />
+                      <Text style={styles.calendarGrandReward}>{grandReward.gems}</Text>
+                    </View>
+                  )}
+                  {!!grandReward.hints && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <GameIcon name="hint" size={11} />
+                      <Text style={styles.calendarGrandReward}>{grandReward.hints}</Text>
+                    </View>
+                  )}
+                  {!!grandReward.rareTile && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <GameIcon name="sparkle" size={11} />
+                      <Text style={styles.calendarGrandReward}>Rare Tile</Text>
+                    </View>
+                  )}
+                  {!!grandReward.cosmetic && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <GameIcon name="palette" size={11} />
+                      <Text style={styles.calendarGrandReward}>Exclusive</Text>
+                    </View>
+                  )}
                 </View>
               </View>
               {/* Claim button for today */}
@@ -1684,7 +1764,7 @@ export function HomeScreen({
                   <Text style={[styles.calendarClaimText, claimedLoginToday && { color: COLORS.textPrimary }]}>
                     {claimedLoginToday
                       ? '✓ REWARD CLAIMED'
-                      : `CLAIM DAY ${Math.min(Math.max(loginCycleDay, 1), 30)} REWARD`}
+                      : `CLAIM DAY ${calendarDay} REWARD`}
                   </Text>
                 </LinearGradient>
               </Pressable>

@@ -17,7 +17,7 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Board, CellPosition, GameMode, GameState, VictorySummaryItem } from '../types';
-import { useGame } from '../hooks/useGame';
+import { useGame, canProduceHint, canSmartShuffle } from '../hooks/useGame';
 import { GameStoreContext } from '../stores/gameStore';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
@@ -50,6 +50,7 @@ import {
   selectConsecutiveFailures,
   selectLastLevelStars,
   selectLastBreatherOfferedAt,
+  selectPrestige,
   selectPuzzlesSolved,
   selectStreaks,
   selectFlawlessStreak,
@@ -72,6 +73,7 @@ import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCo
 import { getTheme } from '../data/cosmetics';
 import { getChapterForLevel, getChapterPalette, getChapterTileRamp } from '../data/chapters';
 import { getWing } from '../data/library';
+import { getPrestigeHintBonus } from '../data/prestigeSystem';
 import { rollBonusTile } from '../utils/bonusTile';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
@@ -86,7 +88,7 @@ import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
 import { ConnectedTimerMovesBars } from './game/TimerMovesBars';
 import { TilePaletteContext } from '../components/LetterCell';
-import { isLastWordTensionActive } from '../utils/gameMotion';
+import { isLastWordTensionActive, streakShieldOfferDue } from '../utils/gameMotion';
 import {
   computeGridGeometry,
   computeGridMetrics,
@@ -289,6 +291,18 @@ function stuckTooltipKeyForLevel(level: number): string {
 /** Stable empty array so the stranded-words memo can't churn GameBanners. */
 const EMPTY_STRING_LIST: string[] = [];
 
+/**
+ * Word-clear particle lifetime, shared between the flight animation and the
+ * batch-removal window in spawnTileBloom so the two can never drift apart:
+ * a particle's total life is its queue stagger (up to (10-1)*20ms) plus
+ * flight. The old hardcoded 700ms removal cut the back half of large
+ * bursts 20-100ms early, popping particles out mid-fade.
+ */
+const CLEAR_PARTICLE_FLIGHT_MS = 620;
+const CLEAR_PARTICLE_MAX_STAGGER_MS = 9 * 20;
+const CLEAR_PARTICLE_REMOVE_AFTER_MS =
+  CLEAR_PARTICLE_FLIGHT_MS + CLEAR_PARTICLE_MAX_STAGGER_MS + 60;
+
 function WordClearParticle({ delay, startX, startY }: { delay: number; startX: number; startY: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   const angle = useRef(Math.random() * Math.PI * 2).current;
@@ -302,7 +316,7 @@ function WordClearParticle({ delay, startX, startY }: { delay: number; startX: n
   useEffect(() => {
     Animated.sequence([
       Animated.delay(delay),
-      Animated.timing(anim, { toValue: 1, duration: 620, useNativeDriver: true }),
+      Animated.timing(anim, { toValue: 1, duration: CLEAR_PARTICLE_FLIGHT_MS, useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -647,6 +661,7 @@ function GameScreenImpl({
   const consecutiveFailures = usePlayerStore(selectConsecutiveFailures);
   const lastLevelStars = usePlayerStore(selectLastLevelStars);
   const lastBreatherOfferedAt = usePlayerStore(selectLastBreatherOfferedAt);
+  const prestige = usePlayerStore(selectPrestige);
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
   const playerStreaks = usePlayerStore(selectStreaks);
   const flawlessStreakData = usePlayerStore(selectFlawlessStreak);
@@ -725,8 +740,11 @@ function GameScreenImpl({
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const perfectRun = useStore(store, s => s.perfectRun);
   // NOTE: deliberately NOT subscribed to per-tap markers (lastInvalidTap /
-  // lastSelectionResetTap) — the invalid-tap feedback below watches the store
-  // transiently so trace restarts never re-render this 3000-line component.
+  // lastSelectionResetTap) so trace restarts never re-render this
+  // 3000-line component. (The invalid-tap sound/haptic/flash that once
+  // watched them transiently was removed with the rest of the
+  // invalid-word feedback — the reducer still maintains the markers, but
+  // nothing consumes them today.)
   const activeComboType = useStore(store, s => s.activeComboType);
   const comboWordsRemaining = useStore(store, s => s.comboWordsRemaining);
   const comboMultiplierValue = useStore(store, s => s.comboMultiplier);
@@ -916,8 +934,10 @@ function GameScreenImpl({
 
   const dismissOffer = useCallback(() => {
     if (activeOffer) {
+      // snake_case matches PostLossModal + the typed analytics helpers — one
+      // param schema per event name, or the funnel slices to NULL.
       void analytics.logEvent('offer_dismissed', {
-        offerType: activeOffer,
+        offer_type: activeOffer,
         level,
         mode,
         difficulty,
@@ -949,7 +969,7 @@ function GameScreenImpl({
     trackTimeout(() => {
       setActiveOffer(type);
       void analytics.logEvent('offer_shown', {
-        offerType: type,
+        offer_type: type,
         level,
         mode,
         difficulty,
@@ -1096,21 +1116,16 @@ function GameScreenImpl({
     }
   }, [status, lives, activeOffer, showOfferIfAllowed]);
 
-  // streak_shield: show when player has an active streak at risk during gameplay
+  // streak_shield: show only when the streak can actually lapse. The old
+  // predicate treated the date-only lastPlayDate stamp as a play timestamp,
+  // so "last play > 20h ago" really meant "the UTC clock passed 20:00" — the
+  // offer fired every evening on streaks that app open had already banked.
+  // streakShieldOfferDue owns the risk rule now (see utils/gameMotion).
   useEffect(() => {
     if (status !== 'playing') return;
-    const streaks = playerStreaks;
-    if (!streaks || streaks.currentStreak < 3 || streaks.streakShieldAvailable) return;
-    // Check if last play was yesterday (streak at risk of expiring today)
-    if (!streaks.lastPlayDate) return;
-    const lastPlayed = new Date(streaks.lastPlayDate);
-    const now = new Date();
-    const diffMs = now.getTime() - lastPlayed.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-    // Streak is at risk if last completed > 20 hours ago (approaching the daily reset)
-    if (diffHours >= 20 && !offerShownThisLevel.current && !activeOffer) {
-      showOfferIfAllowed('streak_shield');
-    }
+    if (offerShownThisLevel.current || activeOffer) return;
+    if (!streakShieldOfferDue(playerStreaks, new Date())) return;
+    showOfferIfAllowed('streak_shield');
   }, [status, playerStreaks, activeOffer, showOfferIfAllowed]);
 
   // post_puzzle: flag when puzzle won with hint tokens depleted
@@ -1142,7 +1157,11 @@ function GameScreenImpl({
         // Gem-priced escalation: spend N gems and auto-solve the last word.
         // Price is Remote Config driven so LiveOps can tune without a build.
         const gemCost = Math.max(1, Math.round(getRemoteNumber('closeFinishPremiumGemCost')));
-        if (spendGems(gemCost)) {
+        // Never take the gems when the auto-solve cannot deliver: on a dead
+        // board USE_PREMIUM_HINT no-ops and the queued SUBMIT_WORD fires on
+        // an empty selection — the exact spot this offer targets (1 word
+        // left) is also where dead boards are guaranteed possible.
+        if (canProduceHint(store.getState()) && spendGems(gemCost)) {
           // Select the current positions of the last word (post-gravity) via
           // USE_PREMIUM_HINT, then submit on the next tick so the player
           // sees the trace briefly before it resolves.
@@ -1189,7 +1208,7 @@ function GameScreenImpl({
         break;
     }
     void analytics.logEvent('offer_accepted', {
-      offerType: activeOffer,
+      offer_type: activeOffer,
       level,
       mode,
       difficulty,
@@ -1335,7 +1354,7 @@ function GameScreenImpl({
           const ids = entries.map(e => e.id);
           trackTimeout(() => {
             particleLayerRef.current?.removeIds(ids);
-          }, 700);
+          }, CLEAR_PARTICLE_REMOVE_AFTER_MS);
         }, idx * 30);
       });
     },
@@ -1549,6 +1568,9 @@ function GameScreenImpl({
   // effect re-runs. `starEarn` is currently the synth fallback; swap to
   // `last_word_sting` when real audio lands.
   const lastWordTensionFiredRef = useRef(false);
+  // True while the 'tense' bed owns BGM, so the falling edge (undo/retry)
+  // can hand playback back to the mode bed exactly once.
+  const tensionBedActiveRef = useRef(false);
   // Below 4 words the "tension peak" fires seconds into the puzzle — on the
   // 2-word L1 board it landed on the FIRST word a brand-new player ever
   // found, before they even knew what the word bank was, training them to
@@ -1563,10 +1585,21 @@ function GameScreenImpl({
     const remaining = totalWords - foundWords;
     if (!tensionActive) {
       if (remaining !== 1) lastWordTensionFiredRef.current = false;
+      // Falling edge: tension engaged, then an undo brought the count back
+      // above 1 or a retry reset the board (newGame keeps the same board
+      // object, so the mount effect's deps don't change and it can't
+      // restore the bed itself). Hand the BGM back to the mode bed —
+      // without this the whole fresh attempt played under 'tense'.
+      if (tensionBedActiveRef.current && status === 'playing') {
+        tensionBedActiveRef.current = false;
+        const bgm = mode === 'timePressure' ? 'tense' : mode === 'relax' ? 'relax' : 'gameplay';
+        void soundManager.playMusic(bgm, { crossfadeMs: 600 });
+      }
       return;
     }
     if (lastWordTensionFiredRef.current) return;
     lastWordTensionFiredRef.current = true;
+    tensionBedActiveRef.current = true;
     void soundManager.playMusic('tense', { crossfadeMs: 600 });
     void soundManager.playSound('lastWord');
     void lastWordHaptic();
@@ -1577,7 +1610,7 @@ function GameScreenImpl({
       mode,
       timeIntoPuzzleMs,
     });
-  }, [foundWords, totalWords, level, mode, store, tensionActive]);
+  }, [foundWords, totalWords, level, mode, store, tensionActive, status]);
 
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && showFailed) {
@@ -1814,9 +1847,12 @@ function GameScreenImpl({
       setShowValidFlash(true);
       if (!reduceMotion) {
         validFlashAnim.setValue(0);
+        // Fit the ramp inside the 50ms auto-submit window below — at the
+        // old 300ms the overlay unmounted at ~1/6 of the ramp (~5% peak
+        // opacity), so the declared green flash never actually rendered.
         Animated.timing(validFlashAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 40,
           useNativeDriver: true,
         }).start();
         // Grid scale pop runs in parallel with the flash so submit can fire faster
@@ -1939,6 +1975,21 @@ function GameScreenImpl({
   useEffect(() => {
     freeRescueUsedRef.current = false;
     setFreeUndoGranted(false);
+  }, [level, mode]);
+
+  // Prestige tier-1's permanent "+1 hint" — displayed by the prestige
+  // ceremony since launch, never applied anywhere. Realized as N free hint
+  // USES per puzzle: the first N hints skip the token charge in handleHint
+  // (granting raw hintsLeft would be invisible — the hint button always
+  // routes through the token spend). Rare-tile companion bonus applies in
+  // useRewardWiring's drop roll.
+  const prestigeFreeHintsRef = useRef(0);
+  useEffect(() => {
+    prestigeFreeHintsRef.current = hintsAllowed
+      ? getPrestigeHintBonus(prestige?.permanentBonuses ?? [])
+      : 0;
+    // Re-provisioned per puzzle load only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level, mode]);
 
   // Purchased one-shot effects from the coin shop. The shop stores them as
@@ -2108,7 +2159,14 @@ function GameScreenImpl({
     if (
       isStuck &&
       status === 'playing' &&
-      mode !== 'relax' &&
+      // The rescue is an UNDO — it must respect the mode's own undo rule,
+      // not just skip relax. Expert and perfectSolve are allowUndo:false
+      // "no assists" modes; granting there violated their contract (and in
+      // perfectSolve the undo flips perfectRun, tripping the fail state).
+      // unlimitedUndo (relax) never needs a grant — same exclusion the old
+      // `mode !== 'relax'` check encoded, now stated as the actual rule.
+      modeConfig.rules.allowUndo &&
+      !modeConfig.rules.unlimitedUndo &&
       undosLeft <= 0 &&
       undoTokens <= 0 &&
       history.length > 0 &&
@@ -2196,11 +2254,21 @@ function GameScreenImpl({
     // not just hide buttons — this is the single choke point every hint
     // surface routes through.
     if (!hintsAllowed) return;
+    // A dead board has no traceable hint: USE_HINT would silently no-op,
+    // so spending the persistent token below bought nothing. Charge only
+    // when the mode-aware picker can actually produce one.
+    if (!canProduceHint(store.getState())) return;
     if (mode !== 'relax') {
-      // Spend from persistent inventory and grant into game state
-      if (hintTokens <= 0) return;
-      spendHintToken();
-      grantHint();
+      if (prestigeFreeHintsRef.current > 0) {
+        // Prestige permanent bonus: this hint is on the house.
+        prestigeFreeHintsRef.current -= 1;
+        grantHint();
+      } else {
+        // Spend from persistent inventory and grant into game state
+        if (hintTokens <= 0) return;
+        spendHintToken();
+        grantHint();
+      }
     }
     void soundManager.playSound('hintUsed');
     void analytics.logEvent('hint_used', { level, mode, hintsAvailable });
@@ -2362,15 +2430,29 @@ function GameScreenImpl({
   });
 
   const handleWildcard = useStableCallback(() => {
-    if ((boosterTokens?.wildcardTile ?? 0) <= 0) return;
-    spendBoosterToken('wildcardTile');
-    grantBooster('wildcardTile');
+    const gameState = store.getState();
+    if (gameState.wildcardMode) {
+      // Second tap = CANCEL placement mode. This used to run the full
+      // activation path again — a second economy token spent for toggling
+      // the mode back off. Cancelling costs nothing; the already-granted
+      // in-puzzle count stays and re-activates for free below.
+      void soundManager.playSound('buttonPress');
+      activateWildcard();
+      return;
+    }
+    // An unconsumed in-puzzle wildcard (a cancelled activation, or one
+    // granted by an entitlement) re-activates without a new charge.
+    if (gameState.boosterCounts.wildcardTile <= 0) {
+      if ((boosterTokens?.wildcardTile ?? 0) <= 0) return;
+      spendBoosterToken('wildcardTile');
+      grantBooster('wildcardTile');
+      void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
+      recordDailyQuestEvent({ type: 'booster_used' });
+      checkFirstBooster();
+      checkAndActivateCombo('wildcardTile');
+    }
     void soundManager.playSound('buttonPress');
-    void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
-    recordDailyQuestEvent({ type: 'booster_used' });
-    checkFirstBooster();
     activateWildcard();
-    checkAndActivateCombo('wildcardTile');
   });
 
   const handleSpotlight = useStableCallback(() => {
@@ -2387,6 +2469,11 @@ function GameScreenImpl({
 
   const handleSmartShuffle = useStableCallback(() => {
     if ((boosterTokens?.smartShuffle ?? 0) <= 0) return;
+    // SMART_SHUFFLE preserves remaining word paths, so it can only succeed
+    // when every remaining word is currently findable — on a dead board the
+    // reducer "refunds" the in-puzzle count by no-oping, but the economy
+    // token spent below was already gone. Charge only when it can apply.
+    if (!canSmartShuffle(store.getState())) return;
     spendBoosterToken('smartShuffle');
     grantBooster('smartShuffle');
     void soundManager.playSound('buttonPress');
@@ -2992,129 +3079,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 60,
   },
-  wordArea: {
-    paddingTop: 2,
-    paddingBottom: 2,
-    height: 86,
-  },
-  cascadeBar: {
-    backgroundColor: 'rgba(50, 15, 20, 0.75)',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    marginHorizontal: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 107, 107, 0.40)',
-    shadowColor: COLORS.coral,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  cascadeText: {
-    fontFamily: FONTS.display,
-    color: COLORS.coral,
-    fontSize: 14,
-    letterSpacing: 0.5,
-    textShadowColor: COLORS.coralGlow,
-    textShadowRadius: 10,
-  },
-  chainPopup: {
-    position: 'absolute',
-    top: '36%',
-    alignSelf: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 18,
-    borderRadius: 32,
-    zIndex: 200,
-    elevation: 30,
-    backgroundColor: 'rgba(255, 45, 149, 0.95)',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.85,
-    shadowRadius: 30,
-    borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  chainText: {
-    fontFamily: FONTS.display,
-    color: '#fff',
-    fontSize: 34,
-    letterSpacing: 6,
-    textAlign: 'center',
-    textShadowColor: 'rgba(255,255,255,0.5)',
-    textShadowRadius: 14,
-  },
-  neonPulseOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 3,
-    borderRadius: 24,
-    borderColor: COLORS.accent,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 30,
-    elevation: 0,
-    zIndex: 190,
-  },
-  vhsGlitchOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,45,149,0.12)',
-    zIndex: 185,
-  },
-  validFlashOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.green,
-    zIndex: 50,
-  },
-  idleHintBanner: {
-    backgroundColor: 'rgba(255, 45, 149, 0.08)',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginHorizontal: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 45, 149, 0.2)',
-  },
-  idleHintText: {
-    color: COLORS.accent,
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
-  },
-  adHintBanner: {
-    backgroundColor: 'rgba(0, 255, 135, 0.08)',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginHorizontal: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 255, 135, 0.2)',
-  },
-  adHintBannerText: {
-    color: COLORS.green,
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
-  },
-  stuckBanner: {
-    backgroundColor: 'rgba(255, 82, 82, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginHorizontal: 8,
-    marginTop: 4,
-  },
-  stuckBannerRetry: {
-    backgroundColor: 'rgba(168, 85, 247, 0.85)',
-  },
-  stuckText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   modeIntroBanner: {
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     paddingVertical: 10,
@@ -3153,85 +3117,8 @@ const styles = StyleSheet.create({
     color: COLORS.teal,
     letterSpacing: 1.5,
   },
-  scorePopup: {
-    position: 'absolute',
-    top: '33%',
-    alignSelf: 'center',
-    zIndex: 250,
-    paddingHorizontal: 34,
-    paddingVertical: 16,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255, 45, 149, 0.95)',
-    elevation: 30,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.85,
-    shadowRadius: 28,
-    borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  scorePopupText: {
-    fontFamily: FONTS.display,
-    color: '#fff',
-    fontSize: 28,
-    letterSpacing: 4,
-    textAlign: 'center',
-    textShadowColor: 'rgba(255,255,255,0.5)',
-    textShadowRadius: 12,
-  },
-  scorePopupCombo: {
-    fontSize: 32,
-    textShadowColor: 'rgba(255, 215, 0, 0.8)',
-    textShadowRadius: 20,
-  },
   // Bigger popup container variants for 5/7+ letter celebrations.
-  scorePopupMedium: {
-    paddingHorizontal: 40,
-    paddingVertical: 20,
-    borderRadius: 30,
-    shadowRadius: 34,
-  },
-  scorePopupBig: {
-    paddingHorizontal: 46,
-    paddingVertical: 24,
-    borderRadius: 34,
-    shadowRadius: 42,
-    shadowOpacity: 1,
-    borderWidth: 3,
-  },
-  scorePopupTextBig: {
-    fontSize: 40,
-    letterSpacing: 5,
-    textShadowColor: 'rgba(255, 215, 0, 0.9)',
-    textShadowRadius: 24,
-  },
   // Big-word celebration label overlay (7+ letters).
-  bigWordOverlay: {
-    position: 'absolute',
-    top: '40%',
-    alignSelf: 'center',
-    zIndex: 260,
-    paddingHorizontal: 50,
-    paddingVertical: 22,
-    borderRadius: 36,
-    backgroundColor: 'rgba(20, 6, 42, 0.92)',
-    borderWidth: 3,
-    borderColor: COLORS.gold,
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.9,
-    shadowRadius: 40,
-    elevation: 36,
-  },
-  bigWordText: {
-    fontFamily: FONTS.display,
-    color: COLORS.gold,
-    fontSize: 44,
-    letterSpacing: 6,
-    textAlign: 'center',
-    textShadowColor: 'rgba(255, 215, 0, 0.9)',
-    textShadowRadius: 22,
-  },
   boosterBar: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -3301,9 +3188,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 10,
     letterSpacing: 0.4,
-  },
-  boosterEmoji: {
-    fontSize: 17,
   },
   boosterCount: {
     position: 'absolute',

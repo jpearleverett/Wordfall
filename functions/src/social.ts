@@ -42,18 +42,22 @@ interface ClubGoalTemplate {
   mode: ClubGoalMode;
 }
 
+// NOTE: every trackingKey below MUST be computable from the fields the client
+// actually writes to users/{uid}/puzzleResults — recordPuzzleResult sends
+// exactly {score, stars, wordsFound, isPerfect, hintsUsed, level, mode}. The
+// old 'chains' / 'combos' / 'shared_cascade' templates read chainCount /
+// maxCombo, fields the Option A refactor deleted from the game entirely, so
+// those goals could never progress: a club dealt one had a dead goal all
+// week. Do not re-add chain/combo goals (CLAUDE.md bans the mechanics).
 const CLUB_GOAL_TEMPLATES: ClubGoalTemplate[] = [
   // Personal goals — existing catalog
   { id: 'words', label: 'Club Word Hunt', target: 500, trackingKey: 'wordsFound', duration: 7, mode: 'personal' },
   { id: 'stars', label: 'Star Chasers', target: 100, trackingKey: 'starsEarned', duration: 7, mode: 'personal' },
   { id: 'perfects', label: 'Perfect Together', target: 20, trackingKey: 'perfectSolves', duration: 7, mode: 'personal' },
-  { id: 'chains', label: 'Chain Masters', target: 50, trackingKey: 'chainsTriggered', duration: 3, mode: 'personal' },
   { id: 'puzzles', label: 'Puzzle Marathon', target: 200, trackingKey: 'puzzlesSolved', duration: 7, mode: 'personal' },
   { id: 'score', label: 'Score Surge', target: 50000, trackingKey: 'totalScore', duration: 3, mode: 'personal' },
   { id: 'nohint', label: 'No-Hint Heroes', target: 30, trackingKey: 'noHintClears', duration: 7, mode: 'personal' },
-  { id: 'combos', label: 'Combo Frenzy', target: 80, trackingKey: 'combosTriggered', duration: 3, mode: 'personal' },
   // Shared goals — Clash-of-Clans style collective progress
-  { id: 'shared_cascade', label: 'Club Cascade Challenge', target: 100, trackingKey: 'chainsTriggered', duration: 7, mode: 'shared' },
   { id: 'shared_marathon', label: 'Word Marathon', target: 5000, trackingKey: 'wordsFound', duration: 7, mode: 'shared' },
   { id: 'shared_squad', label: 'Perfect Squad', target: 50, trackingKey: 'perfectSolves', duration: 7, mode: 'shared' },
 ];
@@ -100,12 +104,8 @@ function computeGoalIncrement(
       return result.isPerfect ? 1 : 0;
     case 'totalScore':
       return clampCount(result.score, MAX_CLUB_SCORE_CONTRIBUTION);
-    case 'chainsTriggered':
-      return clampCount(result.chainCount, MAX_GOAL_INCREMENT);
     case 'noHintClears':
       return result.hintsUsed === 0 ? 1 : 0;
-    case 'combosTriggered':
-      return (Number(result.maxCombo) || 0) > 1 ? 1 : 0;
     default:
       return 0;
   }
@@ -117,20 +117,23 @@ export const onPuzzleComplete = functions.firestore
     const { userId } = context.params;
     const result = snap.data();
 
-    // Get user's club
-    const userDoc = await db.doc(`users/${userId}`).get();
-    const userData = userDoc.data();
-    if (!userData?.clubId) return;
-
-    const clubId = userData.clubId;
-
-    // Both the trigger document AND users/{uid}.clubId are client-writable,
-    // so neither can be trusted. Verify the caller is actually a member of
-    // the club they claim, or an attacker could point `clubId` at a rival
-    // club and mutate its goals and weekly score.
-    const clubDoc = await db.doc(`clubs/${clubId}`).get();
-    const clubMemberIds = (clubDoc.data()?.memberIds as string[]) ?? [];
-    if (!clubMemberIds.includes(userId)) return;
+    // Resolve the player's club by MEMBERSHIP, not by a users-doc field.
+    // Nothing (client or server) ever wrote users/{uid}.clubId — the client
+    // caches it inside the cloud save at users/{uid}/data/player — so the
+    // old `userData?.clubId` read early-returned on EVERY invocation and the
+    // whole club pipeline (goals, weeklyScore, memberContributions) was
+    // dead. clubs.memberIds is also the trust anchor: it is Admin-SDK-only
+    // per firestore.rules, so a forged trigger doc cannot point progress at
+    // a rival club. (joinClub/leaveClub now also maintain users/{uid}.clubId
+    // server-side, but membership stays authoritative here so members who
+    // joined via the client createClub path still count.)
+    const membershipSnap = await db
+      .collection('clubs')
+      .where('memberIds', 'array-contains', userId)
+      .limit(1)
+      .get();
+    if (membershipSnap.empty) return;
+    const clubId = membershipSnap.docs[0].id;
 
     // Personal (per-member) goals and shared (cluster-level) goals live in
     // two separate subcollections — fetch both concurrently.
@@ -139,16 +142,20 @@ export const onPuzzleComplete = functions.firestore
       db.collection(`clubs/${clubId}/sharedGoals`).where('active', '==', true).get(),
     ]);
 
-    if (personalSnap.empty && sharedSnap.empty) return;
-
     const batch = db.batch();
 
+    // Personal goals track PER-MEMBER progress (`mode: 'personal'` contract
+    // above: every member tracks their own progress and claims their own
+    // reward). The old implementation pooled every member's increments into
+    // one `progress` field — personal goals were duplicate shared goals with
+    // 10×-lower targets, and completion paid the whole club.
     for (const goalDoc of personalSnap.docs) {
       const goal = goalDoc.data();
       const increment = computeGoalIncrement(goal.trackingKey, result);
       if (increment > 0) {
         batch.update(goalDoc.ref, {
-          progress: admin.firestore.FieldValue.increment(increment),
+          [`memberProgress.${userId}`]:
+            admin.firestore.FieldValue.increment(increment),
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
@@ -177,48 +184,59 @@ export const onPuzzleComplete = functions.firestore
     const clampedScore = Number.isFinite(rawScore)
       ? Math.max(0, Math.min(rawScore, MAX_CLUB_SCORE_CONTRIBUTION))
       : 0;
+    // memberLastActive is the signal autoKickInactiveMembers kicks on.
+    // Before this stamp existed the ONLY writer was joinClub (once, at join
+    // time), so every member was expelled exactly 14 days after joining no
+    // matter how much they played. Refreshing it on every puzzle completion
+    // — unconditionally, even when no goals are active — makes the kick
+    // criterion mean what it says.
     batch.update(db.doc(`clubs/${clubId}`), {
       weeklyScore: admin.firestore.FieldValue.increment(clampedScore),
+      [`memberLastActive.${userId}`]:
+        admin.firestore.FieldValue.serverTimestamp(),
     });
 
     await batch.commit();
 
-    // Personal goal completion — reward the single member whose count
-    // crossed the target (preserved legacy behaviour: the batch above only
-    // increments once per puzzle so the post-write snapshot is authoritative).
+    // Personal goal completion — per the `mode: 'personal'` contract, only
+    // THIS member's own count decides completion, and only this member is
+    // paid. (The old code pooled progress and paid every memberId — a
+    // 30-member club crossed 'words: 500' in a day and all 30 collected.)
+    // The check + grant run in one transaction so racing triggers can't
+    // double-pay, and — unlike the old non-transactional rewrite — can never
+    // reset an already-claimed reward doc back to claimed:false. The reward
+    // write rides the SAME transaction as the completedMembers flip, so the
+    // member's completion can never be burned without the reward landing.
     for (const goalDoc of personalSnap.docs) {
       const goal = goalDoc.data();
       const inc = computeGoalIncrement(goal.trackingKey, result);
-      const currentProgress = (goal.progress ?? 0) + inc;
-      if (currentProgress >= goal.target && !goal.completed) {
-        // Membership lives in the club document's `memberIds` array — there
-        // is no `clubs/{id}/members` subcollection anywhere in the project.
-        // Reading one returned an empty snapshot, so the reward batch was
-        // always empty while `completed: true` had ALREADY been written:
-        // every personal club goal silently paid nobody and could never pay
-        // out on a later run. Mirrors the shared-goal branch below.
-        const clubSnap = await db.doc(`clubs/${clubId}`).get();
-        const memberIds = (clubSnap.data()?.memberIds as string[]) ?? [];
+      if (inc <= 0) continue;
+      const projected =
+        Number(goal.memberProgress?.[userId] ?? 0) + inc;
+      if (projected < goal.target) continue;
+      if (goal.completedMembers?.[userId]) continue;
 
-        const rewardBatch = db.batch();
-        for (const memberId of memberIds) {
-          rewardBatch.set(db.doc(`users/${memberId}/rewards/${goalDoc.id}`), {
-            type: 'club_goal_complete',
-            goalLabel: goal.label,
-            coins: goal.rewardCoins ?? 600,
-            gems: goal.rewardGems ?? 20,
-            claimed: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
-        // Flip `completed` in the SAME batch as the grants, so the goal can
-        // never be burned without its rewards landing.
-        rewardBatch.update(goalDoc.ref, {
-          completed: true,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      await db.runTransaction(async (tx) => {
+        const freshGoal = await tx.get(goalDoc.ref);
+        const data = freshGoal.data();
+        if (!data) return;
+        if (Number(data.memberProgress?.[userId] ?? 0) < data.target) return;
+        if (data.completedMembers?.[userId]) return;
+
+        tx.update(goalDoc.ref, {
+          [`completedMembers.${userId}`]: true,
+          [`completedMembersAt.${userId}`]:
+            admin.firestore.FieldValue.serverTimestamp(),
         });
-        await rewardBatch.commit();
-      }
+        tx.set(db.doc(`users/${userId}/rewards/${goalDoc.id}`), {
+          type: 'club_goal_complete',
+          goalLabel: data.label ?? goal.label,
+          coins: data.rewardCoins ?? 600,
+          gems: data.rewardGems ?? 20,
+          claimed: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
     }
 
     // Shared goal completion — guard against races by flipping `completed`
@@ -593,10 +611,17 @@ export const processStreakReminders = functions
     let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
 
     while (Date.now() - startedAt < STREAK_REMINDER_TIME_BUDGET_MS) {
+      // Field shape MUST match what syncPlayerProfile actually writes to the
+      // users ROOT doc: a FLAT `currentStreak` number plus `lastActiveDate`
+      // (YYYY-MM-DD) and `tzOffsetMinutes`. The old query filtered on a
+      // `streaks.currentStreak` map path that no writer ever produced (the
+      // real streaks object lives in the cloud save at users/{uid}/data/
+      // player, invisible to this collection query), so it matched zero
+      // documents and the reminder system silently sent nothing, forever.
       let query = db
         .collection('users')
-        .where('streaks.currentStreak', '>', 0)
-        .orderBy('streaks.currentStreak')
+        .where('currentStreak', '>', 0)
+        .orderBy('currentStreak')
         .limit(STREAK_REMINDER_BATCH_SIZE);
       if (lastDoc) query = query.startAfter(lastDoc);
 
@@ -606,7 +631,9 @@ export const processStreakReminders = functions
       for (const userDoc of usersSnap.docs) {
         scanned++;
         const userData = userDoc.data();
-        const lastPlayDate = userData.streaks?.lastPlayDate;
+        // syncPlayerProfile only runs on puzzle completion, so
+        // lastActiveDate IS the last play date.
+        const lastPlayDate = userData.lastActiveDate;
         if (lastPlayDate === today) continue; // Already played today
 
         // Per-timezone send window: only push when the user's local hour is 20:00.
@@ -616,7 +643,7 @@ export const processStreakReminders = functions
           continue;
         }
 
-        const streakDays = userData.streaks?.currentStreak ?? 0;
+        const streakDays = userData.currentStreak ?? 0;
 
         const result = await sendPushToUser(
           userDoc.id,
@@ -671,8 +698,15 @@ async function runReengagementPass(opts: {
   title: string;
   body: string;
   notificationType: string;
-  /** Extra per-user skip predicate (e.g. skip if already converted). */
-  extraSkip?: (userData: FirebaseFirestore.DocumentData) => boolean;
+  /**
+   * Extra per-user skip predicate (e.g. skip if already converted). May be
+   * async so it can consult server-owned subcollections — the users ROOT doc
+   * only carries the profile fields syncPlayerProfile writes.
+   */
+  extraSkip?: (
+    userData: FirebaseFirestore.DocumentData,
+    userId: string,
+  ) => Promise<boolean> | boolean;
 }): Promise<void> {
   const { daysAgo, title, body, notificationType, extraSkip } = opts;
   const nowMs = Date.now();
@@ -706,7 +740,7 @@ async function runReengagementPass(opts: {
         continue;
       }
 
-      if (extraSkip && extraSkip(userData)) {
+      if (extraSkip && (await extraSkip(userData, userDoc.id))) {
         skippedByExtra++;
         continue;
       }
@@ -744,7 +778,24 @@ export const processDay2Reengagement = functions
       body: 'Your puzzle board is waiting. Tap to pick up where you left off.',
       notificationType: 'day2_reengagement',
       // Target non-payers: first-purchase offer on return is more effective.
-      extraSkip: (u) => Array.isArray(u.purchaseHistory) && u.purchaseHistory.length > 0,
+      // The payer signal must be SERVER-readable: the users root doc never
+      // carries purchaseHistory (that lives in the economy cloud save at
+      // users/{uid}/economy/current), so the old `u.purchaseHistory` read
+      // was always undefined and the filter never fired — payers got the
+      // non-payer push while skippedByExtra logged 0. The server-owned
+      // users/{uid}/purchases ledger (written only by validateReceipt on a
+      // store-verified receipt) is the authoritative signal. Runs after the
+      // timezone gate, so it costs one tiny read per user actually in the
+      // send window.
+      extraSkip: async (_u, uid) => {
+        const purchases = await db
+          .collection('users')
+          .doc(uid)
+          .collection('purchases')
+          .limit(1)
+          .get();
+        return !purchases.empty;
+      },
     });
   });
 
@@ -1374,9 +1425,13 @@ export const onReferralSuccess = functions.https.onCall(
 //   ranks 11-100 → 100 gems
 //   ranks 101-1000 → 20 gems + weekly_participant badge
 //
-// Idempotency: reward docs use a stable id (`{weekId}_leaderboard`) so
-// a re-run of the same schedule (manual trigger / retry) does NOT
-// double-grant — the existing doc is simply overwritten.
+// Idempotency: reward docs use a stable id (`{weekId}_leaderboard`) AND
+// create-if-absent semantics — a re-run of the same schedule (manual
+// trigger / retry after a mid-run crash) skips docs that already exist.
+// Overwriting instead would rewrite `claimed: false` onto docs the player
+// already claimed (the inbox sweep credits gems then flips claimed:true;
+// Admin SDK writes bypass the rules' unclaimed→claimed guard), re-paying
+// every previously-claimed recipient on their next app open.
 
 const WEEKLY_REWARD_COLLECTION = 'weeklyScores';
 const WEEKLY_REWARD_BATCH_SIZE = 500;
@@ -1399,11 +1454,23 @@ const WEEKLY_REWARD_TIERS: WeeklyRewardTier[] = [
  * Compute the weekId of the week that just closed when the function
  * runs at Sunday 23:00 UTC. Mirrors `getCurrentWeekId` in
  * `src/services/firestore.ts` so client and server agree on the ID.
+ *
+ * Sunday-anchored (MUST stay byte-identical to `weekIdFor` below and
+ * `getWeekId` in src/utils/weekId.ts): the week number comes from the year
+ * of the Sunday that STARTS the week, so ids match the old Jan-1-reset
+ * formula for every mid-year week, while the week containing Jan 1 stays a
+ * single 7-day bucket under the prior year's last id (e.g. Jan 1–3 2026 →
+ * `2025_W53`). The old formula split that week in two, and this function's
+ * 24h look-back could never name the old-year half — its scores were never
+ * rewarded.
  */
 function getClosingWeekId(now: Date = new Date()): string {
-  const year = now.getUTCFullYear();
+  const DAY_MS = 86_400_000;
+  const utcMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const sunday = new Date(utcMidnight - now.getUTCDay() * DAY_MS);
+  const year = sunday.getUTCFullYear();
   const startOfYear = new Date(Date.UTC(year, 0, 1));
-  const days = Math.floor((now.getTime() - startOfYear.getTime()) / 86_400_000);
+  const days = Math.floor((sunday.getTime() - startOfYear.getTime()) / DAY_MS);
   const weekNumber = Math.ceil((days + startOfYear.getUTCDay() + 1) / 7);
   return `${year}_W${String(weekNumber).padStart(2, '0')}`;
 }
@@ -1443,11 +1510,15 @@ export const distributeWeeklyRewards = functions
       return;
     }
 
-    // Batch reward writes in groups of 500 to stay under Firestore's
-    // per-commit limit. Each reward doc id is stable per-user-per-week
-    // so re-running the schedule is idempotent (overwrite, not grow).
-    let processed = 0;
-    let batch = db.batch();
+    // Build the candidate grants first, then write CREATE-IF-ABSENT in
+    // chunks: read each chunk of stable-id reward docs via getAll and only
+    // write the ones that do not exist yet. A re-run must NEVER rewrite an
+    // existing reward doc — it may already be claimed, and resetting
+    // `claimed: false` would make the client inbox sweep pay it again.
+    const candidates: Array<{
+      ref: admin.firestore.DocumentReference;
+      data: admin.firestore.DocumentData;
+    }> = [];
     for (let i = 0; i < snap.docs.length; i++) {
       const doc = snap.docs[i];
       const rank = i + 1;
@@ -1456,32 +1527,46 @@ export const distributeWeeklyRewards = functions
       const userId = doc.data().userId as string | undefined;
       if (!userId) continue;
 
-      const rewardRef = db.doc(`users/${userId}/rewards/${weekId}_leaderboard`);
-      batch.set(rewardRef, {
-        type: 'weekly_leaderboard',
-        weekId,
-        rank,
-        tierLabel: tier.label,
-        gems: tier.gems,
-        decorations: tier.decorations,
-        claimed: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      candidates.push({
+        ref: db.doc(`users/${userId}/rewards/${weekId}_leaderboard`),
+        data: {
+          type: 'weekly_leaderboard',
+          weekId,
+          rank,
+          tierLabel: tier.label,
+          gems: tier.gems,
+          decorations: tier.decorations,
+          claimed: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
       });
-      processed++;
-
-      if (processed % WEEKLY_REWARD_BATCH_SIZE === 0) {
-        await batch.commit();
-        batch = db.batch();
-      }
     }
 
-    if (processed % WEEKLY_REWARD_BATCH_SIZE !== 0) {
-      await batch.commit();
+    let processed = 0;
+    let skippedExisting = 0;
+    for (let i = 0; i < candidates.length; i += WEEKLY_REWARD_BATCH_SIZE) {
+      const chunk = candidates.slice(i, i + WEEKLY_REWARD_BATCH_SIZE);
+      const existing = await db.getAll(...chunk.map((c) => c.ref));
+      const batch = db.batch();
+      let writes = 0;
+      existing.forEach((docSnap, j) => {
+        if (docSnap.exists) {
+          skippedExisting++;
+          return;
+        }
+        batch.set(chunk[j].ref, chunk[j].data);
+        writes++;
+      });
+      if (writes > 0) {
+        await batch.commit();
+        processed += writes;
+      }
     }
 
     functions.logger.info('[distributeWeeklyRewards] granted rewards', {
       weekId,
       processed,
+      skippedExisting,
       durationMs: Date.now() - startedAt,
     });
   });
@@ -1535,6 +1620,15 @@ function maxPlausibleScore(mode: string, level: number, scope?: string): number 
   // that still blocks the absurd numbers manipulation produces.
   if (scope === 'weekly' || scope === 'event') {
     return Math.max(Math.min(base * multiplier, 250_000), 50_000);
+  }
+  if (scope === 'daily') {
+    // The daily plays ONE known ~12-word board at level 0, so the per-level
+    // base collapses to 1000 there — which rejected virtually every
+    // legitimate daily score (12×100 word-found + ~20/letter + 500 perfect
+    // + 200 no-hints ≈ 3-4k, up to ~7k with a booster-combo 2×). Flat
+    // tight ceiling: comfortably above any real solve, far below what
+    // manipulation produces.
+    return 10_000;
   }
   return Math.min(base * multiplier, 250_000);
 }
@@ -1691,20 +1785,26 @@ export const submitValidatedScore = functions.https.onCall(
   },
 );
 
-/** ISO week-number helper — mirrors src/utils/weekIdentifier.ts so the
- *  server doesn't need to import from client code. */
 /**
  * Week bucket for leaderboard writes. MUST stay byte-identical to
- * `getClosingWeekId` here and `getCurrentWeekId` on the client — this
+ * `getClosingWeekId` here and `getWeekId` in src/utils/weekId.ts — this
  * previously emitted ISO weeks as `2026-W33` (dash) while both readers
  * queried `2026_W33` (underscore), so with `leaderboardValidationEnabled`
  * on by default the weekly leaderboard was permanently empty and
  * distributeWeeklyRewards never paid anyone.
+ *
+ * Sunday-anchored: the week number comes from the year of the Sunday that
+ * STARTS the week, so ids match the old Jan-1-reset formula for every
+ * mid-year week while the week containing Jan 1 stays one 7-day bucket
+ * under the prior year's last id (see getClosingWeekId above).
  */
 function weekIdFor(d: Date): string {
-  const year = d.getUTCFullYear();
+  const DAY_MS = 86_400_000;
+  const utcMidnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const sunday = new Date(utcMidnight - d.getUTCDay() * DAY_MS);
+  const year = sunday.getUTCFullYear();
   const startOfYear = new Date(Date.UTC(year, 0, 1));
-  const days = Math.floor((d.getTime() - startOfYear.getTime()) / 86_400_000);
+  const days = Math.floor((sunday.getTime() - startOfYear.getTime()) / DAY_MS);
   const weekNumber = Math.ceil((days + startOfYear.getUTCDay() + 1) / 7);
   return `${year}_W${String(weekNumber).padStart(2, '0')}`;
 }
@@ -1791,7 +1891,10 @@ export const joinClub = functions.https.onCall(
         : [];
 
       if (memberIds.includes(uid)) {
-        // Idempotent replay — already in this club.
+        // Idempotent replay — already in this club. Still (re)stamp the
+        // users-doc clubId cache so members who joined before it existed
+        // self-heal on retry.
+        tx.set(db.collection('users').doc(uid), { clubId }, { merge: true });
         return {
           success: true,
           clubId,
@@ -1827,6 +1930,12 @@ export const joinClub = functions.https.onCall(
           admin.firestore.FieldValue.serverTimestamp(),
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      // Server-authoritative membership cache on the users ROOT doc.
+      // Nothing else ever wrote this field (the client caches clubId inside
+      // the cloud save subcollection), so server code that read
+      // users/{uid}.clubId was reading a phantom. set+merge because the
+      // root doc may not exist yet for a fresh account.
+      tx.set(db.collection('users').doc(uid), { clubId }, { merge: true });
 
       return {
         success: true,
@@ -1875,12 +1984,33 @@ export const leaveClub = functions.https.onCall(
     }
 
     const clubRef = db.collection('clubs').doc(clubId);
+    const userRef = db.collection('users').doc(uid);
 
     return db.runTransaction(async (tx) => {
-      const clubSnap = await tx.get(clubRef);
+      const [clubSnap, userSnap] = await Promise.all([
+        tx.get(clubRef),
+        tx.get(userRef),
+      ]);
+
+      // joinClub maintains a server-authoritative users/{uid}.clubId cache;
+      // leaving (or discovering the club is gone) must CLEAR it, or server
+      // reads of the cache would see a phantom membership forever. Only
+      // cleared when it still points at THIS club, so a stale retry can
+      // never wipe a newer membership.
+      const cachedClubId = userSnap.data()?.clubId as string | undefined;
+      const clearClubIdCache = () => {
+        if (cachedClubId === clubId) {
+          tx.set(
+            userRef,
+            { clubId: admin.firestore.FieldValue.delete() },
+            { merge: true },
+          );
+        }
+      };
 
       if (!clubSnap.exists) {
         // Idempotent — the club is already gone.
+        clearClubIdCache();
         return { success: true, clubId, alreadyLeft: true, clubDeleted: false };
       }
 
@@ -1890,6 +2020,7 @@ export const leaveClub = functions.https.onCall(
         : [];
 
       if (!memberIds.includes(uid)) {
+        clearClubIdCache();
         return { success: true, clubId, alreadyLeft: true, clubDeleted: false };
       }
 
@@ -1897,6 +2028,7 @@ export const leaveClub = functions.https.onCall(
 
       if (newMemberIds.length === 0) {
         tx.delete(clubRef);
+        clearClubIdCache();
         return { success: true, clubId, alreadyLeft: false, clubDeleted: true };
       }
 
@@ -1913,6 +2045,7 @@ export const leaveClub = functions.https.onCall(
         update.ownerId = newMemberIds[0];
       }
       tx.update(clubRef, update);
+      clearClubIdCache();
 
       return {
         success: true,
