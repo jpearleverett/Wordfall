@@ -248,4 +248,33 @@ describe('grid transition update decision', () => {
   test('does nothing when grid identity and geometry are unchanged', () => {
     expect(decideGridTransitionUpdate(state, state)).toBe('none');
   });
+
+  test('a wholesale board replacement resets instead of ghosting every tile', () => {
+    // Snapshot hydration / OS-kill relaunch: new board, zero shared cell
+    // IDs. Running the clear transition would ghost the entire previous
+    // board (a full-screen dissolve storm) over the incoming one.
+    expect(decideGridTransitionUpdate(state, {
+      ...state,
+      grid: [[cell('Z')]],
+    })).toBe('reset');
+  });
+
+  test('a word clear (surviving IDs) still transitions', () => {
+    const before = {
+      ...state,
+      grid: [[cell('A'), cell('B')]],
+      cols: 2,
+    };
+    expect(decideGridTransitionUpdate(before, {
+      ...before,
+      grid: [[cell('A'), null]],
+    })).toBe('transition');
+  });
+
+  test('clearing the final tiles to an empty grid still transitions (ghost dissolve)', () => {
+    expect(decideGridTransitionUpdate(state, {
+      ...state,
+      grid: [[null]],
+    })).toBe('transition');
+  });
 });

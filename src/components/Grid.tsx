@@ -83,6 +83,13 @@ interface GridProps {
    */
   onGravitySettled?: () => void;
   /**
+   * Whether the ambient idle glint may run. The layer self-schedules an
+   * infinite timeout chain, so callers must switch this off whenever the
+   * board is not actually visible gameplay (result overlay up, screen
+   * blurred under a pushed route) — freezeOnBlur does not stop timers.
+   */
+  glintActive?: boolean;
+  /**
    * Chapter accent color (#rrggbb). Tints the neon frame + outer glow so
    * the board chrome harmonizes with the chapter's tile ramp instead of
    * always being pink — the blind design review flagged green nature tiles
@@ -372,6 +379,7 @@ function GameGridImpl({
   validWord = false,
   maxHeight,
   onGravitySettled,
+  glintActive = true,
   frameAccent,
   wildcardMode = false,
   bonusCellId = null,
@@ -1002,8 +1010,11 @@ function GameGridImpl({
 
           {/* Ambient idle glint — a periodic one-shot sparkle on a random
               occupied tile so an untouched board still shimmers. Unmounted
-              entirely under reduce motion (no timer, no loop). */}
-          {!reduceMotion && (
+              entirely under reduce motion (no timer, no loop), and whenever
+              the board is not visible gameplay (glintActive false: result
+              overlay covering the grid, or the screen blurred in the stack)
+              so its self-rescheduling timer chain stops. */}
+          {!reduceMotion && glintActive && (
             <IdleGlintLayer cellBounds={geometry.bounds} cellSize={cellSize} />
           )}
 

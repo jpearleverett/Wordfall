@@ -12,6 +12,7 @@
 import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
 import { Animated, View, StyleSheet } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
+import { useIsFocused } from '@react-navigation/native';
 import { GameGrid } from '../../components/Grid';
 import { WordBank } from '../../components/WordBank';
 import { useGameStore, useGameDispatch } from '../../stores/gameStore';
@@ -93,6 +94,12 @@ function PlayFieldImpl({
   const wildcardCells = useGameStore(useShallow((s: GameState) => s.wildcardCells));
   const wildcardMode = useGameStore(s => s.wildcardMode);
   const gravityDirection = useGameStore(s => s.gravityDirection);
+  // Idle-glint gate: the layer's self-rescheduling timer chain must stop
+  // when the board isn't visible gameplay — result overlay up (status not
+  // 'playing') or GameScreen blurred under a pushed route (freezeOnBlur
+  // suspends rendering but not timers).
+  const isFocused = useIsFocused();
+  const glintActive = useGameStore(s => s.status) === 'playing' && isFocused;
 
   // ── Derived state ─────────────────────────────────────────────────────
   const currentWord = useMemo(
@@ -257,6 +264,7 @@ function PlayFieldImpl({
             bonusCellId={bonusCellId}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
             onGravitySettled={onGravitySettled}
+            glintActive={glintActive}
             frameAccent={frameAccent}
             wildcardMode={wildcardMode}
           />

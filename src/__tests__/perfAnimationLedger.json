@@ -400,5 +400,130 @@
         "suite": "src/__tests__/ceremonyQueue.test.ts"
       }
     ]
+  },
+  {
+    "id": "tension-bgm-never-reverts",
+    "title": "Tense BGM never hands back to the mode bed on undo/retry falling edge",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "tensionBedActiveRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(tensionBedActiveRef\\.current && status === 'playing'\\)"
+      }
+    ]
+  },
+  {
+    "id": "valid-flash-anim-truncated-by-submit",
+    "title": "Valid-word green flash ramped over 300ms but unmounted at 50ms (~5% peak opacity \u2014 invisible)",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "validFlashAnim, \\{\\n          toValue: 1,\\n          duration: 300"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "duration: 40,"
+      }
+    ]
+  },
+  {
+    "id": "bloom-removal-window-shorter-than-lifetime",
+    "title": "Word-clear particles removed at 700ms but live up to 800ms (pop out mid-fade)",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "CLEAR_PARTICLE_REMOVE_AFTER_MS"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "removeIds\\(ids\\);\\n          \\}, 700\\)"
+      }
+    ]
+  },
+  {
+    "id": "dead-chain-era-styles",
+    "title": "24 orphaned StyleSheet entries in GameScreen (chain-era relics + stale duplicates of GameFlashes styles)",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "chainPopup:"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "vhsGlitchOverlay:"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "scorePopupCombo:"
+      }
+    ]
+  },
+  {
+    "id": "board-replace-ghost-storm",
+    "title": "Wholesale board replacement (snapshot hydration) ghosted every tile \u2014 full-board dissolve storm",
+    "file": "src/components/game/gridGeometry.ts",
+    "klass": "F4",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/game/gridGeometry.ts",
+        "pattern": "gridsShareNoCellIds"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/game/__tests__/gridGeometry.test.ts",
+        "pattern": "wholesale board replacement resets"
+      }
+    ]
+  },
+  {
+    "id": "idle-glint-runs-while-blurred",
+    "title": "Idle glint timer chain ran forever behind the result overlay and blurred routes",
+    "file": "src/components/Grid.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/Grid.tsx",
+        "pattern": "!reduceMotion && glintActive &&"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/game/PlayField.tsx",
+        "pattern": "=== 'playing' && isFocused"
+      }
+    ]
   }
 ]

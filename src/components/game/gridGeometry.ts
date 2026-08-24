@@ -89,6 +89,35 @@ function emptyGridGeometry(): GridGeometry {
   };
 }
 
+/**
+ * True when two non-empty grids have no cell ID in common — i.e. the board
+ * was REPLACED rather than mutated. Cell IDs are globally unique, so a
+ * word-clear/gravity step always preserves the surviving tiles' IDs, while
+ * hydrating a saved snapshot over a freshly generated board (re-entering a
+ * level with a snapshot, OS-kill relaunch) shares none.
+ */
+function gridsShareNoCellIds(previous: Grid, next: Grid): boolean {
+  const previousIds = new Set<string>();
+  for (const row of previous) {
+    for (const cell of row) {
+      if (cell) previousIds.add(cell.id);
+    }
+  }
+  if (previousIds.size === 0) return false;
+  let nextHasCells = false;
+  for (const row of next) {
+    for (const cell of row) {
+      if (cell) {
+        nextHasCells = true;
+        if (previousIds.has(cell.id)) return false;
+      }
+    }
+  }
+  // An emptied grid is a legitimate final clear (ghost dissolve), not a
+  // replacement — only a DIFFERENT populated board counts.
+  return nextHasCells;
+}
+
 export function decideGridTransitionUpdate(
   previous: GridTransitionRenderState,
   next: GridTransitionRenderState,
@@ -101,7 +130,15 @@ export function decideGridTransitionUpdate(
   ) {
     return 'reset';
   }
-  return previous.grid === next.grid ? 'none' : 'transition';
+  if (previous.grid === next.grid) return 'none';
+  // Wholesale board replacement must not run the clear transition: every
+  // on-screen tile would ghost (a ~2.4s full-board green dissolve storm
+  // over the incoming board). Route it through 'reset', which snaps values
+  // and clears animation resources atomically.
+  if (next.grid !== null && gridsShareNoCellIds(previous.grid, next.grid)) {
+    return 'reset';
+  }
+  return 'transition';
 }
 
 export function computeGridTransition(
