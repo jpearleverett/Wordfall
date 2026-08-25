@@ -26,7 +26,8 @@ export type AdRewardType =
   | 'spin_reward'
   | 'coins_reward'
   | 'double_reward'
-  | 'life_reward';
+  | 'life_reward'
+  | 'time_continue';
 
 export interface AdRewardResult {
   rewarded: boolean;
@@ -41,6 +42,7 @@ export const AD_REWARD_VALUES: Record<AdRewardType, { currency: string; amount: 
   coins_reward: { currency: 'coins', amount: 50 },
   double_reward: { currency: 'double', amount: 2 },
   life_reward: { currency: 'lives', amount: 1 },
+  time_continue: { currency: 'time', amount: 30 },
 };
 
 // ── Daily tracking persistence ─────────────────────────────────────────────────

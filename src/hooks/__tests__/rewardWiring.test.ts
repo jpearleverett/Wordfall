@@ -469,3 +469,39 @@ describe("seasonal 'modes_played' steps count distinct modes", () => {
     expect(player.updateSeasonalQuest).not.toHaveBeenCalled();
   });
 });
+
+// ─── VIP 2× XP boost (Aug 2026 — the perk was advertised on every vip_* SKU
+// and rendered in the shop's benefit list, but never applied anywhere) ───────
+describe('VIP 2x XP boost composition', () => {
+  const classicParams = { level: 12, mode: 'classic' };
+
+  it('non-VIP baseline: base 100 + 3 stars * 50 with no multiplier', () => {
+    const { economy } = run({}, { isVip: false }, classicParams);
+    expect(economy.addSeasonPassXp).toHaveBeenCalledWith(250);
+  });
+
+  it('an active VIP subscription doubles season-pass XP', () => {
+    const { economy } = run({}, { isVip: true }, classicParams);
+    expect(economy.addSeasonPassXp).toHaveBeenCalledWith(500);
+  });
+
+  it('VIP composes multiplicatively with prestige under the MAX_BONUS_FACTOR 5.0 cap', () => {
+    // Prestige level 5 alone is a 3.0x XP multiplier; x2 VIP = 6.0, which
+    // must clamp to the shared 5.0 ceiling: (100 + 150) * 5 = 1250.
+    const prestige = { prestigeLevel: 5, permanentBonuses: [] as string[] };
+    const { economy } = run({ prestige }, { isVip: true }, classicParams);
+    expect(economy.addSeasonPassXp).toHaveBeenCalledWith(1250);
+
+    // Sanity: without VIP the same prestige pays 3.0x = 750, proving the
+    // clamp above came from composing the two channels.
+    const { economy: economyNoVip } = run({ prestige }, { isVip: false }, classicParams);
+    expect(economyNoVip.addSeasonPassXp).toHaveBeenCalledWith(750);
+  });
+
+  it('VIP does not touch coin or gem payouts (XP-only perk)', () => {
+    const { economy: vip } = run({}, { isVip: true }, classicParams);
+    const { economy: nonVip } = run({}, { isVip: false }, classicParams);
+    expect(vip.addCoins).toHaveBeenCalledWith(10 + 3 * ECONOMY.starBonus);
+    expect(nonVip.addCoins).toHaveBeenCalledWith(10 + 3 * ECONOMY.starBonus);
+  });
+});

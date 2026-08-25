@@ -86,6 +86,7 @@ import {
   TIMEOUT_CONTINUE_SECONDS,
 } from '../components/monetizationModel';
 import { adManager, AdRewardType } from '../services/ads';
+import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
 import { MockAdModal } from '../components/MockAdModal';
 import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
 import { getModeTutorial } from '../data/modeTutorials';
@@ -2435,12 +2436,9 @@ function GameScreenImpl({
   // Timeout continue (Time Pressure): watch a rewarded ad to resume the
   // timed-out attempt with +30s. Once per attempt (timeExtendUsedRef); the
   // reducer's EXTEND_TIME only accepts the transition from 'timeout'.
-  // NOTE: 'undo_reward' stands in for a dedicated time-continue
-  // AdRewardType — the union lives in services/ads.ts (outside this
-  // change's ownership); no reward-type-specific caps attach to it.
   const handleTimeoutContinue = useCallback(async () => {
     if (timeExtendUsedRef.current) return;
-    const result = await adManager.showRewardedAd('undo_reward');
+    const result = await adManager.showRewardedAd('time_continue');
     if (!result.rewarded) return;
     timeExtendUsedRef.current = true;
     extendTime(TIMEOUT_CONTINUE_SECONDS);
@@ -2508,6 +2506,9 @@ function GameScreenImpl({
     if (isDaily || mode === 'weekly') return false;
     if (showModeTutorial || tensionActive) return false;
     if (activeOffer !== null || miniPack !== null) return false;
+    // Never under a queued ceremony — the celebration owns that moment, and
+    // an interstitial popping over a milestone screen reads as punishment.
+    if (isCeremonyVisible()) return false;
     if (level < getRemoteNumberClamped('interstitialMinLevel', 13, 1, 200)) return false;
     if (!adManager.canShowInterstitial()) return false;
     crashReporter.addBreadcrumb(`interstitial requested at next-level (L${level} ${mode})`, 'ads');
@@ -2877,6 +2878,7 @@ function GameScreenImpl({
             // auto-grants for them without playing an ad, so hiding the
             // surface made Remove-Ads a net loss of free hints.
             canShowAdHint={hintsAllowed && (isAdFree || adManager.canShowAd('hint_reward'))}
+            adFree={isAdFree}
             isStuck={isStuck}
             undosLeft={undosLeft}
             strandedWords={strandedWords}
@@ -3221,7 +3223,7 @@ function GameScreenImpl({
               {status === 'timeout' &&
                 getRemoteBoolean('timeoutContinueEnabled') &&
                 !timeExtendUsedRef.current &&
-                (isAdFree || adManager.canShowAd('undo_reward')) && (
+                (isAdFree || adManager.canShowAd('time_continue')) && (
                 <Pressable
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={() => void handleTimeoutContinue()}
@@ -3282,6 +3284,18 @@ function GameScreenImpl({
             </View>
           </View>
         </View>
+      )}
+
+      {/* Mini pack sheet — the store bridge every zero-conversion moment
+          routes to (empty hint tap, empty booster taps, insufficient-funds
+          offer accepts, broke post-loss buy). Overlay presentation so the
+          dev MockAdModal (zIndex 999) can still paint above it. */}
+      {miniPack && (
+        <MiniPackSheet
+          need={miniPack.need}
+          source={miniPack.source}
+          onClose={() => setMiniPack(null)}
+        />
       )}
 
       {/* Mock Ad Modal — shown during development when no real ad SDK is installed */}

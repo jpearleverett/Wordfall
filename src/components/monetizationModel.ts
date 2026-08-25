@@ -267,7 +267,10 @@ export function buildMiniPackOptions(need: MiniPackNeed, ctx: MiniPackContext): 
       options.push(iapOption('hint_bundle_10', ctx));
       break;
     case 'gems':
-      options.push(iapOption('gems_30', ctx));
+      // Small / medium / large — ids must exist in SHOP_PRODUCTS (gems_50 is
+      // the smallest real SKU; a bad id silently drops the row via the
+      // null-filter, so the pin test checks these resolve).
+      options.push(iapOption('gems_50', ctx));
       options.push(iapOption('gems_120', ctx));
       options.push(iapOption('gems_500', ctx));
       break;

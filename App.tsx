@@ -81,6 +81,7 @@ import { useSettings } from './src/contexts/SettingsContext';
 import { usePlayer } from './src/contexts/PlayerContext';
 import { useHardEnergy } from './src/hooks/useHardEnergy';
 import { NoLivesModal } from './src/components/NoLivesModal';
+import { MiniPackSheet } from './src/components/MiniPackSheet';
 import PostStreakBreakOffer, {
   RESTORE_GEM_COST,
   RESTORE_WINDOW_MS,
@@ -269,7 +270,15 @@ function EventScreenWrapperNav({ navigation }: any) {
                 if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
                   player.refillEnergy('gems');
                 } else {
-                  Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.');
+                  // Dead-end fix: "visit the shop" now comes with the door.
+                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
+                    { text: 'Not Now', style: 'cancel' },
+                    {
+                      text: 'Go to Shop',
+                      onPress: () =>
+                        navigation.navigate('Home' as never, { screen: 'Shop' } as never),
+                    },
+                  ]);
                 }
               },
             },
@@ -646,7 +655,15 @@ function ModesScreenWrapper({ navigation, route }: any) {
                 if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
                   player.refillEnergy('gems');
                 } else {
-                  Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.');
+                  // Dead-end fix: "visit the shop" now comes with the door.
+                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
+                    { text: 'Not Now', style: 'cancel' },
+                    {
+                      text: 'Go to Shop',
+                      onPress: () =>
+                        navigation.navigate('Home' as never, { screen: 'Shop' } as never),
+                    },
+                  ]);
                 }
               },
             },
@@ -840,6 +857,15 @@ function GameScreenWrapper({ route, navigation }: any) {
     const ok = hardEnergy.refillWithGems();
     if (ok) setShowNoLives(false);
   }, [hardEnergy]);
+
+  // Broke case: the gem CTA routes here instead of sitting disabled. The
+  // sheet uses 'modal' presentation so its native Modal stacks above
+  // NoLivesModal's; NoLivesModal stays mounted underneath, and on sheet
+  // close the (unchanged) canPlay state keeps it up for another try.
+  const [showGemSheet, setShowGemSheet] = useState(false);
+  const handleNoLivesGetGems = useCallback(() => {
+    setShowGemSheet(true);
+  }, []);
 
   // Delegate reward wiring to extracted hook
   const handleCompleteInner = useRewardWiring({
@@ -1215,7 +1241,19 @@ function GameScreenWrapper({ route, navigation }: any) {
         onClose={handleNoLivesClose}
         onWatchAd={handleNoLivesWatchAd}
         onSpendGems={handleNoLivesSpendGems}
+        onGetGems={handleNoLivesGetGems}
       />
+
+      {/* Gem store bridge for the broke NoLivesModal case. Mounted AFTER
+          NoLivesModal so its native Modal stacks on top (Android-first). */}
+      {showGemSheet && (
+        <MiniPackSheet
+          need="gems"
+          source="no_lives_modal"
+          presentation="modal"
+          onClose={() => setShowGemSheet(false)}
+        />
+      )}
     </View>
   );
 }
@@ -1686,7 +1724,13 @@ function HomeMainScreen({ route, navigation }: any) {
                 if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
                   player.refillEnergy('gems');
                 } else {
-                  Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.');
+                  // Dead-end fix: "visit the shop" now comes with the door.
+                  // HomeMainScreen lives in the Home stack, so Shop is a
+                  // sibling screen — no cross-tab hop needed.
+                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
+                    { text: 'Not Now', style: 'cancel' },
+                    { text: 'Go to Shop', onPress: () => navigation.navigate('Shop' as never) },
+                  ]);
                 }
               },
             },

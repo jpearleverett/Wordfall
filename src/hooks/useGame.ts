@@ -54,7 +54,8 @@ export interface ExtendTimeAction {
   seconds: number;
 }
 
-export type GameActionWithExtensions = GameAction | ExtendTimeAction;
+/** EXTEND_TIME is now part of the GameAction union in types.ts. */
+export type GameActionWithExtensions = GameAction;
 
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
 

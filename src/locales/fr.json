@@ -52,6 +52,8 @@
     "watchAdA11y": "Regarder une pub pour gagner une vie",
     "fullRefillGems": "💎 {{count}} gemmes — Recharge complète",
     "youHaveGems": "Tu as {{count}} gemmes",
+    "getMoreGems": "Tu as {{count}} — touche pour plus de gemmes",
+    "getMoreGemsA11y": "Pas assez de gemmes. Ouvre les offres de gemmes",
     "refillA11y": "Recharger les vies pour {{count}} gemmes",
     "nextLifeIn": "Prochaine vie dans",
     "illWait": "Je vais attendre",
@@ -66,49 +68,49 @@
       "title": "Pack d'indices de secours",
       "description": "Reçois 5 indices pour venir à bout de ce niveau. Tu es plus près du but que tu ne le crois !",
       "button": "OBTENIR 5 INDICES",
-      "price": "5 gemmes"
+      "price": "{{amount}} pièces"
     },
     "lifeRefill": {
       "ribbon": "PLUS DE VIES",
       "title": "Recharge instantanée",
       "description": "N'attends pas ! Récupère tes 5 vies immédiatement.",
       "button": "RECHARGER",
-      "price": "10 gemmes"
+      "price": "{{amount}} gemmes"
     },
     "streakShield": {
       "ribbon": "SÉRIE EN DANGER",
       "title": "Protège ta série",
       "description": "Ta série de {{streak}} jours expire ce soir. Mets-la à l'abri !",
       "button": "ACTIVER LE BOUCLIER",
-      "price": "30 gemmes"
+      "price": "{{amount}} gemmes"
     },
     "closeFinish": {
       "ribbon": "SI PRÈS DU BUT !",
       "title": "Plus qu'un mot",
       "description": "Il ne te manque qu'un mot pour gagner ! Un indice peut tout changer.",
       "button": "OBTENIR UN INDICE",
-      "price": "3 gemmes"
+      "price": "{{amount}} pièces"
     },
     "closeFinishPremium": {
       "ribbon": "NE LÂCHE PAS",
       "title": "Termine le puzzle",
       "description": "Un seul mot restant — on te le révèle. Empoche ta victoire.",
       "button": "RÉVÉLER LE DERNIER MOT",
-      "price": "9 gemmes"
+      "price": "{{amount}} gemmes"
     },
     "postPuzzle": {
       "ribbon": "PEU D'INDICES",
       "title": "Fais le plein",
       "description": "Bien joué ! Fais le plein d'indices pour le prochain défi.",
       "button": "OBTENIR 10 INDICES",
-      "price": "10 gemmes"
+      "price": "{{amount}} pièces"
     },
     "boosterPack": {
       "ribbon": "NIVEAU CORSÉ EN VUE",
       "title": "Pack Boosters",
       "description": "Obtiens Projecteur + Joker + Mélange pour ce puzzle {{difficulty}} !",
       "button": "OBTENIR 3 BOOSTERS",
-      "price": "15 gemmes"
+      "price": "{{amount}} gemmes"
     }
   },
   "home": {
@@ -280,6 +282,9 @@
     "usedAllMoves": "Tu as utilisé tes {{count}} coups.",
     "wordsCounter": "{{found}}/{{total}} mots",
     "watchAdFreeHint": "Regarder une pub pour un indice",
+    "claimFreeHint": "Réclamer un indice gratuit (sans pub)",
+    "timeoutContinue": "Regarder une pub : +{{seconds}} s",
+    "timeoutContinueFree": "Continuer +{{seconds}} s — gratuit",
     "undoLastMove": "ANNULER LE DERNIER COUP",
     "dayStreak": "Jours d'affilée",
     "keepItGoing": "Continue comme ça !",

@@ -37,7 +37,6 @@ export interface SeasonPassState {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-export const PREMIUM_PASS_PRICE_GEMS = 500;
 export const XP_PER_PUZZLE = 100;
 export const XP_PER_STAR = 50;
 export const XP_PER_DAILY = 200;
@@ -49,6 +48,29 @@ const XP_GROWTH_FACTOR = 1.08;
 
 function xpForTier(tier: number): number {
   return Math.round(BASE_XP_PER_TIER * Math.pow(XP_GROWTH_FACTOR, tier - 1));
+}
+
+// ─── Season numbering + season-scoped cosmetic ids ─────────────────────────
+
+/** Season epoch — season 1 starts Jan 1 2026 UTC; each season is 30 days. */
+const SEASON_EPOCH_MS = Date.UTC(2026, 0, 1);
+const MS_PER_SEASON = 30 * 24 * 60 * 60 * 1000;
+
+/** 1-based season number for `now` (clamped to 1 for pre-epoch clocks). */
+export function getCurrentSeasonNumber(now: number = Date.now()): number {
+  return Math.max(1, Math.floor((now - SEASON_EPOCH_MS) / MS_PER_SEASON) + 1);
+}
+
+/**
+ * Season-scope a premium cosmetic id. Season 1 keeps the original unsuffixed
+ * ids (players already own them under those ids); later seasons append
+ * `_s{n}` so each season's track mints a DISTINCT ownership id instead of
+ * re-selling the exact cosmetic a season-1 finisher already owns.
+ * `data/cosmetics.ts` resolves the suffixed ids back to the base art/rarity
+ * with a season-decorated display name.
+ */
+export function seasonCosmeticId(baseId: string, seasonNumber: number): string {
+  return seasonNumber <= 1 ? baseId : `${baseId}_s${seasonNumber}`;
 }
 
 // ─── 50 Tier Definitions ────────────────────────────────────────────────────
@@ -87,12 +109,12 @@ function buildFreeReward(tier: number): PassReward {
   return { type: 'booster', amount: 1, label: '1 Booster', icon: '\u{1F500}' };
 }
 
-function buildPremiumReward(tier: number): PassReward {
+function buildPremiumReward(tier: number, seasonNumber: number): PassReward {
   // Tier 50: legendary set (frame + title + decoration)
   if (tier === 50) {
     return {
       type: 'cosmetic',
-      cosmeticId: 'set_season_legend',
+      cosmeticId: seasonCosmeticId('set_season_legend', seasonNumber),
       label: 'Legendary Season Set (Frame + Title + Decoration)',
       icon: '\u{1F451}',
     };
@@ -102,7 +124,7 @@ function buildPremiumReward(tier: number): PassReward {
   if (tier === 10) {
     return {
       type: 'cosmetic',
-      cosmeticId: 'frame_season_bronze',
+      cosmeticId: seasonCosmeticId('frame_season_bronze', seasonNumber),
       label: 'Season Bronze Frame',
       icon: '\u{1F3C5}',
     };
@@ -110,7 +132,7 @@ function buildPremiumReward(tier: number): PassReward {
   if (tier === 20) {
     return {
       type: 'cosmetic',
-      cosmeticId: 'title_season_explorer',
+      cosmeticId: seasonCosmeticId('title_season_explorer', seasonNumber),
       label: 'Season Explorer Title',
       icon: '\u{1F3C5}',
     };
@@ -118,7 +140,7 @@ function buildPremiumReward(tier: number): PassReward {
   if (tier === 30) {
     return {
       type: 'cosmetic',
-      cosmeticId: 'frame_season_champion',
+      cosmeticId: seasonCosmeticId('frame_season_champion', seasonNumber),
       label: 'Season Champion Frame',
       icon: '\u{1F451}',
     };
@@ -126,7 +148,7 @@ function buildPremiumReward(tier: number): PassReward {
   if (tier === 40) {
     return {
       type: 'cosmetic',
-      cosmeticId: 'deco_season_master',
+      cosmeticId: seasonCosmeticId('deco_season_master', seasonNumber),
       label: 'Season Master Decoration',
       icon: '\u{2728}',
     };
@@ -151,7 +173,7 @@ function buildPremiumReward(tier: number): PassReward {
     return { type: 'rare_tile', amount: 1, label: 'Rare Tile', icon: '\u{2B50}' };
   }
   if (cycle === 3) {
-    const cosmeticId = `season_deco_${tier}`;
+    const cosmeticId = seasonCosmeticId(`season_deco_${tier}`, seasonNumber);
     return {
       type: 'cosmetic',
       cosmeticId,
@@ -164,15 +186,32 @@ function buildPremiumReward(tier: number): PassReward {
   return { type: 'gems', amount, label: `${amount} Gems`, icon: '\u{1F48E}' };
 }
 
-export const SEASON_PASS_TIERS: SeasonPassTier[] = Array.from({ length: MAX_SEASON_TIER }, (_, i) => {
-  const level = i + 1;
-  return {
-    level,
-    xpRequired: xpForTier(level),
-    freeReward: buildFreeReward(level),
-    premiumReward: buildPremiumReward(level),
-  };
-});
+/**
+ * Build the 50-tier ladder for a given season. Only the premium cosmetic
+ * IDS vary by season (see seasonCosmeticId) — XP curve, currency amounts and
+ * labels are identical across seasons.
+ */
+export function buildSeasonPassTiers(seasonNumber: number): SeasonPassTier[] {
+  return Array.from({ length: MAX_SEASON_TIER }, (_, i) => {
+    const level = i + 1;
+    return {
+      level,
+      xpRequired: xpForTier(level),
+      freeReward: buildFreeReward(level),
+      premiumReward: buildPremiumReward(level, seasonNumber),
+    };
+  });
+}
+
+/**
+ * The CURRENT season's ladder. Evaluated at module load — a season rollover
+ * mid-session keeps serving the old season's cosmetic ids until the next
+ * app start, which is harmless: the rotation reset itself (seasonRotation)
+ * also lands on app foreground, and cosmetics.ts resolves any season's
+ * suffixed ids regardless.
+ */
+export const SEASON_PASS_TIERS: SeasonPassTier[] =
+  buildSeasonPassTiers(getCurrentSeasonNumber());
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
@@ -214,6 +253,34 @@ export function getXPProgress(
 }
 
 /**
+ * Total XP consumed by completing tiers 1..tier (the XP "boundary" at which
+ * `getSeasonPassTier` first reports that tier). Clamped to the 50-tier
+ * ladder.
+ */
+export function cumulativeXpForTier(tier: number): number {
+  const capped = Math.max(0, Math.min(Math.floor(tier), MAX_SEASON_TIER));
+  let total = 0;
+  for (let i = 0; i < capped; i++) {
+    total += SEASON_PASS_TIERS[i].xpRequired;
+  }
+  return total;
+}
+
+/**
+ * XP needed from `currentXP` to land EXACTLY on the boundary `skips` tiers
+ * ahead — the amount the gem tier-skip purchase grants. Partial progress
+ * into the current tier counts toward the first skip (a skip completes the
+ * tier in progress, it does not add a full tier's XP on top). Returns 0 at
+ * or past the tier-50 ceiling, and never a negative number.
+ */
+export function xpNeededForTierSkips(currentXP: number, skips: number): number {
+  const safeXP = Math.max(0, currentXP);
+  const currentTier = getSeasonPassTier(safeXP);
+  const targetTier = Math.min(currentTier + Math.max(0, Math.floor(skips)), MAX_SEASON_TIER);
+  return Math.max(0, cumulativeXpForTier(targetTier) - safeXP);
+}
+
+/**
  * Get the current season based on the current date.
  * Each season is 30 days. Season 1 starts on Jan 1, 2026.
  */
@@ -224,14 +291,12 @@ export function getCurrentSeason(): {
   name: string;
   theme: string;
 } {
-  const epoch = new Date('2026-01-01T00:00:00Z').getTime();
   const now = Date.now();
-  const msPerSeason = 30 * 24 * 60 * 60 * 1000;
-  const seasonIndex = Math.floor((now - epoch) / msPerSeason);
-  const seasonNumber = Math.max(1, seasonIndex + 1);
+  const seasonIndex = Math.floor((now - SEASON_EPOCH_MS) / MS_PER_SEASON);
+  const seasonNumber = getCurrentSeasonNumber(now);
 
-  const startMs = epoch + seasonIndex * msPerSeason;
-  const endMs = startMs + msPerSeason;
+  const startMs = SEASON_EPOCH_MS + seasonIndex * MS_PER_SEASON;
+  const endMs = startMs + MS_PER_SEASON;
 
   const startDate = new Date(startMs).toISOString().split('T')[0];
   const endDate = new Date(endMs).toISOString().split('T')[0];

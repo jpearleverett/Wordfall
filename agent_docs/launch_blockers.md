@@ -500,7 +500,23 @@ Fix: `WordChip` gains a `tensionActive` prop; on rising edge it fires a one-shot
 completeness.)
 
 - Register `wordfall_*` IAP SKUs in Play Console (catalog:
-  `src/data/shopProducts.ts`).
+  `src/data/shopProducts.ts`). **New ids from the Aug 2026 monetization
+  pass — register each at its listed catalog price** (the sale variants
+  are REAL discounted SKUs; the store price must match
+  `fallbackPriceAmount` exactly or the honesty invariant breaks):
+  - `wordfall_second_purchase` — $1.99 (second-purchase follow-up bundle)
+  - `wordfall_starter_pack_sale50` — $0.99
+  - `wordfall_starter_pack_sale60` — $0.79
+  - `wordfall_starter_pack_sale70` — $0.59
+  - `wordfall_chapter_bundle_sale50` — $1.49
+  - `wordfall_gems_250_sale30` — $3.49
+  - `wordfall_gems_250_sale50` — $2.49
+  - `wordfall_gems_500_sale40` — $5.99
+  Also register the three `wordfall_vip_*` SKUs as **subscriptions**
+  (base plan per tier) — the client now purchases them through the Play
+  subs flow with offer tokens. And **deactivate** `wordfall_gems_30` and
+  `wordfall_gems_200` if they were already created: both were strictly
+  dominated price points and are gone from the catalog.
 - Grant Firebase default service account
   (`<project>@appspot.gserviceaccount.com`) the **Android Publisher**
   role so `validateReceipt` can call Google's API.

@@ -518,7 +518,7 @@ export function useRewardWiring({
     economy.addLibraryPoints(Math.round(stars * 5 * eventMultipliers.xp));
 
     // Update event progress for all active events
-    eventManager.onPuzzleComplete(score, stars, isPerfect);
+    eventManager.onPuzzleComplete(score, stars, isPerfect, wordsFound);
     player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
 
     // Handle daily completion — first completion of today's board only.

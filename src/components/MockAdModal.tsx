@@ -18,6 +18,7 @@ const AD_DURATION_SECONDS = 5;
 const REWARD_LABELS: Record<AdRewardType, string> = {
   hint_reward: '+1 Hint',
   undo_reward: '+1 Undo',
+  time_continue: '+30 Seconds',
   spin_reward: '+1 Mystery Wheel Spin',
   coins_reward: '+50 Coins',
   double_reward: 'Double Rewards',

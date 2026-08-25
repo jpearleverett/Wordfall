@@ -9,6 +9,10 @@ import {
   storeIdToInternalId,
   internalIdToStoreId,
   getVipDailyDrip,
+  getStorefrontShelf,
+  bundleContentsFromRewards,
+  resolveFeaturedProductId,
+  isOfferOnlyProduct,
   ShopProduct,
 } from '../shopProducts';
 
@@ -293,19 +297,19 @@ describe('getVipDailyDrip', () => {
   const record = (item: string) => ({ item });
 
   it('returns the weekly floor for an empty history', () => {
-    expect(getVipDailyDrip([])).toEqual({ gems: 50, hintTokens: 3 });
+    expect(getVipDailyDrip([])).toEqual({ gems: 45, hintTokens: 3 });
   });
 
   it('returns the monthly drip for a history ending in vip_monthly', () => {
     expect(getVipDailyDrip([record('starter_pack'), record('vip_monthly')])).toEqual({
-      gems: 75,
+      gems: 25,
       hintTokens: 5,
     });
   });
 
   it('returns the annual drip for a history ending in vip_annual', () => {
     expect(getVipDailyDrip([record('vip_weekly'), record('vip_annual')])).toEqual({
-      gems: 100,
+      gems: 12,
       hintTokens: 8,
     });
   });
@@ -313,13 +317,139 @@ describe('getVipDailyDrip', () => {
   it('uses the most recent vip_* record, ignoring later non-vip purchases', () => {
     expect(
       getVipDailyDrip([record('vip_annual'), record('vip_weekly'), record('gems_500')]),
-    ).toEqual({ gems: 50, hintTokens: 3 });
+    ).toEqual({ gems: 45, hintTokens: 3 });
   });
 
   it('tolerates malformed records (missing/non-string item)', () => {
     expect(getVipDailyDrip([{}, { item: 42 }, record('vip_monthly')])).toEqual({
-      gems: 75,
+      gems: 25,
       hintTokens: 5,
     });
+  });
+});
+
+// ─── Dominated gem SKUs removed (Aug 2026) ───────────────────────────────────
+// gems_30 (30 gems / $0.99 while gems_50 gives 50 for the same $0.99) and
+// gems_200 (200 / $4.99 while gems_250 gives 250 for the same $4.99) were
+// strictly dominated rows — any buyer was simply overcharged.
+describe('gem ladder has no dominated SKUs', () => {
+  it('gems_30 and gems_200 are gone from the catalog', () => {
+    expect(getProductById('gems_30')).toBeUndefined();
+    expect(getProductById('gems_200')).toBeUndefined();
+  });
+
+  it('no two gem SKUs share a price point with different gem counts', () => {
+    const gems = SHOP_PRODUCTS.filter(
+      (p) => p.category === 'currency' && p.rewards.gems && !p.rewards.coins &&
+        !(p as { saleVariantOf?: string }).saleVariantOf && p.id !== 'piggy_bank_break',
+    );
+    const byPrice = new Map<number, ShopProduct[]>();
+    for (const g of gems) {
+      byPrice.set(g.fallbackPriceAmount, [...(byPrice.get(g.fallbackPriceAmount) ?? []), g]);
+    }
+    for (const [, group] of byPrice) {
+      expect(group.length).toBe(1);
+    }
+  });
+});
+
+// ─── season_pass_bundle premium flag (P0 trust fix) ──────────────────────────
+describe('season_pass_bundle', () => {
+  it('grants the seasonPassPremium flag it is named after', () => {
+    const bundle = getProductById('season_pass_bundle');
+    expect(bundle).toBeDefined();
+    expect(bundle!.rewards.flags?.seasonPassPremium).toBe(true);
+  });
+
+  it('matches season_pass_premium in the flag it sets', () => {
+    const pass = getProductById('season_pass_premium');
+    expect(pass!.rewards.flags?.seasonPassPremium).toBe(true);
+  });
+});
+
+// ─── Storefront enumeration helpers (opening the dark catalog) ───────────────
+describe('getStorefrontShelf', () => {
+  it('returns purchasable bundle/premium SKUs sorted cheapest-first', () => {
+    const shelf = getStorefrontShelf(['bundles', 'premium']);
+    expect(shelf.length).toBeGreaterThan(0);
+    for (let i = 1; i < shelf.length; i++) {
+      expect(shelf[i].fallbackPriceAmount).toBeGreaterThanOrEqual(shelf[i - 1].fallbackPriceAmount);
+    }
+  });
+
+  it('surfaces the $14.99–$99.99 shelf to everyone', () => {
+    const ids = getStorefrontShelf(['bundles', 'premium']).map((p) => p.id);
+    for (const id of ['champion_pack', 'season_pass_bundle', 'diamond_collection', 'royal_collection', 'platinum_pack', 'ultimate_whale']) {
+      expect(ids).toContain(id);
+    }
+  });
+
+  it('never returns offer-only products, sale variants, or subscriptions', () => {
+    const shelf = getStorefrontShelf(['bundles', 'premium', 'currency', 'consumables']);
+    for (const p of shelf) {
+      expect(isOfferOnlyProduct(p)).toBe(false);
+      expect(p.category).not.toBe('subscription');
+    }
+    const ids = shelf.map((p) => p.id);
+    expect(ids).not.toContain('first_purchase_special');
+    expect(ids).not.toContain('second_purchase_special');
+    expect(ids).not.toContain('starter_pack_sale_70');
+    expect(ids).not.toContain('vip_weekly');
+  });
+
+  it('honors the exclusion list so a SKU never renders twice', () => {
+    const ids = getStorefrontShelf(['bundles', 'premium'], ['starter_pack', 'champion_pack']).map(
+      (p) => p.id,
+    );
+    expect(ids).not.toContain('starter_pack');
+    expect(ids).not.toContain('champion_pack');
+  });
+});
+
+describe('bundleContentsFromRewards', () => {
+  it('derives the contents strip from the ACTUAL rewards', () => {
+    const weekend = getProductById('weekend_warrior')!;
+    expect(bundleContentsFromRewards(weekend.rewards)).toEqual([
+      { kind: 'coins', label: '1,000' },
+      { kind: 'gems', label: '50' },
+      { kind: 'hints', label: '10' },
+      { kind: 'undos', label: '5' },
+    ]);
+  });
+
+  it('summarises boosters and decorations', () => {
+    const crate = getProductById('booster_crate')!;
+    expect(bundleContentsFromRewards(crate.rewards)).toEqual([
+      { kind: 'boosters', label: '15 BOOST' },
+    ]);
+    const starter = getProductById('starter_pack')!;
+    expect(bundleContentsFromRewards(starter.rewards)).toEqual([
+      { kind: 'coins', label: '500' },
+      { kind: 'gems', label: '50' },
+      { kind: 'hints', label: '10' },
+      { kind: 'decor', label: 'DECOR' },
+    ]);
+  });
+
+  it('caps at maxEntries and tolerates missing rewards', () => {
+    const starter = getProductById('starter_pack')!;
+    expect(bundleContentsFromRewards(starter.rewards, 2)).toHaveLength(2);
+    expect(bundleContentsFromRewards(undefined)).toEqual([]);
+  });
+});
+
+describe('resolveFeaturedProductId', () => {
+  it('accepts a valid, purchasable catalog id', () => {
+    expect(resolveFeaturedProductId('explorer_bundle')).toBe('explorer_bundle');
+    expect(resolveFeaturedProductId('weekend_warrior')).toBe('weekend_warrior');
+  });
+
+  it('falls back for empty, unknown, offer-only, and subscription ids', () => {
+    expect(resolveFeaturedProductId('')).toBe('starter_pack');
+    expect(resolveFeaturedProductId(undefined)).toBe('starter_pack');
+    expect(resolveFeaturedProductId('mega_bundle_gold')).toBe('starter_pack');
+    expect(resolveFeaturedProductId('first_purchase_special')).toBe('starter_pack');
+    expect(resolveFeaturedProductId('starter_pack_sale_70')).toBe('starter_pack');
+    expect(resolveFeaturedProductId('vip_annual')).toBe('starter_pack');
   });
 });

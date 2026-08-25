@@ -10,6 +10,18 @@ import { GameEvent, EventType, EventExclusiveReward } from '../types';
  * a `badge`, but the client has no badge ledger, so every one was silently
  * dropped at claim time — they were removed rather than left as an empty
  * promise. Re-add badges only together with a store that records them.
+ *
+ * Tier THRESHOLD units (August 2026 retune — see eventLadderTuning.test):
+ *  - perfectClear thresholds are PERFECT CLEARS and mysteryWords thresholds
+ *    are WORDS FOUND; eventManager.onPuzzleComplete routes the increment by
+ *    event type. Every other main event is authored in SCORE.
+ *  - Score ladders assume ~1,500 pts/puzzle at ~15 puzzles/day: bronze
+ *    (~15–18k) lands on day one, diamond (~140–180k) is a genuine week-long
+ *    chase (40–120% of a full week). The previous 5,000–20,000 ladders were
+ *    exhausted in a single session.
+ *  - GEM payouts were halved (diamond 50–100 → 25–50) with bronze–gold
+ *    trimmed so a typical (gold-reaching) week pays <= ~30 gems, in line
+ *    with the collapsed faucet economy (see data/economyTuning.ts).
  */
 export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | 'active'>[] = [
   {
@@ -20,10 +32,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'frame', id: 'speed_demon_frame', name: 'Speed Demon Frame', rarity: 'epic' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 500, rewards: { coins: 200, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 1500, rewards: { coins: 500, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1000, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 5000, rewards: { coins: 2000, gems: 50, hintTokens: 20, decoration: 'speed_trophy' } },
+      { tier: 'bronze', threshold: 15000, rewards: { coins: 200, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 45000, rewards: { coins: 500, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 90000, rewards: { coins: 1000, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 150000, rewards: { coins: 2000, gems: 25, hintTokens: 20, decoration: 'speed_trophy' } },
     ],
   },
   {
@@ -33,11 +45,12 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rules: { noHints: true, noUndo: true, scoreMultiplier: 2 },
     exclusiveReward: { type: 'title', id: 'perfectionist_title', name: 'The Perfectionist', rarity: 'epic' },
     isTimeLimited: true,
+    // Thresholds are PERFECT CLEARS (not score) — routed by onPuzzleComplete.
     rewards: [
-      { tier: 'bronze', threshold: 3, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 7, rewards: { coins: 600, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 15, rewards: { coins: 1200, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 25, rewards: { coins: 2500, gems: 50, hintTokens: 20, decoration: 'diamond_plaque' } },
+      { tier: 'bronze', threshold: 3, rewards: { coins: 300, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 7, rewards: { coins: 600, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 15, rewards: { coins: 1200, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 25, rewards: { coins: 2500, gems: 25, hintTokens: 20, decoration: 'diamond_plaque' } },
     ],
   },
   {
@@ -48,10 +61,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'decoration', id: 'rally_banner', name: 'Rally Banner', rarity: 'rare' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 5000, rewards: { coins: 500, gems: 10, hintTokens: 5 } },
-      { tier: 'silver', threshold: 15000, rewards: { coins: 1000, gems: 25, hintTokens: 10 } },
-      { tier: 'gold', threshold: 30000, rewards: { coins: 2000, gems: 50, hintTokens: 15 } },
-      { tier: 'diamond', threshold: 50000, rewards: { coins: 4000, gems: 100, hintTokens: 25, decoration: 'rally_banner' } },
+      { tier: 'bronze', threshold: 18000, rewards: { coins: 500, gems: 2, hintTokens: 5 } },
+      { tier: 'silver', threshold: 55000, rewards: { coins: 1000, gems: 6, hintTokens: 10 } },
+      { tier: 'gold', threshold: 110000, rewards: { coins: 2000, gems: 12, hintTokens: 15 } },
+      { tier: 'diamond', threshold: 180000, rewards: { coins: 4000, gems: 50, hintTokens: 25, decoration: 'rally_banner' } },
     ],
   },
   {
@@ -62,10 +75,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'frame', id: 'gravity_flip_crown_frame', name: 'Gravity Flip Crown', rarity: 'legendary' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 1000, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 3000, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 6000, rewards: { coins: 1500, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 10000, rewards: { coins: 3000, gems: 50, hintTokens: 20, decoration: 'gravity_flip_crystal' } },
+      { tier: 'bronze', threshold: 15000, rewards: { coins: 300, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 45000, rewards: { coins: 700, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 90000, rewards: { coins: 1500, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 150000, rewards: { coins: 3000, gems: 25, hintTokens: 20, decoration: 'gravity_flip_crystal' } },
     ],
   },
   {
@@ -75,11 +88,14 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     rules: { hiddenWordBank: true, revealOnFind: true, bonusScore: 200 },
     exclusiveReward: { type: 'decoration', id: 'mystery_orb', name: 'Mystery Orb', rarity: 'epic' },
     isTimeLimited: true,
+    // Thresholds are WORDS FOUND (routed by onPuzzleComplete). At ~8 words a
+    // puzzle the old 75-word diamond fell inside one session; 600 words is
+    // ~5 days at 15 puzzles/day.
     rewards: [
-      { tier: 'bronze', threshold: 10, rewards: { coins: 400, gems: 10, hintTokens: 5 } },
-      { tier: 'silver', threshold: 25, rewards: { coins: 800, gems: 20, hintTokens: 10 } },
-      { tier: 'gold', threshold: 50, rewards: { coins: 1500, gems: 40, hintTokens: 15 } },
-      { tier: 'diamond', threshold: 75, rewards: { coins: 3000, gems: 75, hintTokens: 25, decoration: 'mystery_orb' } },
+      { tier: 'bronze', threshold: 60, rewards: { coins: 400, gems: 2, hintTokens: 5 } },
+      { tier: 'silver', threshold: 180, rewards: { coins: 800, gems: 5, hintTokens: 10 } },
+      { tier: 'gold', threshold: 350, rewards: { coins: 1500, gems: 12, hintTokens: 15 } },
+      { tier: 'diamond', threshold: 600, rewards: { coins: 3000, gems: 38, hintTokens: 25, decoration: 'mystery_orb' } },
     ],
   },
   {
@@ -90,10 +106,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'title', id: 'retro_master_title', name: 'Retro Master', rarity: 'rare' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 500, rewards: { coins: 250, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 1500, rewards: { coins: 600, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3500, rewards: { coins: 1200, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 6000, rewards: { coins: 2500, gems: 50, hintTokens: 20, decoration: 'retro_arcade' } },
+      { tier: 'bronze', threshold: 15000, rewards: { coins: 250, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 40000, rewards: { coins: 600, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 80000, rewards: { coins: 1200, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 140000, rewards: { coins: 2500, gems: 25, hintTokens: 20, decoration: 'retro_arcade' } },
     ],
   },
   {
@@ -104,10 +120,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'frame', id: 'nature_bloom_frame', name: 'Nature Bloom Frame', rarity: 'rare' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 5000, rewards: { coins: 2800, gems: 50, hintTokens: 20, decoration: 'nature_painting' } },
+      { tier: 'bronze', threshold: 15000, rewards: { coins: 300, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 40000, rewards: { coins: 700, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 80000, rewards: { coins: 1400, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 140000, rewards: { coins: 2800, gems: 25, hintTokens: 20, decoration: 'nature_painting' } },
     ],
   },
   {
@@ -118,10 +134,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'title', id: 'gauntlet_survivor', name: 'Gauntlet Survivor', rarity: 'legendary' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 1000, rewards: { coins: 500, gems: 10, hintTokens: 5 } },
-      { tier: 'silver', threshold: 3000, rewards: { coins: 1000, gems: 25, hintTokens: 10 } },
-      { tier: 'gold', threshold: 7000, rewards: { coins: 2000, gems: 50, hintTokens: 15 } },
-      { tier: 'diamond', threshold: 12000, rewards: { coins: 4000, gems: 100, hintTokens: 30, decoration: 'gauntlet_shield' } },
+      { tier: 'bronze', threshold: 18000, rewards: { coins: 500, gems: 2, hintTokens: 5 } },
+      { tier: 'silver', threshold: 55000, rewards: { coins: 1000, gems: 6, hintTokens: 10 } },
+      { tier: 'gold', threshold: 110000, rewards: { coins: 2000, gems: 12, hintTokens: 15 } },
+      { tier: 'diamond', threshold: 180000, rewards: { coins: 4000, gems: 50, hintTokens: 30, decoration: 'gauntlet_shield' } },
     ],
   },
   {
@@ -133,11 +149,15 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     isTimeLimited: true,
     communityGoal: 1000000,
     communityProgress: 0,
+    // Progress is fed the PLAYER'S OWN score (no client aggregation of the
+    // community total exists), so the ladder is authored on the personal
+    // scale — the old 250k–1M "community total" thresholds were unreachable
+    // for the player actually holding the progress bar.
     rewards: [
-      { tier: 'bronze', threshold: 250000, rewards: { coins: 200, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 500000, rewards: { coins: 500, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 750000, rewards: { coins: 1000, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 1000000, rewards: { coins: 2000, gems: 50, hintTokens: 20, decoration: 'community_statue' } },
+      { tier: 'bronze', threshold: 15000, rewards: { coins: 200, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 45000, rewards: { coins: 500, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 90000, rewards: { coins: 1000, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 150000, rewards: { coins: 2000, gems: 25, hintTokens: 20, decoration: 'community_statue' } },
     ],
   },
   {
@@ -148,10 +168,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'frame', id: 'season_champion_frame', name: 'Season Champion Frame', rarity: 'legendary' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 2000, rewards: { coins: 500, gems: 15, hintTokens: 5 } },
-      { tier: 'silver', threshold: 5000, rewards: { coins: 1000, gems: 30, hintTokens: 10 } },
-      { tier: 'gold', threshold: 10000, rewards: { coins: 2500, gems: 60, hintTokens: 20 } },
-      { tier: 'diamond', threshold: 20000, rewards: { coins: 5000, gems: 100, hintTokens: 30, decoration: 'season_throne' } },
+      { tier: 'bronze', threshold: 18000, rewards: { coins: 500, gems: 3, hintTokens: 5 } },
+      { tier: 'silver', threshold: 55000, rewards: { coins: 1000, gems: 8, hintTokens: 10 } },
+      { tier: 'gold', threshold: 110000, rewards: { coins: 2500, gems: 15, hintTokens: 20 } },
+      { tier: 'diamond', threshold: 180000, rewards: { coins: 5000, gems: 50, hintTokens: 30, decoration: 'season_throne' } },
     ],
   },
   {
@@ -162,10 +182,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'title', id: 'blitz_warrior', name: 'Blitz Warrior', rarity: 'rare' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1500, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 5000, rewards: { coins: 3000, gems: 50, hintTokens: 20, decoration: 'blitz_trophy' } },
+      { tier: 'bronze', threshold: 15000, rewards: { coins: 300, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 40000, rewards: { coins: 700, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 80000, rewards: { coins: 1500, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 140000, rewards: { coins: 3000, gems: 25, hintTokens: 20, decoration: 'blitz_trophy' } },
     ],
   },
   {
@@ -176,10 +196,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'frame', id: 'cosmic_frame', name: 'Cosmic Frame', rarity: 'epic' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 5000, rewards: { coins: 2800, gems: 50, hintTokens: 20, decoration: 'lab_equipment' } },
+      { tier: 'bronze', threshold: 15000, rewards: { coins: 300, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 40000, rewards: { coins: 700, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 80000, rewards: { coins: 1400, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 140000, rewards: { coins: 2800, gems: 25, hintTokens: 20, decoration: 'lab_equipment' } },
     ],
   },
   {
@@ -190,10 +210,10 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     exclusiveReward: { type: 'decoration', id: 'ocean_wave_deco', name: 'Ocean Wave', rarity: 'epic' },
     isTimeLimited: true,
     rewards: [
-      { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
-      { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
-      { tier: 'gold', threshold: 3000, rewards: { coins: 1400, gems: 30, hintTokens: 10 } },
-      { tier: 'diamond', threshold: 5000, rewards: { coins: 2800, gems: 50, hintTokens: 20, decoration: 'ship_wheel' } },
+      { tier: 'bronze', threshold: 15000, rewards: { coins: 300, gems: 2, hintTokens: 3 } },
+      { tier: 'silver', threshold: 40000, rewards: { coins: 700, gems: 5, hintTokens: 5 } },
+      { tier: 'gold', threshold: 80000, rewards: { coins: 1400, gems: 10, hintTokens: 10 } },
+      { tier: 'diamond', threshold: 140000, rewards: { coins: 2800, gems: 25, hintTokens: 20, decoration: 'ship_wheel' } },
     ],
   },
 ];

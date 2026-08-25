@@ -246,9 +246,8 @@ export function MiniPackSheet({ need, source, presentation = 'overlay', onClose 
   const balanceLabel =
     need === 'gems' ? `You have ${gems} gems` : `You have ${coins.toLocaleString()} coins`;
 
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={handleClose}>
-      <View style={styles.overlay}>
+  const sheetBody = (
+    <View style={presentation === 'modal' ? styles.overlay : [StyleSheet.absoluteFillObject, styles.overlay, styles.overlayInline]}>
         <View style={styles.card}>
           <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
             <Text style={styles.ribbon}>{header.ribbon}</Text>
@@ -334,9 +333,25 @@ export function MiniPackSheet({ need, source, presentation = 'overlay', onClose 
             </Pressable>
           </LinearGradient>
         </View>
-      </View>
-    </Modal>
+    </View>
   );
+
+  if (presentation === 'modal') {
+    // Native Modal: needed when the sheet must stack above another native
+    // Modal (e.g. NoLivesModal's gem CTA in App.tsx) — plain Views can never
+    // paint over a native Modal.
+    return (
+      <Modal visible transparent animationType="fade" onRequestClose={handleClose}>
+        {sheetBody}
+      </Modal>
+    );
+  }
+  // Overlay (default): absolute-fill sibling of the game surfaces. MUST NOT
+  // be a native Modal here — dev-mode mock ads (MockAdModal, zIndex 999) are
+  // plain overlays too, and a native Modal would paint over the mock ad the
+  // sheet's own "watch ad" option triggers, leaving the promise stuck behind
+  // an invisible dialog.
+  return sheetBody;
 }
 
 const styles = StyleSheet.create({
@@ -346,6 +361,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+  },
+  // Overlay presentation: above ContextualOffer (190) / PostLossModal (100),
+  // below MockAdModal (999) so mock ads stay visible and interactive.
+  overlayInline: {
+    zIndex: 600,
+    elevation: 600,
   },
   card: {
     width: '100%',

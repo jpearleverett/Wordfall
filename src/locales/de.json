@@ -52,6 +52,8 @@
     "watchAdA11y": "Sieh dir eine Werbung an und erhalte ein Leben",
     "fullRefillGems": "💎 {{count}} Juwelen — Komplett auffüllen",
     "youHaveGems": "Du hast {{count}} Juwelen",
+    "getMoreGems": "Du hast {{count}} — tippe für mehr Juwelen",
+    "getMoreGemsA11y": "Nicht genug Juwelen. Öffnet Juwelen-Angebote",
     "refillA11y": "Leben für {{count}} Juwelen auffüllen",
     "nextLifeIn": "Nächstes Leben in",
     "illWait": "Ich warte",
@@ -66,49 +68,49 @@
       "title": "Tipp-Rettungspaket",
       "description": "Hol dir 5 Tipps für dieses Level. Du bist näher dran, als du denkst!",
       "button": "5 TIPPS HOLEN",
-      "price": "5 Juwelen"
+      "price": "{{amount}} Münzen"
     },
     "lifeRefill": {
       "ribbon": "KEINE LEBEN MEHR",
       "title": "Sofort-Auffüllung",
       "description": "Nicht warten! Hol dir sofort alle 5 Leben zurück.",
       "button": "JETZT AUFFÜLLEN",
-      "price": "10 Juwelen"
+      "price": "{{amount}} Juwelen"
     },
     "streakShield": {
       "ribbon": "SERIE IN GEFAHR",
       "title": "Schütze deine Serie",
       "description": "Deine {{streak}}-Tage-Serie läuft heute Nacht ab. Schütze sie!",
       "button": "SCHILD AKTIVIEREN",
-      "price": "30 Juwelen"
+      "price": "{{amount}} Juwelen"
     },
     "closeFinish": {
       "ribbon": "FAST GESCHAFFT!",
       "title": "Nur noch 1 Wort",
       "description": "Nur ein Wort bis zum Sieg! Ein Tipp könnte reichen.",
       "button": "TIPP HOLEN",
-      "price": "3 Juwelen"
+      "price": "{{amount}} Münzen"
     },
     "closeFinishPremium": {
       "ribbon": "NICHT AUFGEBEN",
       "title": "Rätsel abschließen",
       "description": "Nur noch ein Wort — wir decken es für dich auf. Sichere dir den Sieg.",
       "button": "LETZTES WORT AUFDECKEN",
-      "price": "9 Juwelen"
+      "price": "{{amount}} Juwelen"
     },
     "postPuzzle": {
       "ribbon": "WENIG TIPPS",
       "title": "Vorrat auffüllen",
       "description": "Stark gelöst! Schnapp dir Tipps für die nächste Herausforderung.",
       "button": "10 TIPPS HOLEN",
-      "price": "10 Juwelen"
+      "price": "{{amount}} Münzen"
     },
     "boosterPack": {
       "ribbon": "SCHWERES LEVEL VORAUS",
       "title": "Power-Up-Paket",
       "description": "Hol dir Scheinwerfer + Joker + Mischen für dieses {{difficulty}}-Rätsel!",
       "button": "3 BOOSTER HOLEN",
-      "price": "15 Juwelen"
+      "price": "{{amount}} Juwelen"
     }
   },
   "home": {
@@ -280,6 +282,9 @@
     "usedAllMoves": "Du hast alle {{count}} Züge verbraucht.",
     "wordsCounter": "{{found}}/{{total}} Wörter",
     "watchAdFreeHint": "Werbung ansehen für Gratis-Tipp",
+    "claimFreeHint": "Gratis-Tipp einlösen (ohne Werbung)",
+    "timeoutContinue": "Werbung ansehen: +{{seconds}} Sek. weiterspielen",
+    "timeoutContinueFree": "Weiterspielen: +{{seconds}} Sek. — gratis",
     "undoLastMove": "LETZTEN ZUG ZURÜCK",
     "dayStreak": "Tage-Serie",
     "keepItGoing": "Bleib dran!",

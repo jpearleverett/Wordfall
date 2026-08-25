@@ -131,7 +131,9 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     originalPrice: '$4.99',
     originalPriceAmount: 4.99,
     offerOnly: true,
-    icon: '\u{1F49D}',
+    // 🎁 — must stay inside GameIcon's EMOJI_TO_NAME map (pinned by
+    // shopGlyphCoverage.test) so the offer card renders bespoke art.
+    icon: '\u{1F381}',
   },
 
   // ── Bundles ──────────────────────────────────────────────────────────────
@@ -1332,4 +1334,84 @@ export function getVipDailyDrip(
   // No vip_* record: the weekly tier is the conservative floor.
   const weekly = productMap.get('vip_weekly')?.rewards?.dailyDrip;
   return { gems: weekly?.gems ?? 45, hintTokens: weekly?.hintTokens ?? 3 };
+}
+
+// ─── Storefront enumeration helpers ─────────────────────────────────────────
+
+/**
+ * The purchasable storefront shelf for the given categories: every catalog
+ * product a player can buy at its everyday price, sorted cheapest-first.
+ * Skips offer-only products and sale variants (they surface via offer flows
+ * only), subscriptions (sold by the dedicated VIP card), and any id in
+ * `excludeIds` (products already rendered by a dedicated shop surface, so
+ * the same SKU never appears twice on the sheet). This is how ShopScreen
+ * opens the previously-dark catalog — a SKU registered in SHOP_PRODUCTS is
+ * visible by default rather than only when some bespoke card names it.
+ */
+export function getStorefrontShelf(
+  categories: readonly ProductCategory[],
+  excludeIds: Iterable<string> = [],
+): ShopProduct[] {
+  const excluded = new Set(excludeIds);
+  const wanted = new Set(categories);
+  return SHOP_PRODUCTS.filter(
+    (p) =>
+      wanted.has(p.category) &&
+      p.category !== 'subscription' &&
+      !isOfferOnlyProduct(p) &&
+      !excluded.has(p.id),
+  ).sort((a, b) => a.fallbackPriceAmount - b.fallbackPriceAmount);
+}
+
+/** One row of a bundle-contents strip, derived from the product's rewards. */
+export interface BundleContentEntry {
+  kind: 'coins' | 'gems' | 'hints' | 'undos' | 'boosters' | 'decor';
+  label: string;
+}
+
+/**
+ * Derive the contents strip for a bundle card from the product's ACTUAL
+ * rewards, so a card can never advertise contents the purchase does not
+ * deliver (the old hardcoded "Weekend Bundle" card promised 100 gems +
+ * 3000 coins + a frame while charging for a product that grants none of
+ * that). Capped at `maxEntries` rows for card layout.
+ */
+export function bundleContentsFromRewards(
+  rewards: ProductRewards | undefined,
+  maxEntries = 4,
+): BundleContentEntry[] {
+  if (!rewards) return [];
+  const entries: BundleContentEntry[] = [];
+  if (rewards.coins) entries.push({ kind: 'coins', label: rewards.coins.toLocaleString() });
+  if (rewards.gems) entries.push({ kind: 'gems', label: rewards.gems.toLocaleString() });
+  if (rewards.hintTokens) entries.push({ kind: 'hints', label: String(rewards.hintTokens) });
+  if (rewards.undoTokens) entries.push({ kind: 'undos', label: String(rewards.undoTokens) });
+  if (rewards.boosters && rewards.boosters.length > 0) {
+    const total = rewards.boosters.reduce((sum, b) => sum + b.count, 0);
+    if (total > 0) entries.push({ kind: 'boosters', label: `${total} BOOST` });
+  }
+  if (rewards.decorations && rewards.decorations.length > 0) {
+    entries.push({ kind: 'decor', label: 'DECOR' });
+  }
+  return entries.slice(0, maxEntries);
+}
+
+/**
+ * Resolve the Remote-Config `featuredProductId` pin to a product the
+ * featured card can truthfully sell: the id must exist in the catalog and
+ * must not be an offer-gated product (sale variants and purchase specials
+ * surface via their own flows). Anything else — empty string, unknown id,
+ * offer-only id — falls back to `fallbackId` so the card never renders an
+ * unpurchasable or mispriced SKU.
+ */
+export function resolveFeaturedProductId(
+  remoteValue: string | null | undefined,
+  fallbackId: IAPProductId = 'starter_pack',
+): IAPProductId {
+  if (!remoteValue) return fallbackId;
+  const product = productMap.get(remoteValue);
+  if (!product || isOfferOnlyProduct(product) || product.category === 'subscription') {
+    return fallbackId;
+  }
+  return product.id;
 }

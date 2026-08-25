@@ -91,6 +91,38 @@ describe('commercialEntitlements', () => {
       expect(result.grants.decorations).toContain('chapter_decoration');
     });
 
+    it('season_pass_bundle unlocks the premium season lane it is named after (P0)', () => {
+      // The $19.99 bundle carries rewards.flags.seasonPassPremium; the
+      // generic flag path must flip the season-pass slice exactly like
+      // season_pass_premium's dedicated branch, preserving the rest of
+      // the season state. Before Aug 2026 the bundle charged 2x the pass
+      // price and never granted the lane.
+      const state = {
+        ...createBaseState(),
+        seasonPass: { isPremium: false, currentTier: 7 } as { isPremium: boolean },
+      };
+      const result = applyCatalogPurchase(state, 'season_pass_bundle', {
+        transactionId: 'tx-season-bundle',
+      });
+
+      expect(result.applied).toBe(true);
+      expect(result.nextState.seasonPass?.isPremium).toBe(true);
+      // Other season fields survive the flag flip.
+      expect((result.nextState.seasonPass as { currentTier?: number }).currentTier).toBe(7);
+      // The bundle's hard currency still lands.
+      expect(result.nextState.coins).toBe(5000);
+      expect(result.nextState.gems).toBe(300);
+    });
+
+    it('season_pass_bundle without a seasonPass slice still applies (older callers)', () => {
+      const result = applyCatalogPurchase(createBaseState(), 'season_pass_bundle', {
+        transactionId: 'tx-season-bundle-2',
+      });
+      expect(result.applied).toBe(true);
+      // No slice to flip — the purchase itself must not be rejected.
+      expect(result.nextState.seasonPass).toBeUndefined();
+    });
+
     it('ignores duplicate transaction ids', () => {
       const first = applyCatalogPurchase(createBaseState(), 'ad_removal', {
         transactionId: 'tx-duplicate',

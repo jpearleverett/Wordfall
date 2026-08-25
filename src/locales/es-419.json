@@ -52,6 +52,8 @@
     "watchAdA11y": "Mira un anuncio para ganar una vida",
     "fullRefillGems": "💎 {{count}} gemas — Recarga total",
     "youHaveGems": "Tienes {{count}} gemas",
+    "getMoreGems": "Tienes {{count}} — toca para conseguir más gemas",
+    "getMoreGemsA11y": "No tienes suficientes gemas. Abre ofertas de gemas",
     "refillA11y": "Recargar vidas por {{count}} gemas",
     "nextLifeIn": "Próxima vida en",
     "illWait": "Esperaré",
@@ -66,49 +68,49 @@
       "title": "Pack Rescate de Pistas",
       "description": "Consigue 5 pistas para superar este nivel. ¡Estás más cerca de lo que crees!",
       "button": "OBTENER 5 PISTAS",
-      "price": "5 gemas"
+      "price": "{{amount}} monedas"
     },
     "lifeRefill": {
       "ribbon": "SIN VIDAS",
       "title": "Recarga instantánea",
       "description": "¡No esperes! Recupera tus 5 vidas al instante.",
       "button": "RECARGAR AHORA",
-      "price": "10 gemas"
+      "price": "{{amount}} gemas"
     },
     "streakShield": {
       "ribbon": "RACHA EN PELIGRO",
       "title": "Protege tu racha",
       "description": "Tu racha de {{streak}} días expira esta noche. ¡Actívale un escudo!",
       "button": "ACTIVAR ESCUDO",
-      "price": "30 gemas"
+      "price": "{{amount}} gemas"
     },
     "closeFinish": {
       "ribbon": "¡CASI LO TIENES!",
       "title": "A solo 1 palabra",
       "description": "¡Estás a una palabra de la victoria! Una pista puede darte el triunfo.",
       "button": "OBTENER PISTA",
-      "price": "3 gemas"
+      "price": "{{amount}} monedas"
     },
     "closeFinishPremium": {
       "ribbon": "NO LO PIERDAS",
       "title": "Completa el puzzle",
       "description": "Queda una palabra — la revelaremos por ti. Reclama tu victoria.",
       "button": "REVELAR ÚLTIMA PALABRA",
-      "price": "9 gemas"
+      "price": "{{amount}} gemas"
     },
     "postPuzzle": {
       "ribbon": "POCAS PISTAS",
       "title": "Llena tu reserva",
       "description": "¡Gran partida! Lleva pistas para el próximo desafío.",
       "button": "OBTENER 10 PISTAS",
-      "price": "10 gemas"
+      "price": "{{amount}} monedas"
     },
     "boosterPack": {
       "ribbon": "NIVEL DIFÍCIL A LA VISTA",
       "title": "Pack de potenciadores",
       "description": "¡Consigue Reflector + Comodín + Mezcla para este nivel {{difficulty}}!",
       "button": "OBTENER 3 POTENCIADORES",
-      "price": "15 gemas"
+      "price": "{{amount}} gemas"
     }
   },
   "home": {
@@ -280,6 +282,9 @@
     "usedAllMoves": "Usaste tus {{count}} movimientos.",
     "wordsCounter": "{{found}}/{{total}} palabras",
     "watchAdFreeHint": "Ver anuncio: pista gratis",
+    "claimFreeHint": "Reclamar pista gratis (sin anuncio)",
+    "timeoutContinue": "Ver anuncio: continuar +{{seconds}} s",
+    "timeoutContinueFree": "Continuar +{{seconds}} s — gratis",
     "undoLastMove": "DESHACER ÚLTIMO MOVIMIENTO",
     "dayStreak": "Racha de días",
     "keepItGoing": "¡No la pierdas!",

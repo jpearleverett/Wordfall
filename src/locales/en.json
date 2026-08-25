@@ -52,6 +52,8 @@
     "watchAdA11y": "Watch an ad to earn one life",
     "fullRefillGems": "\uD83D\uDC8E {{count}} Gems \u2014 Full Refill",
     "youHaveGems": "You have {{count}} gems",
+    "getMoreGems": "You have {{count}} — tap to get more gems",
+    "getMoreGemsA11y": "Not enough gems. Opens gem offers",
     "refillA11y": "Refill lives for {{count}} gems",
     "nextLifeIn": "Next life in",
     "illWait": "I'll Wait",
@@ -66,49 +68,49 @@
       "title": "Hint Rescue Pack",
       "description": "Get 5 hints to help crack this level. You're closer than you think!",
       "button": "GET 5 HINTS",
-      "price": "5 gems"
+      "price": "{{amount}} coins"
     },
     "lifeRefill": {
       "ribbon": "OUT OF LIVES",
       "title": "Instant Refill",
       "description": "Don't wait! Get all 5 lives back instantly.",
       "button": "REFILL NOW",
-      "price": "10 gems"
+      "price": "{{amount}} gems"
     },
     "streakShield": {
       "ribbon": "STREAK AT RISK",
       "title": "Protect Your Streak",
       "description": "Your {{streak}}-day streak expires tonight. Shield it!",
       "button": "ACTIVATE SHIELD",
-      "price": "30 gems"
+      "price": "{{amount}} gems"
     },
     "closeFinish": {
       "ribbon": "SO CLOSE!",
       "title": "Just 1 Word Away",
       "description": "You're one word from victory! A hint could seal the deal.",
       "button": "GET A HINT",
-      "price": "3 gems"
+      "price": "{{amount}} coins"
     },
     "closeFinishPremium": {
       "ribbon": "DON'T LOSE IT",
       "title": "Finish The Puzzle",
       "description": "One word left — we'll reveal it for you. Claim your win.",
       "button": "REVEAL LAST WORD",
-      "price": "9 gems"
+      "price": "{{amount}} gems"
     },
     "postPuzzle": {
       "ribbon": "LOW ON HINTS",
       "title": "Stock Up",
       "description": "Great solve! Grab hints for the next challenge.",
       "button": "GET 10 HINTS",
-      "price": "10 gems"
+      "price": "{{amount}} coins"
     },
     "boosterPack": {
       "ribbon": "TOUGH LEVEL AHEAD",
       "title": "Power-Up Pack",
       "description": "Get Spotlight + Wildcard + Shuffle for this {{difficulty}} puzzle!",
       "button": "GET 3 BOOSTERS",
-      "price": "15 gems"
+      "price": "{{amount}} gems"
     }
   },
   "home": {
@@ -280,6 +282,9 @@
     "usedAllMoves": "You used all {{count}} moves.",
     "wordsCounter": "{{found}}/{{total}} words",
     "watchAdFreeHint": "Watch Ad for Free Hint",
+    "claimFreeHint": "Claim Free Hint (no ad)",
+    "timeoutContinue": "Watch Ad — Continue +{{seconds}}s",
+    "timeoutContinueFree": "Continue +{{seconds}}s — Free",
     "undoLastMove": "UNDO LAST MOVE",
     "dayStreak": "Day Streak",
     "keepItGoing": "Keep it going!",

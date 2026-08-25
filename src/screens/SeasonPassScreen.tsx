@@ -26,6 +26,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
 import { COLORS, FONTS, GRADIENTS, RADIUS, SHADOWS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
@@ -38,15 +39,23 @@ import {
   useEconomyStore,
   useEconomyActions,
   selectSeasonPass,
+  selectGems,
 } from '../stores/economyStore';
 import {
   SEASON_PASS_TIERS,
   MAX_SEASON_TIER,
   getXPProgress,
   getCurrentSeason,
+  xpNeededForTierSkips,
   type PassReward,
   type SeasonPassState,
 } from '../data/seasonPass';
+import {
+  getRemoteBoolean,
+  getRemoteNumber,
+  getRemoteNumberClamped,
+} from '../services/remoteConfig';
+import { analytics } from '../services/analytics';
 import { useCommerce } from '../hooks/useCommerce';
 import { usePlayerActions } from '../stores/playerStore';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
@@ -176,9 +185,12 @@ interface RewardArtSpec {
 }
 
 function decorationIcon(cosmeticId: string, tier: number): GameIconName {
-  const bespoke = SEASON_COSMETIC_ICONS[cosmeticId];
+  // Seasons past the first mint `_s{n}`-suffixed cosmetic ids (see
+  // data/seasonPass.ts seasonCosmeticId) — icon lookups key on the base id.
+  const baseId = cosmeticId.replace(/_s\d+$/, '');
+  const bespoke = SEASON_COSMETIC_ICONS[baseId];
   if (bespoke) return bespoke;
-  const resolved = getDecorationIconName(cosmeticId);
+  const resolved = getDecorationIconName(baseId);
   if (resolved !== 'chest') return resolved;
   return SEASON_DECOR_ROTATION[Math.floor(tier / 4) % SEASON_DECOR_ROTATION.length];
 }
@@ -1531,10 +1543,12 @@ function PremiumCTAButton({
 
 const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
   const pass = useEconomyStore(selectSeasonPass);
-  const { claimSeasonPassTier } = useEconomyActions();
+  const gems = useEconomyStore(selectGems);
+  const { claimSeasonPassTier, spendGems, addSeasonPassXp } = useEconomyActions();
   const { unlockCosmetic, queueCeremony } = usePlayerActions();
   const commerce = useCommerce();
   const reduceMotion = useReduceMotion();
+  const navigation = useNavigation<any>();
 
   const [purchasing, setPurchasing] = useState(false);
   const season = useMemo(() => getCurrentSeason(), []);
@@ -1624,6 +1638,90 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
     [claimSeasonPassTier, unlockCosmetic, queueCeremony, season.name],
   );
 
+  // ── Gem tier skip ────────────────────────────────────────────────────────
+  // Skips grant EXACTLY the XP to the next tier boundary per skip
+  // (xpNeededForTierSkips — partial tier progress counts toward the first
+  // skip), so a skip can never over- or under-shoot the ladder.
+  const skipCostPerTier = getRemoteNumberClamped('seasonTierSkipGemCost', 20, 1, 500);
+  const tiersRemaining = MAX_SEASON_TIER - state.currentTier;
+  const tierSkipAvailable =
+    getRemoteBoolean('seasonPassEnabled') && tiersRemaining > 0;
+
+  const handleSkipTiers = useCallback(
+    (requested: number) => {
+      const tiersToSkip = Math.min(requested, MAX_SEASON_TIER - state.currentTier);
+      if (tiersToSkip <= 0) return;
+      const cost = skipCostPerTier * tiersToSkip;
+      const tierWord = tiersToSkip === 1 ? 'tier' : `${tiersToSkip} tiers`;
+
+      if (gems < cost) {
+        void analytics.logEvent('season_pass_tier_skip_blocked', {
+          tiers: tiersToSkip,
+          gem_cost: cost,
+          gems_held: gems,
+          from_tier: state.currentTier,
+        });
+        Alert.alert(
+          'Not enough gems',
+          `Skipping ${tierWord} costs ${cost} gems — you have ${gems}.`,
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Get gems', onPress: () => navigation.navigate('Shop') },
+          ],
+        );
+        return;
+      }
+
+      Alert.alert(
+        tiersToSkip === 1 ? 'Skip a tier?' : `Skip ${tiersToSkip} tiers?`,
+        `Spend ${cost} gems to instantly complete ${tierWord}${tiersToSkip === 1 ? '' : ' of'} the reward track?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: `Skip (${cost} gems)`,
+            onPress: () => {
+              const xpNeeded = xpNeededForTierSkips(state.currentXP, tiersToSkip);
+              if (xpNeeded <= 0) return;
+              if (!spendGems(cost)) {
+                Alert.alert(
+                  'Not enough gems',
+                  `Skipping ${tierWord} costs ${cost} gems.`,
+                  [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Get gems', onPress: () => navigation.navigate('Shop') },
+                  ],
+                );
+                return;
+              }
+              // addSeasonPassXp applies the seasonPassXpMultiplier RC —
+              // divide it out so the credited XP lands on the boundary
+              // (ceil errs toward completing the tier, never short of it).
+              const multiplier = getRemoteNumber('seasonPassXpMultiplier') || 1;
+              addSeasonPassXp(
+                multiplier === 1 ? xpNeeded : Math.ceil(xpNeeded / multiplier),
+              );
+              void analytics.logEvent('season_pass_tier_skipped', {
+                tiers: tiersToSkip,
+                gem_cost: cost,
+                xp_granted: xpNeeded,
+                from_tier: state.currentTier,
+              });
+            },
+          },
+        ],
+      );
+    },
+    [
+      gems,
+      skipCostPerTier,
+      state.currentTier,
+      state.currentXP,
+      spendGems,
+      addSeasonPassXp,
+      navigation,
+    ],
+  );
+
   const keyExtractorTier = useCallback((tier: number) => String(tier), []);
 
   const renderItem = useCallback(
@@ -1705,6 +1803,51 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
           </Text>
         )}
       </View>
+
+      {/* Gem tier skip */}
+      {tierSkipAvailable && (
+        <View style={[styles.skipPanel, { backgroundColor: theme.panel }]}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, styles.panelFill]}
+          />
+          <View style={styles.skipCopyRow}>
+            <GameIcon name="gemSingle" size={30} />
+            <View style={styles.skipCopy}>
+              <Text style={styles.skipTitle}>IN A HURRY?</Text>
+              <Text style={styles.skipDesc}>
+                Skip ahead with gems — each skip completes a full tier.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.skipButtonRow}>
+            <PrimaryButton
+              label={`SKIP TIER · ${skipCostPerTier}💎`}
+              variant="primary"
+              size="small"
+              onPress={() => handleSkipTiers(1)}
+              accessibilityLabel={`Skip one tier for ${skipCostPerTier} gems`}
+              style={styles.skipButton}
+            />
+            {tiersRemaining > 1 && (
+              <PrimaryButton
+                label={`SKIP ${Math.min(5, tiersRemaining)} · ${
+                  skipCostPerTier * Math.min(5, tiersRemaining)
+                }💎`}
+                variant="primary"
+                size="small"
+                onPress={() => handleSkipTiers(5)}
+                accessibilityLabel={`Skip ${Math.min(5, tiersRemaining)} tiers for ${
+                  skipCostPerTier * Math.min(5, tiersRemaining)
+                } gems`}
+                style={styles.skipButton}
+              />
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Premium upsell hero */}
       {!state.isPremium && (
@@ -1916,6 +2059,41 @@ const styles = StyleSheet.create({
     color: COLORS.coral,
     textAlign: 'center',
     marginTop: 6,
+  },
+
+  // ── Gem tier skip ────────────────────────────────────────────────────
+  skipPanel: {
+    ...bentoPanel('purple', { padding: 14 }),
+    backgroundColor: 'rgba(12,4,28,0.94)',
+  },
+  skipCopyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skipCopy: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  skipTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    letterSpacing: 2,
+  },
+  skipDesc: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  skipButtonRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  skipButton: {
+    flex: 1,
   },
 
   // ── Premium upsell hero ──────────────────────────────────────────────

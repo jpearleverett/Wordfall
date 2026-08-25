@@ -324,6 +324,13 @@ export const GameHeader = React.memo(function GameHeader({
               </Pressable>
             )}
 
+            {/* Hint button. The allowHints wrapper is load-bearing: modes
+                that forbid hints (expert, perfectSolve) render NO hint
+                affordance at all. Within hint-allowed modes the button stays
+                TAPPABLE at zero tokens — GameScreen's handleHint routes the
+                empty tap to the MiniPackSheet store bridge instead of a
+                silent disabled dead end; the dimmed style + "+" badge signal
+                the empty state. */}
             {modeConfig.rules.allowHints && (
               <Pressable
                 style={({ pressed }) => [
@@ -334,9 +341,12 @@ export const GameHeader = React.memo(function GameHeader({
                   { borderColor: `${selectedColor}45` },
                 ]}
                 onPress={onHint}
-                disabled={hintsLeft <= 0}
-                accessibilityLabel="Use hint"
-                accessibilityHint="Reveals the next word to find"
+                accessibilityLabel={hintsLeft > 0 ? 'Use hint' : 'Get more hints'}
+                accessibilityHint={
+                  hintsLeft > 0
+                    ? 'Reveals the next word to find'
+                    : 'Out of hints — opens hint offers'
+                }
               >
                 <LinearGradient
                   colors={[`${selectedColor}33`, `${selectedColor}14`] as [string, string]}
@@ -347,11 +357,9 @@ export const GameHeader = React.memo(function GameHeader({
                   <View style={[styles.hintGlow, { backgroundColor: `${selectedColor}44` }]} />
                 )}
                 <Image source={LOCAL_IMAGES.iconHint} style={{ width: 22, height: 22 }} resizeMode="contain" />
-                {hintsLeft > 0 && (
-                  <View style={[styles.countBadge, styles.hintCountBadge]}>
-                    <Text style={styles.countBadgeText}>{hintsLeft}</Text>
-                  </View>
-                )}
+                <View style={[styles.countBadge, styles.hintCountBadge]}>
+                  <Text style={styles.countBadgeText}>{hintsLeft > 0 ? hintsLeft : '+'}</Text>
+                </View>
               </Pressable>
             )}
           </View>

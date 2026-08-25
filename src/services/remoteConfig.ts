@@ -444,7 +444,7 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Featured-bundle pin shown at the top of the shop. Ops rotates this
   // weekly via Remote Config — empty string means "no pin" so the shop
   // falls back to the static ordering.
-  featuredProductId: 'explorer_bundle',
+  featuredProductId: '',
   chapterOverrideJson: '',
   // Weekly leaderboard — off until reward tiers + copy are final and
   // the Cloud Function has been running long enough (1-2 weeks) to

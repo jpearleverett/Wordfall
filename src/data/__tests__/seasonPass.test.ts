@@ -1,7 +1,6 @@
 import {
   SEASON_PASS_TIERS,
   MAX_SEASON_TIER,
-  PREMIUM_PASS_PRICE_GEMS,
   XP_PER_PUZZLE,
   XP_PER_STAR,
   XP_PER_DAILY,
@@ -18,10 +17,6 @@ describe('SEASON_PASS_TIERS data', () => {
 
   it('MAX_SEASON_TIER is 50', () => {
     expect(MAX_SEASON_TIER).toBe(50);
-  });
-
-  it('PREMIUM_PASS_PRICE_GEMS is 500', () => {
-    expect(PREMIUM_PASS_PRICE_GEMS).toBe(500);
   });
 
   it('has correct XP constants', () => {
@@ -62,10 +57,12 @@ describe('SEASON_PASS_TIERS data', () => {
     }
   });
 
-  it('tier 50 premium reward is the legendary season set', () => {
+  it('tier 50 premium reward is the legendary season set (season-scoped id)', () => {
     const tier50 = SEASON_PASS_TIERS[49];
     expect(tier50.premiumReward.type).toBe('cosmetic');
-    expect(tier50.premiumReward.cosmeticId).toBe('set_season_legend');
+    // Season 1 mints the bare id; every later season a `_s{n}`-suffixed
+    // variant — see seasonPassSeasonScoping.test.ts for the full contract.
+    expect(tier50.premiumReward.cosmeticId).toMatch(/^set_season_legend(_s\d+)?$/);
   });
 });
 

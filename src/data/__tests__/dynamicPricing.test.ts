@@ -4,8 +4,14 @@ import {
   getFlashSale,
   isOfferExpired,
   getDiscountedPrice,
+  resolveSalePricing,
+  offerExpiresAt,
+  recordPurchaseForFollowup,
+  getSecondPurchaseFollowupOffer,
+  __resetPurchaseFollowupForTests,
+  SECOND_PURCHASE_OFFER_PRODUCT_ID,
 } from '../dynamicPricing';
-import { getProductById } from '../shopProducts';
+import { getProductById, SHOP_PRODUCTS, isOfferOnlyProduct } from '../shopProducts';
 import type { SpendingSegment, EngagementSegment } from '../../services/playerSegmentation';
 
 describe('MEGA_BUNDLES data', () => {
@@ -263,49 +269,60 @@ describe('getDynamicOffers — Tier 6 B6 comeback ladder', () => {
     expect(offers.every((o) => o.badge !== 'WELCOME BACK')).toBe(true);
   });
 
-  it('Day 2–3 lightly lapsed: 50% starter with COME BACK badge, 24h', () => {
+  // Deep discounts now ride REAL sale-variant SKUs (shopProducts.ts
+  // `saleVariantOf`): a genuinely lower registered store price with the
+  // base SKU's everyday price as the anchor, and discountPercent DERIVED
+  // from those two numbers — never authored freehand. The old ladder
+  // advertised 50%/70% off while charging the everyday price.
+  it('Day 2–3 lightly lapsed: real 50%-off starter variant with COME BACK badge, 24h', () => {
     const offers = getDynamicOffers('non_payer', 'at_risk', 10, 2);
     expect(offers[0]).toMatchObject({
-      productId: 'starter_pack',
+      productId: 'starter_pack_sale_50',
       discountPercent: 50,
       badge: 'COME BACK',
       expiresInHours: 24,
     });
   });
 
-  it('Day 4–7 lapsed: 70% starter with WELCOME BACK badge, 48h', () => {
+  it('Day 4–7 lapsed: real 70%-off starter variant with WELCOME BACK badge, 48h', () => {
     const offers = getDynamicOffers('non_payer', 'lapsed', 15, 5);
     expect(offers[0]).toMatchObject({
-      productId: 'starter_pack',
+      productId: 'starter_pack_sale_70',
       discountPercent: 70,
       badge: 'WELCOME BACK',
       expiresInHours: 48,
     });
   });
 
-  it('Day 8–14 deeply lapsed: 75% first-purchase-special + gems_500, WE MISS YOU', () => {
+  it('Day 8–14 deeply lapsed: first-purchase-special (real 75% anchor) + gems_500 sale variant, WE MISS YOU', () => {
     const offers = getDynamicOffers('non_payer', 'lapsed', 15, 10);
+    // $0.49 vs the $1.99 anchor — 75% is derived, not authored.
     expect(offers[0]).toMatchObject({
       productId: 'first_purchase_special',
       discountPercent: 75,
       badge: 'WE MISS YOU',
     });
     expect(offers[1]).toMatchObject({
-      productId: 'gems_500',
+      productId: 'gems_500_sale_40',
       discountPercent: 40,
     });
   });
 
-  it('Day 15+ churned: 30% Champion Pack with LAST CALL badge, 72h', () => {
+  it('Day 15+ churned: Champion Pack (catalog-derived 40%) with LAST CALL badge, 72h', () => {
     // champion_pack, NOT mega_bundle_gold: the mega bundles are not in
     // SHOP_PRODUCTS and can't be purchased, so the winback offer must
-    // point at a real premium bundle.
+    // point at a real premium bundle. Its badge is the catalog anchor
+    // ratio ($14.99 vs $24.99 → 40%), not the old freehand 30%.
     const offers = getDynamicOffers('non_payer', 'lapsed', 20, 20);
     expect(offers[0]).toMatchObject({
       productId: 'champion_pack',
-      discountPercent: 30,
+      discountPercent: 40,
       badge: 'LAST CALL',
       expiresInHours: 72,
+    });
+    expect(offers[1]).toMatchObject({
+      productId: 'starter_pack_sale_60',
+      discountPercent: 60,
     });
   });
 
@@ -319,9 +336,144 @@ describe('getDynamicOffers — Tier 6 B6 comeback ladder', () => {
   it('falls through to legacy branches when daysSinceActive is undefined', () => {
     const offers = getDynamicOffers('non_payer', 'lapsed', 15);
     expect(offers[0]).toMatchObject({
-      productId: 'starter_pack',
+      productId: 'starter_pack_sale_70',
       discountPercent: 70,
       badge: 'WELCOME BACK',
     });
+  });
+});
+
+/**
+ * Honesty invariant (Aug 2026): a discount badge is DERIVED from the
+ * catalog (anchor vs. real charged price), never authored freehand, so the
+ * price a card advertises is always the price the store sheet charges.
+ * Deep discounts ride real sale-variant SKUs registered at the lower price.
+ */
+describe('offer pricing honesty — displayed == charged, everywhere', () => {
+  const spendings: SpendingSegment[] = ['non_payer', 'minnow', 'dolphin', 'whale'];
+  const engagements: EngagementSegment[] = [
+    'new_player', 'casual', 'regular', 'hardcore', 'lapsed', 'at_risk', 'returned',
+  ];
+  const daysSinceActiveValues = [undefined, 0, 2, 5, 10, 20];
+  const playerLevels = [1, 10, 30];
+
+  it('every dynamic offer badge equals the catalog-derived discount for its product', () => {
+    for (const spending of spendings) {
+      for (const engagement of engagements) {
+        for (const daysSinceActive of daysSinceActiveValues) {
+          for (const playerLevel of playerLevels) {
+            const offers = getDynamicOffers(spending, engagement, playerLevel, daysSinceActive);
+            for (const offer of offers) {
+              const pricing = resolveSalePricing(offer.productId);
+              expect(pricing).not.toBeNull();
+              expect(offer.discountPercent).toBe(pricing!.discountPercent);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('every dynamic offer carries a real expiry window (createdAt anchored to the UTC day)', () => {
+    const startOfToday = (() => {
+      const d = new Date();
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    })();
+    for (const spending of spendings) {
+      for (const engagement of engagements) {
+        const offers = getDynamicOffers(spending, engagement, 15, 5);
+        for (const offer of offers) {
+          expect(offer.createdAt).toBe(startOfToday);
+          expect(offerExpiresAt(offer)).toBe(
+            offer.createdAt + offer.expiresInHours * 60 * 60 * 1000,
+          );
+          // Freshly derived offers are never already expired.
+          expect(isOfferExpired(offer.createdAt, offer.expiresInHours)).toBe(false);
+        }
+      }
+    }
+  });
+});
+
+describe('sale-variant SKU contract', () => {
+  const variants = SHOP_PRODUCTS.filter((p) => p.saleVariantOf !== undefined);
+
+  it('the catalog defines sale variants (deep discounts must be real)', () => {
+    expect(variants.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('each variant grants EXACTLY the base product rewards at a genuinely lower price', () => {
+    for (const variant of variants) {
+      const base = getProductById(variant.saleVariantOf!);
+      expect(base).toBeDefined();
+      expect(variant.rewards).toEqual(base!.rewards);
+      expect(variant.fallbackPriceAmount).toBeLessThan(base!.fallbackPriceAmount);
+      // Anchor = the base SKU's everyday CHARGED price (not the base's own
+      // marketing anchor), so the % badge understates rather than inflates.
+      expect(variant.originalPriceAmount).toBe(base!.fallbackPriceAmount);
+      // Each variant needs its own store registration.
+      expect(variant.storeProductId).not.toBe(base!.storeProductId);
+      expect(variant.storeProductId.startsWith('wordfall_')).toBe(true);
+    }
+  });
+
+  it('variants and purchase specials are offer-only — the storefront enumeration skips them', () => {
+    for (const p of SHOP_PRODUCTS) {
+      if (p.saleVariantOf || p.offerOnly) {
+        expect(isOfferOnlyProduct(p)).toBe(true);
+      }
+    }
+    expect(isOfferOnlyProduct(getProductById('starter_pack')!)).toBe(false);
+    expect(isOfferOnlyProduct(getProductById('gems_250')!)).toBe(false);
+  });
+});
+
+describe('second-purchase follow-up lifecycle', () => {
+  beforeEach(() => {
+    __resetPurchaseFollowupForTests();
+  });
+
+  it('no offer before any purchase', () => {
+    expect(getSecondPurchaseFollowupOffer()).toBeNull();
+  });
+
+  it('first real-money purchase opens a 48h window with a live, purchasable offer', () => {
+    const t0 = Date.UTC(2026, 7, 25, 12, 0, 0);
+    expect(recordPurchaseForFollowup('starter_pack', t0)).toBe('first_purchase');
+
+    const offer = getSecondPurchaseFollowupOffer(t0 + 1000);
+    expect(offer).not.toBeNull();
+    expect(offer!.productId).toBe(SECOND_PURCHASE_OFFER_PRODUCT_ID);
+    expect(getProductById(offer!.productId)).toBeDefined();
+    expect(offer!.createdAt).toBe(t0);
+    expect(offer!.expiresInHours).toBe(48);
+    // Honest badge: derived from the catalog anchor.
+    expect(offer!.discountPercent).toBe(
+      resolveSalePricing(SECOND_PURCHASE_OFFER_PRODUCT_ID)!.discountPercent,
+    );
+  });
+
+  it('the window expires 48h after the first purchase', () => {
+    const t0 = Date.UTC(2026, 7, 25, 12, 0, 0);
+    recordPurchaseForFollowup('gems_250', t0);
+    expect(getSecondPurchaseFollowupOffer(t0 + 48 * 3600 * 1000 - 1)).not.toBeNull();
+    expect(getSecondPurchaseFollowupOffer(t0 + 48 * 3600 * 1000 + 1)).toBeNull();
+  });
+
+  it('buying the follow-up SKU converts and closes the window permanently', () => {
+    const t0 = Date.UTC(2026, 7, 25, 12, 0, 0);
+    recordPurchaseForFollowup('starter_pack', t0);
+    expect(recordPurchaseForFollowup(SECOND_PURCHASE_OFFER_PRODUCT_ID, t0 + 1000)).toBe(
+      'followup_converted',
+    );
+    expect(getSecondPurchaseFollowupOffer(t0 + 2000)).toBeNull();
+  });
+
+  it('later ordinary purchases neither reopen nor extend the window', () => {
+    const t0 = Date.UTC(2026, 7, 25, 12, 0, 0);
+    expect(recordPurchaseForFollowup('starter_pack', t0)).toBe('first_purchase');
+    expect(recordPurchaseForFollowup('gems_500', t0 + 1000)).toBeNull();
+    // Window still anchored to the FIRST purchase.
+    expect(getSecondPurchaseFollowupOffer(t0 + 48 * 3600 * 1000 + 1)).toBeNull();
   });
 });

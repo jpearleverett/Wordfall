@@ -1607,7 +1607,7 @@
       {
         "type": "pattern-present",
         "file": "src/components/PostLossModal.tsx",
-        "pattern": "if \\(timeLeft === 0\\) \\{\\s*requestDismiss\\(\\);",
+        "pattern": "if \\(timeLeft === 0 && !paused\\) \\{\\s*requestDismiss\\(\\);",
         "count": 1
       }
     ],
@@ -2492,7 +2492,7 @@
       {
         "type": "pattern-present",
         "file": "src/screens/GameScreen.tsx",
-        "pattern": "canProduceHint\\(store\\.getState\\(\\)\\) && spendGems\\(gemCost\\)"
+        "pattern": "if \\(canProduceHint\\(store\\.getState\\(\\)\\)\\) \\{\\s*if \\(spendGems\\(price\\.amount\\)\\)"
       }
     ]
   },

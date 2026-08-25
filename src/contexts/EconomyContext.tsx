@@ -972,6 +972,11 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         // handleWatchAdForDoubleReward) — crediting anything here as well
         // would double-pay.
         break;
+      case 'time':
+        // Deliberate no-op: the timeout continue is applied by the game
+        // reducer (EXTEND_TIME) from GameScreen's handler, not the wallet —
+        // there is no currency to credit here.
+        break;
       case 'lives':
         // creditLives banks accrued refills first and keeps the refill
         // anchor below max — the old raw add + lastRefillTime reset made a

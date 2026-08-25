@@ -97,6 +97,18 @@ export function useCommerce() {
     void analytics.trackIAPCompleted(result.productId, priceAmount, priceAmount);
     void analytics.trackRevenue(result.productId, priceAmount, 'USD');
     void funnelTracker.trackPurchase('iap_completed', result.productId);
+    // An orphaned fulfilment is still a genuine real-money charge (the app
+    // died between store charge and delivery), so it participates in the
+    // second-purchase follow-up funnel exactly like an in-app purchase.
+    // Redeliveries can't double-record: applyValidatedPurchase dedupes on
+    // transactionId and we returned above when it refused.
+    const followup = recordPurchaseForFollowup(result.productId);
+    if (followup === 'followup_converted') {
+      void analytics.logEvent('offer_followup_converted', {
+        product_id: result.productId,
+        price: priceAmount,
+      });
+    }
   };
 
   useEffect(() => {

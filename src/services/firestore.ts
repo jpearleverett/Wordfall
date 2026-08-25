@@ -1104,6 +1104,79 @@ class FirestoreService {
   }
 
   /**
+   * Read the club-vs-club weekly leaderboard snapshot written server-side by
+   * `updateClubLeaderboard` (functions/src/social.ts) at
+   * `leaderboards/clubs_weekly` — entries of { clubId, name, score, rank,
+   * tier }, rank-ordered. Member counts are enriched best-effort from the
+   * club docs (one documentId-in batch; the snapshot itself doesn't carry
+   * them).
+   *
+   * Three-state result, matching findClubByMembership:
+   *   - entries[] → snapshot read (possibly genuinely empty this week)
+   *   - null      → offline / disabled / read error — caller should show a
+   *                 neutral empty state, not "no rankings"
+   */
+  async getClubsWeeklyLeaderboard(max: number = 10): Promise<Array<{
+    clubId: string;
+    name: string;
+    score: number;
+    rank: number;
+    tier: 'bronze' | 'silver' | 'gold' | 'diamond';
+    memberCount: number;
+  }> | null> {
+    if (!this.enabled) return null;
+    try {
+      const snap = await getDoc(doc(db, 'leaderboards', 'clubs_weekly'));
+      if (!snap.exists()) return [];
+      const raw = snap.data()?.entries;
+      if (!Array.isArray(raw)) return [];
+      const tiers = new Set(['bronze', 'silver', 'gold', 'diamond']);
+      const entries = raw
+        .filter(
+          (e): e is Record<string, unknown> =>
+            !!e &&
+            typeof e === 'object' &&
+            typeof (e as { clubId?: unknown }).clubId === 'string',
+        )
+        .slice(0, Math.max(1, Math.min(max, 10)))
+        .map((e) => ({
+          clubId: e.clubId as string,
+          name: typeof e.name === 'string' ? (e.name as string) : 'Unknown Club',
+          score: Number(e.score) || 0,
+          rank: Number(e.rank) || 0,
+          tier: (tiers.has(String(e.tier))
+            ? String(e.tier)
+            : 'bronze') as 'bronze' | 'silver' | 'gold' | 'diamond',
+          memberCount: 0,
+        }));
+      if (entries.length === 0) return [];
+
+      // Best-effort memberCount enrichment (<= 10 ids → one 'in' query).
+      try {
+        const clubSnap = await getDocs(
+          query(
+            collection(db, 'clubs'),
+            where(documentId(), 'in', entries.map((e) => e.clubId)),
+          ),
+        );
+        const countById = new Map<string, number>();
+        for (const d of clubSnap.docs) {
+          countById.set(d.id, Number(d.data().memberCount) || 0);
+        }
+        for (const entry of entries) {
+          entry.memberCount = countById.get(entry.clubId) ?? 0;
+        }
+      } catch {
+        // Counts stay 0 — the ranking itself is still worth showing.
+      }
+      return entries;
+    } catch (e) {
+      logger.warn('[Firestore] getClubsWeeklyLeaderboard failed:', e);
+      return null;
+    }
+  }
+
+  /**
    * Batch-fetch display names for a club's member list. Reads users/{uid}
    * profile docs (written by syncPlayerProfile) in documentId-in batches of
    * 10. UIDs without a profile doc fall back to 'Player'.

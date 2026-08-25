@@ -8,6 +8,7 @@ import {
   Pressable,
   TextInput,
   StyleSheet,
+  ActivityIndicator,
   Alert,
   Animated,
   Easing,
@@ -1022,6 +1023,41 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     return () => { cancelled = true; };
   }, [clubId]);
 
+  // Club-vs-club weekly rankings — the REAL server snapshot written by
+  // updateClubLeaderboard at leaderboards/clubs_weekly. null = not loaded /
+  // unavailable (offline), [] = read fine but no scores recorded this week.
+  const [clubsWeeklyLb, setClubsWeeklyLb] = useState<
+    ClubLeaderboardEntry[] | null
+  >(null);
+  const [clubsLbLoading, setClubsLbLoading] = useState(false);
+  useEffect(() => {
+    if (!clubId || !firestoreService.isAvailable()) return;
+    let cancelled = false;
+    setClubsLbLoading(true);
+    firestoreService
+      .getClubsWeeklyLeaderboard()
+      .then((rows) => {
+        if (cancelled) return;
+        setClubsWeeklyLb(
+          rows === null
+            ? null
+            : rows.map((r) => ({
+                clubId: r.clubId,
+                clubName: r.name,
+                clubInitial: r.name.charAt(0).toUpperCase(),
+                weeklyScore: r.score,
+                memberCount: r.memberCount,
+                tier: r.tier,
+                rank: r.rank,
+              })),
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setClubsLbLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [clubId]);
+
   // Load this user's block list — messages from blocked users are filtered out
   useEffect(() => {
     const userId = user?.uid;
@@ -1278,24 +1314,16 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     return map;
   }, [data?.members]);
 
-  // Mock leaderboard entries for display when none provided
+  // Club-vs-club rankings: prop-supplied entries win (tests / previews),
+  // otherwise the fetched server snapshot. NO fabricated fallback — an empty
+  // week honestly renders as "no rankings yet" instead of a mock top-5 the
+  // player's club could never actually climb.
   const leaderboardEntries = useMemo<ClubLeaderboardEntry[]>(() => {
     if (data?.leaderboardEntries && data.leaderboardEntries.length > 0) {
       return data.leaderboardEntries;
     }
-    if (!data || !clubId) return [];
-    // Generate mock entries with current club included
-    const mockClubs: ClubLeaderboardEntry[] = [
-      { clubId: 'c1', clubName: 'Word Warriors', clubInitial: 'W', weeklyScore: 45200, memberCount: 28, tier: 'gold', rank: 1 },
-      { clubId: 'c2', clubName: 'Lexicon Lords', clubInitial: 'L', weeklyScore: 38900, memberCount: 25, tier: 'gold', rank: 2 },
-      { clubId: 'c3', clubName: 'Puzzle Pros', clubInitial: 'P', weeklyScore: 32100, memberCount: 22, tier: 'silver', rank: 3 },
-      { clubId: clubId, clubName: data.name, clubInitial: data.name.charAt(0).toUpperCase(), weeklyScore: data.weeklyScore, memberCount: data.memberCount, tier: data.tier ?? 'bronze', rank: 4 },
-      { clubId: 'c5', clubName: 'Brain Squad', clubInitial: 'B', weeklyScore: 18500, memberCount: 18, tier: 'silver', rank: 5 },
-    ];
-    // Re-sort by score and re-assign ranks
-    mockClubs.sort((a, b) => b.weeklyScore - a.weeklyScore);
-    return mockClubs.map((c, i) => ({ ...c, rank: i + 1 }));
-  }, [data?.leaderboardEntries, data?.weeklyScore, clubId]);
+    return clubsWeeklyLb ?? [];
+  }, [data?.leaderboardEntries, clubsWeeklyLb]);
 
   // Compute player's contribution to current goal
   const playerContribution = useMemo(() => {
@@ -1665,9 +1693,35 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           </Text>
         </View>
 
-        {/* Club Leaderboard */}
+        {/* Club Leaderboard — real leaderboards/clubs_weekly snapshot */}
         <SectionHeader label={t('club.weeklyRankings')} accent={COLORS.cyan} />
-        <ClubLeaderboard entries={leaderboardEntries} currentClubId={clubId} />
+        {clubsLbLoading && leaderboardEntries.length === 0 ? (
+          <View style={styles.lbStateCard}>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <ActivityIndicator color={COLORS.cyan} />
+            <Text style={styles.lbStateText}>Loading weekly rankings…</Text>
+          </View>
+        ) : leaderboardEntries.length === 0 ? (
+          <View style={styles.lbStateCard}>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <GameIcon name="medal" metal="gold" size={30} />
+            <Text style={styles.lbStateText}>
+              Rankings appear after this week's first scores
+            </Text>
+          </View>
+        ) : (
+          <ClubLeaderboard entries={leaderboardEntries} currentClubId={clubId} />
+        )}
 
         {/* Members with Weekly Scores */}
         <SectionHeader
@@ -1926,6 +1980,24 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  // Weekly-rankings loading / empty card (real clubs_weekly snapshot).
+  lbStateCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.borderMedium,
+    marginBottom: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 10,
+  },
+  lbStateText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
   scrollView: {
     flex: 1,
   },
