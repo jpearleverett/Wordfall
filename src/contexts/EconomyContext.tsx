@@ -965,7 +965,12 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         // Spins are handled by PlayerContext — caller should call player.updateMysteryWheel
         break;
       case 'double':
-        // Double reward is a multiplier — caller handles the actual doubling
+        // Deliberate no-op: the doubler's grant depends on the completion's
+        // authoritative totals (totalCoinsAwarded/totalGemsAwarded), which
+        // only GameScreen has. GameScreen credits the real coins+gems delta
+        // itself after the ad resolves (exactly-once per completion, see
+        // handleWatchAdForDoubleReward) — crediting anything here as well
+        // would double-pay.
         break;
       case 'lives':
         // creditLives banks accrued refills first and keeps the refill

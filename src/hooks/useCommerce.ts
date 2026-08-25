@@ -6,6 +6,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
 import { iapManager, PurchaseResult } from '../services/iap';
+import { recordPurchaseForFollowup } from '../data/dynamicPricing';
 
 export interface PurchasePreflightResult {
   allowed: boolean;
@@ -175,6 +176,18 @@ export function useCommerce() {
       await analytics.trackIAPCompleted(result.productId, priceAmount, priceAmount);
       await analytics.trackRevenue(result.productId, priceAmount, 'USD');
       await funnelTracker.trackPurchase('iap_completed', result.productId);
+      // Second-purchase ladder: a player's FIRST real-money purchase opens
+      // a 48h follow-up window (the shop's For You carousel surfaces the
+      // "thanks — next one's better" offer); buying the follow-up SKU
+      // closes it. Restores/migrations never reach this path, so the
+      // window only ever opens on a genuine charge.
+      const followup = recordPurchaseForFollowup(result.productId);
+      if (followup === 'followup_converted') {
+        void analytics.logEvent('offer_followup_converted', {
+          product_id: result.productId,
+          price: priceAmount,
+        });
+      }
     }
 
     refreshStatus();

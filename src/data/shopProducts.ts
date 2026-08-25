@@ -58,7 +58,28 @@ export interface ShopProduct {
    * - 'limited'    — time-boxed or stock-capped; red ribbon with pulse.
    */
   badge?: 'popular' | 'best_value' | 'limited';
+  /**
+   * When set, this product is a genuinely-discounted sale variant of the
+   * given base SKU: identical rewards, a REAL lower store price, and an
+   * anchor equal to the base SKU's everyday charged price. Sale variants
+   * exist so offer surfaces (comeback ladder, welcome-back deals) can
+   * advertise a discount the store sheet actually honors — displayed
+   * price == charged price, always. They are surfaced ONLY through offer
+   * flows; the general storefront enumeration must skip them.
+   */
+  saleVariantOf?: IAPProductId;
+  /**
+   * Offer-gated products (first/second-purchase specials) that must never
+   * render in the general storefront enumeration.
+   */
+  offerOnly?: boolean;
   icon: string;
+}
+
+/** True for products the general storefront must not enumerate (sale
+ *  variants + offer-gated specials — they surface via offer flows only). */
+export function isOfferOnlyProduct(product: ShopProduct): boolean {
+  return Boolean(product.offerOnly || product.saleVariantOf);
 }
 
 // ─── Product definitions ─────────────────────────────────────────────────────
@@ -84,7 +105,33 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     isNonConsumable: true,
     originalPrice: '$1.99',
     originalPriceAmount: 1.99,
+    offerOnly: true,
     icon: '🎁',
+  },
+
+  // ── Second Purchase Follow-up (offer-only) ─────────────────────────────
+  // Surfaced by the "thanks — next one's better" follow-up offer for 48h
+  // after a player's FIRST real-money purchase (dynamicPricing.ts). Real
+  // price, real anchor: strictly better value than starter_pack at the
+  // same $1.99 so the second purchase feels like a reward, not a rerun.
+  {
+    id: 'second_purchase_special' as IAPProductId,
+    storeProductId: 'wordfall_second_purchase',
+    name: 'Thanks Bundle',
+    description: '1200 Coins + 80 Gems + 15 Hints — a thank-you for your first purchase',
+    fallbackPrice: '$1.99',
+    fallbackPriceAmount: 1.99,
+    category: 'bundles',
+    rewards: {
+      coins: 1200,
+      gems: 80,
+      hintTokens: 15,
+    },
+    isNonConsumable: true,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
+    offerOnly: true,
+    icon: '\u{1F49D}',
   },
 
   // ── Bundles ──────────────────────────────────────────────────────────────
@@ -520,20 +567,11 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
   },
 
   // ── Currency: Gems ───────────────────────────────────────────────────────
-  {
-    id: 'gems_30',
-    storeProductId: 'wordfall_gems_30',
-    name: 'Pocket Gems',
-    description: 'A small pouch of 30 gems',
-    fallbackPrice: '$0.99',
-    fallbackPriceAmount: 0.99,
-    category: 'currency',
-    rewards: { gems: 30 },
-    isNonConsumable: false,
-    originalPrice: '$1.99',
-    originalPriceAmount: 1.99,
-    icon: '\u{1F48E}',
-  },
+  // gems_30 and gems_200 were REMOVED (Aug 2026 monetization pass): both
+  // were strictly dominated rows at the same price point (gems_50 gives 50
+  // for the same $0.99; gems_250 gives 250 for the same $4.99), so any
+  // player buying them was simply overcharged. Deregister wordfall_gems_30
+  // and wordfall_gems_200 in Play Console.
   {
     id: 'gems_50',
     storeProductId: 'wordfall_gems_50',
@@ -560,20 +598,6 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     isNonConsumable: false,
     originalPrice: '$4.99',
     originalPriceAmount: 4.99,
-    icon: '\u{1F48E}',
-  },
-  {
-    id: 'gems_200',
-    storeProductId: 'wordfall_gems_200',
-    name: 'Gem Pouch',
-    description: 'A generous pouch of 200 gems',
-    fallbackPrice: '$4.99',
-    fallbackPriceAmount: 4.99,
-    category: 'currency',
-    rewards: { gems: 200 },
-    isNonConsumable: false,
-    originalPrice: '$7.99',
-    originalPriceAmount: 7.99,
     icon: '\u{1F48E}',
   },
   {
@@ -858,11 +882,16 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     id: 'season_pass_bundle',
     storeProductId: 'wordfall_season_pass_bundle',
     name: 'Season Pass Bundle',
-    description: '5000 Coins + 300 Gems + 50 Hints + 25 Undos + 10 Each Booster + Season Frame & Title',
+    description: '5000 Coins + 300 Gems + 50 Hints + 25 Undos + 10 Each Booster + Season Frame & Title + Premium Season Pass',
     fallbackPrice: '$19.99',
     fallbackPriceAmount: 19.99,
     category: 'premium',
     rewards: {
+      // P0 trust fix (Aug 2026): the $19.99 "Season Pass Bundle" never set
+      // seasonPassPremium, so buyers paid twice the season_pass_premium
+      // price without the premium lane it is named after. The flag flows
+      // through applyCatalogPurchase like season_pass_premium's does.
+      flags: { seasonPassPremium: true },
       coins: 5000,
       gems: 300,
       hintTokens: 50,
@@ -1008,14 +1037,145 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     icon: '\u{1F525}',
   },
 
+  // ── Sale variants (offer-only, REAL discounts) ─────────────────────────
+  //
+  // The comeback ladder and welcome-back offers used to advertise "50% /
+  // 70% off" while resolveSalePricing pinned the charged price to the
+  // everyday SKU — every deep-discount claim was fictional. These variants
+  // make the discount real: identical rewards to the base SKU, a genuinely
+  // lower registered store price, and the anchor set to the base SKU's
+  // everyday charged price so the % badge is derived, not invented.
+  // Register each wordfall_*_sale* id in Play Console at the listed price.
+  {
+    id: 'starter_pack_sale_50' as IAPProductId,
+    storeProductId: 'wordfall_starter_pack_sale50',
+    name: 'Starter Pack',
+    description: '500 Coins + 50 Gems + 10 Hints + Exclusive Decoration',
+    fallbackPrice: '$0.99',
+    fallbackPriceAmount: 0.99,
+    category: 'bundles',
+    rewards: { coins: 500, gems: 50, hintTokens: 10, decorations: ['starter_bookend'] },
+    isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
+    saleVariantOf: 'starter_pack',
+    icon: '\u{1F381}',
+  },
+  {
+    id: 'starter_pack_sale_60' as IAPProductId,
+    storeProductId: 'wordfall_starter_pack_sale60',
+    name: 'Starter Pack',
+    description: '500 Coins + 50 Gems + 10 Hints + Exclusive Decoration',
+    fallbackPrice: '$0.79',
+    fallbackPriceAmount: 0.79,
+    category: 'bundles',
+    rewards: { coins: 500, gems: 50, hintTokens: 10, decorations: ['starter_bookend'] },
+    isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
+    saleVariantOf: 'starter_pack',
+    icon: '\u{1F381}',
+  },
+  {
+    id: 'starter_pack_sale_70' as IAPProductId,
+    storeProductId: 'wordfall_starter_pack_sale70',
+    name: 'Starter Pack',
+    description: '500 Coins + 50 Gems + 10 Hints + Exclusive Decoration',
+    fallbackPrice: '$0.59',
+    fallbackPriceAmount: 0.59,
+    category: 'bundles',
+    rewards: { coins: 500, gems: 50, hintTokens: 10, decorations: ['starter_bookend'] },
+    isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
+    saleVariantOf: 'starter_pack',
+    icon: '\u{1F381}',
+  },
+  {
+    id: 'chapter_bundle_sale_50' as IAPProductId,
+    storeProductId: 'wordfall_chapter_bundle_sale50',
+    name: 'Chapter Bundle',
+    description: 'Theme decoration + 20 Gems + 10 Hints + 1 Board Preview',
+    fallbackPrice: '$1.49',
+    fallbackPriceAmount: 1.49,
+    category: 'bundles',
+    rewards: {
+      gems: 20,
+      hintTokens: 10,
+      decorations: ['chapter_decoration'],
+      boosters: [{ type: 'boardPreview', count: 1 }],
+    },
+    isNonConsumable: false,
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
+    saleVariantOf: 'chapter_bundle',
+    icon: '\u{1F4D6}',
+  },
+  {
+    id: 'gems_250_sale_30' as IAPProductId,
+    storeProductId: 'wordfall_gems_250_sale30',
+    name: '250 Gems',
+    description: 'A chest of 250 gems',
+    fallbackPrice: '$3.49',
+    fallbackPriceAmount: 3.49,
+    category: 'currency',
+    rewards: { gems: 250 },
+    isNonConsumable: false,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
+    saleVariantOf: 'gems_250',
+    icon: '\u{1F48E}',
+  },
+  {
+    id: 'gems_250_sale_50' as IAPProductId,
+    storeProductId: 'wordfall_gems_250_sale50',
+    name: '250 Gems',
+    description: 'A chest of 250 gems',
+    fallbackPrice: '$2.49',
+    fallbackPriceAmount: 2.49,
+    category: 'currency',
+    rewards: { gems: 250 },
+    isNonConsumable: false,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
+    saleVariantOf: 'gems_250',
+    icon: '\u{1F48E}',
+  },
+  {
+    id: 'gems_500_sale_40' as IAPProductId,
+    storeProductId: 'wordfall_gems_500_sale40',
+    name: '500 Gems',
+    description: 'A treasury of 500 gems',
+    fallbackPrice: '$5.99',
+    fallbackPriceAmount: 5.99,
+    category: 'currency',
+    rewards: { gems: 500 },
+    isNonConsumable: false,
+    originalPrice: '$9.99',
+    originalPriceAmount: 9.99,
+    saleVariantOf: 'gems_500',
+    icon: '\u{1F48E}',
+  },
+
   // ── Subscription ────────────────────────────────────────────────────────
   //
   // Three-tier VIP stack so the catalog supports all three typical
   // commitment horizons. Reward shapes share the same flag bundle
-  // (adsRemoved + vipSubscriber + vipExclusive frame); the dailyDrip
-  // scales and the anchor discount grows with duration so the annual
-  // tier presents as the clear long-term value, and the annual tier adds
-  // the legendary VIP trophy decoration.
+  // (adsRemoved + vipSubscriber + vipExclusive frame); the anchor
+  // discount grows with duration so the annual tier presents as the
+  // clear long-term value, and the annual tier adds the legendary VIP
+  // trophy decoration.
+  //
+  // DRIP TUNING (Aug 2026 — pinned by vipDripRatio.test.ts): total drip
+  // gems per dollar of each billing period must land between 1.2× and
+  // 2.0× the gems_250 pack rate (250/$4.99 ≈ 50 gems/$), ascending with
+  // tier length so annual is the best per-$ deal without dwarfing gem
+  // packs. The old 50/75/100 gems/day put annual at ~730 gems/$ — 14.6×
+  // the pack rate, cannibalizing every gem SKU.
+  //   weekly  45/day × 7d  ÷ $4.99  ≈ 63 gems/$ (1.26×)
+  //   monthly 25/day × 30d ÷ $9.99  ≈ 75 gems/$ (1.50×)
+  //   annual  12/day × 365d ÷ $49.99 ≈ 88 gems/$ (1.75×)
+  // Hint drip ascends 3/5/8 so longer tiers still read richer per day.
   //
   // Cosmetic ids here MUST exist in src/data/cosmetics.ts —
   // splitPlayerGrantIds silently drops any id that resolves via neither
@@ -1038,7 +1198,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     id: 'vip_weekly',
     storeProductId: 'wordfall_vip_weekly',
     name: 'VIP Weekly',
-    description: 'Ad-free + 50 daily gems + 3 daily hints + exclusive VIP frame + 2x XP boost',
+    description: 'Ad-free + 45 daily gems + 3 daily hints + exclusive VIP frame + 2x XP boost',
     fallbackPrice: '$4.99/week',
     fallbackPriceAmount: 4.99,
     originalPrice: '$9.99/week',
@@ -1046,7 +1206,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'subscription',
     rewards: {
       flags: { adsRemoved: true, vipSubscriber: true },
-      dailyDrip: { gems: 50, hintTokens: 3 },
+      dailyDrip: { gems: 45, hintTokens: 3 },
       decorations: ['frame_vip_exclusive'],
     },
     isNonConsumable: false,
@@ -1057,7 +1217,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     storeProductId: 'wordfall_vip_monthly',
     name: 'VIP Monthly',
     description:
-      'Ad-free + 75 daily gems + 5 daily hints + exclusive VIP frame + 2x XP boost',
+      'Ad-free + 25 daily gems + 5 daily hints + exclusive VIP frame + 2x XP boost',
     fallbackPrice: '$9.99/month',
     fallbackPriceAmount: 9.99,
     originalPrice: '$19.99/month',
@@ -1065,7 +1225,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'subscription',
     rewards: {
       flags: { adsRemoved: true, vipSubscriber: true },
-      dailyDrip: { gems: 75, hintTokens: 5 },
+      dailyDrip: { gems: 25, hintTokens: 5 },
       decorations: ['frame_vip_exclusive'],
     },
     isNonConsumable: false,
@@ -1077,7 +1237,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     storeProductId: 'wordfall_vip_annual',
     name: 'VIP Annual',
     description:
-      'Ad-free + 100 daily gems + 8 daily hints + exclusive VIP frame + legendary VIP trophy + 2x XP boost',
+      'Ad-free + 12 daily gems + 8 daily hints + exclusive VIP frame + legendary VIP trophy + 2x XP boost',
     fallbackPrice: '$49.99/year',
     fallbackPriceAmount: 49.99,
     originalPrice: '$149.99/year',
@@ -1085,7 +1245,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'subscription',
     rewards: {
       flags: { adsRemoved: true, vipSubscriber: true },
-      dailyDrip: { gems: 100, hintTokens: 8 },
+      dailyDrip: { gems: 12, hintTokens: 8 },
       // vip_trophy is the real LIBRARY_DECORATIONS legendary (also the
       // 26-week VIP-streak ladder reward — an annual commitment grants it
       // up front; unlocks are idempotent so the ladder tier stays safe).
@@ -1171,5 +1331,5 @@ export function getVipDailyDrip(
   }
   // No vip_* record: the weekly tier is the conservative floor.
   const weekly = productMap.get('vip_weekly')?.rewards?.dailyDrip;
-  return { gems: weekly?.gems ?? 50, hintTokens: weekly?.hintTokens ?? 3 };
+  return { gems: weekly?.gems ?? 45, hintTokens: weekly?.hintTokens ?? 3 };
 }

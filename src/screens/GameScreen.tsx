@@ -66,7 +66,7 @@ import {
   selectIsAdFreeComputed,
 } from '../stores/economyStore';
 import { analytics } from '../services/analytics';
-import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+import { getRemoteBoolean, getRemoteNumber, getRemoteNumberClamped } from '../services/remoteConfig';
 import BoosterComboBanner from '../components/BoosterComboBanner';
 import GameplayMascot from '../components/GameplayMascot';
 import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCombos';
@@ -77,6 +77,14 @@ import { getPrestigeHintBonus } from '../data/prestigeSystem';
 import { rollBonusTile } from '../utils/bonusTile';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
+import { MiniPackSheet } from '../components/MiniPackSheet';
+import {
+  computeDoubleRewardGrant,
+  getOfferPrice,
+  MiniPackNeed,
+  POST_LOSS_HINT_PACK,
+  TIMEOUT_CONTINUE_SECONDS,
+} from '../components/monetizationModel';
 import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
 import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
@@ -231,22 +239,36 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
     { key: 'spotlight', label: 'Spotlight', icon: 'hint' as GameIconName, accent: COLORS.teal, count: spotlightCount, active: spotlightActive, onPress: onSpotlight },
     { key: 'shuffle', label: 'Shuffle', icon: 'shuffle' as GameIconName, accent: COLORS.coral, count: shuffleCount, active: false, onPress: onSmartShuffle },
   ];
+  // The bar now renders during play even at zero inventory: an empty button
+  // is dimmed and its count badge shows "+" — tapping it opens the
+  // MiniPackSheet (the handlers route there on empty inventory) instead of
+  // silently doing nothing. Hidden (opacity 0, layout preserved) outside
+  // play; pointerEvents blocks the invisible touch targets that opacity
+  // alone would leave live.
+  const barHidden = !isPlaying;
   return (
-    <View style={[
-      styles.boosterBar,
-      !(hasAnyBoosters && isPlaying) && styles.boosterBarHidden,
-    ]}>
+    <View
+      style={[styles.boosterBar, barHidden && styles.boosterBarHidden]}
+      pointerEvents={barHidden ? 'none' : 'auto'}
+    >
       <View style={styles.boosterShelf}>
-        {boosters.map(b => b.count > 0 && (
+        {boosters.map(b => (
           <Pressable
             key={b.key}
             style={({ pressed }) => [
               styles.boosterButton,
               { borderColor: b.accent + '66', shadowColor: b.accent },
               b.active && [styles.boosterActive, { borderColor: b.accent }],
+              b.count <= 0 && styles.boosterEmpty,
               pressed && styles.boosterPressed,
             ]}
             onPress={b.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={
+              b.count > 0
+                ? `${b.label} booster, ${b.count} available`
+                : `${b.label} booster, none left — tap to get more`
+            }
           >
             <LinearGradient
               colors={BOOSTER_BODY_GRADIENT}
@@ -258,7 +280,7 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
             </View>
             <Text style={styles.boosterLabel}>{b.label}</Text>
             <View style={[styles.boosterCount, { backgroundColor: b.accent, shadowColor: b.accent }]}>
-              <Text style={styles.boosterCountText}>{b.count}</Text>
+              <Text style={styles.boosterCountText}>{b.count > 0 ? b.count : '+'}</Text>
             </View>
           </Pressable>
         ))}
@@ -643,8 +665,11 @@ function GameScreenImpl({
   showTomorrowPreview = false,
   summaryItems = [],
   onNavigate,
-  totalCoinsAwarded = 0,
-  totalGemsAwarded = 0,
+  // No `= 0` defaults: undefined means "authoritative totals not delivered
+  // yet" (victory screen falls back to its estimate), while an explicit 0 is
+  // a real zero-award (repeat board / cap-exhausted) that must display as-is.
+  totalCoinsAwarded,
+  totalGemsAwarded,
   nextUnlockPreview = null,
 }: GameScreenProps) {
   const { t } = useTranslation();
@@ -713,6 +738,7 @@ function GameScreenImpl({
     activateSmartShuffle,
     activateBoosterCombo,
     expireBoosterCombo,
+    extendTime,
     activateScoreDoubler,
     activateBoardFreeze,
     isStuck,
@@ -833,6 +859,7 @@ function GameScreenImpl({
   const isAdFree = useEconomyStore(selectIsAdFreeComputed);
   const {
     addCoins,
+    addGems,
     addHintTokens,
     addLives,
     addBoosterToken,
@@ -847,6 +874,13 @@ function GameScreenImpl({
   } = useEconomyActions();
   const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
   const offerShownThisLevel = useRef(false);
+
+  // --- Mini pack sheet (store bridge for zero-conversion moments) ---
+  // `need` selects the sheet's contents; `source` is analytics-only.
+  const [miniPack, setMiniPack] = useState<{ need: MiniPackNeed; source: string } | null>(null);
+  const openMiniPack = useCallback((need: MiniPackNeed, sheetSource: string) => {
+    setMiniPack({ need, source: sheetSource });
+  }, []);
 
   // ── Bonus coin tile (in-puzzle variable reward) ──────────────────────
   // ~35% of boards mark one letter of a hidden word with a coin badge;
@@ -915,13 +949,57 @@ function GameScreenImpl({
     }
   }, [processAdReward]);
 
-  const handleWatchAdForDoubleReward = useCallback(async () => {
-    const result = await adManager.showRewardedAd('double_reward');
+  // Ad-undo (dead-end relief tier 2): grants ONE undo into this puzzle's
+  // pool — same pool the free stuck rescue uses, so the existing stuck
+  // banner flips to "tap to step back" the moment the grant lands.
+  const handleWatchAdForUndo = useCallback(async () => {
+    const result = await adManager.showRewardedAd('undo_reward');
     if (result.rewarded) {
-      setRewardDoubled(true);
-      // The actual doubling is applied in onComplete callback — we just set the flag
+      grantUndo();
+      void soundManager.playSound('undoUsed');
+      void analytics.logEvent('ad_undo_granted', { level, mode });
     }
-  }, []);
+  }, [grantUndo, level, mode]);
+
+  // Latest authoritative completion totals, readable at ad-resolve time.
+  // (Props can update between tap and resolve; the ref always has the
+  // freshest values without re-minting the callback.)
+  const completionTotalsRef = useRef({ coins: 0, gems: 0 });
+  completionTotalsRef.current = {
+    coins: totalCoinsAwarded ?? 0,
+    gems: totalGemsAwarded ?? 0,
+  };
+  // Exactly-once guard for the doubler grant, reset per completion
+  // (retry / next level / new board).
+  const doubleGrantedRef = useRef(false);
+  // Once-per-level-attempt guard for the timeout "+30s continue" offer
+  // (Time Pressure). Reset on retry / next level / new board.
+  const timeExtendUsedRef = useRef(false);
+
+  const handleWatchAdForDoubleReward = useCallback(async () => {
+    // "Watch Ad to DOUBLE Rewards" used to set a display flag and grant
+    // NOTHING — the single worst trust defect in the game. The real grant is
+    // a delta equal to the coins+gems actually awarded for this completion
+    // (wave 1 made those authoritative: 0 on repeat boards / cap-exhausted
+    // clears, so doubling 0 correctly grants 0).
+    if (doubleGrantedRef.current) return;
+    const result = await adManager.showRewardedAd('double_reward');
+    if (!result.rewarded) return;
+    const totals = completionTotalsRef.current;
+    const grant = computeDoubleRewardGrant(totals.coins, totals.gems, doubleGrantedRef.current);
+    doubleGrantedRef.current = true;
+    if (grant) {
+      if (grant.coins > 0) addCoins(grant.coins);
+      if (grant.gems > 0) addGems(grant.gems);
+    }
+    setRewardDoubled(true);
+    void analytics.logEvent('double_reward_granted', {
+      level,
+      mode,
+      coins: grant?.coins ?? 0,
+      gems: grant?.gems ?? 0,
+    });
+  }, [addCoins, addGems, level, mode]);
 
   const handleMockAdComplete = useCallback((watched: boolean) => {
     if (mockAdState) {
@@ -1138,71 +1216,90 @@ function GameScreenImpl({
   const handleOfferAccept = useCallback(() => {
     if (!activeOffer) return;
     let accepted = false;
+    // The SAME `getOfferPrice` read drives ContextualOffer's price label, so
+    // display and charge cannot diverge (they did: locale strings claimed
+    // gems while these branches spent coins). Coin rescues scale with the
+    // difficulty tier already in scope here (x1/x1.5/x2.5/x4, rounded to 5).
+    const price = getOfferPrice(activeOffer, difficulty);
+    // When the player can't afford the accepted offer, the old handler
+    // silently closed the modal as if they had declined. Route the intent to
+    // the MiniPackSheet for the missing currency instead.
+    let sheetNeed: MiniPackNeed | null = null;
     switch (activeOffer) {
       case 'hint_rescue':
-        // Spend 50 coins, grant 5 hint tokens
-        if (spendCoins(50)) {
+        if (spendCoins(price.amount)) {
           addHintTokens(5);
           accepted = true;
+        } else {
+          sheetNeed = 'coins';
         }
         break;
       case 'close_finish':
-        // Spend 25 coins, grant 1 hint token
-        if (spendCoins(25)) {
+        if (spendCoins(price.amount)) {
           addHintTokens(1);
           accepted = true;
+        } else {
+          sheetNeed = 'coins';
         }
         break;
       case 'close_finish_premium': {
-        // Gem-priced escalation: spend N gems and auto-solve the last word.
-        // Price is Remote Config driven so LiveOps can tune without a build.
-        const gemCost = Math.max(1, Math.round(getRemoteNumber('closeFinishPremiumGemCost')));
+        // Gem-priced escalation (Remote-Config priced via getOfferPrice).
         // Never take the gems when the auto-solve cannot deliver: on a dead
         // board USE_PREMIUM_HINT no-ops and the queued SUBMIT_WORD fires on
         // an empty selection — the exact spot this offer targets (1 word
         // left) is also where dead boards are guaranteed possible.
-        if (canProduceHint(store.getState()) && spendGems(gemCost)) {
-          // Select the current positions of the last word (post-gravity) via
-          // USE_PREMIUM_HINT, then submit on the next tick so the player
-          // sees the trace briefly before it resolves.
-          store.dispatch({ type: 'USE_PREMIUM_HINT' });
-          trackTimeout(() => {
-            store.dispatch({ type: 'SUBMIT_WORD' });
-          }, 400);
-          accepted = true;
+        if (canProduceHint(store.getState())) {
+          if (spendGems(price.amount)) {
+            // Select the current positions of the last word (post-gravity) via
+            // USE_PREMIUM_HINT, then submit on the next tick so the player
+            // sees the trace briefly before it resolves.
+            store.dispatch({ type: 'USE_PREMIUM_HINT' });
+            trackTimeout(() => {
+              store.dispatch({ type: 'SUBMIT_WORD' });
+            }, 400);
+            accepted = true;
+          } else {
+            sheetNeed = 'gems';
+          }
         }
         break;
       }
       case 'post_puzzle':
-        // Spend 80 coins, grant 10 hint tokens
-        if (spendCoins(80)) {
+        if (spendCoins(price.amount)) {
           addHintTokens(10);
           accepted = true;
+        } else {
+          sheetNeed = 'coins';
         }
         break;
       case 'booster_pack':
-        // Spend 15 gems, grant 1 of each booster to persistent inventory
-        if (spendGems(15)) {
+        // Grant 1 of each booster to persistent inventory
+        if (spendGems(price.amount)) {
           addBoosterToken('wildcardTile');
           addBoosterToken('spotlight');
           addBoosterToken('smartShuffle');
           accepted = true;
+        } else {
+          sheetNeed = 'gems';
         }
         break;
       case 'life_refill':
-        // Spend 10 gems, refill lives
-        if (spendGems(10)) {
+        if (spendGems(price.amount)) {
           addLives(5);
           accepted = true;
+        } else {
+          sheetNeed = 'gems';
         }
         break;
       case 'streak_shield':
         // Activate streak shield — gem-priced in-game alternative to the
         // streak_freeze IAP. Same underlying player action.
         if (typeof (playerActionsAny as Record<string, unknown>).activateStreakShield === 'function') {
-          if (spendGems(30)) {
+          if (spendGems(price.amount)) {
             (playerActionsAny as { activateStreakShield: () => void }).activateStreakShield();
             accepted = true;
+          } else {
+            sheetNeed = 'gems';
           }
         }
         break;
@@ -1215,6 +1312,9 @@ function GameScreenImpl({
       transactionCompleted: accepted,
     });
     setActiveOffer(null);
+    if (sheetNeed) {
+      openMiniPack(sheetNeed, `offer_${activeOffer}`);
+    }
   }, [
     activeOffer,
     spendCoins,
@@ -1228,6 +1328,7 @@ function GameScreenImpl({
     difficulty,
     store,
     trackTimeout,
+    openMiniPack,
   ]);
 
   // Memoize the composed grid scale to avoid creating a new style object each render
@@ -1937,6 +2038,10 @@ function GameScreenImpl({
     // Also reset the adjuster's per-puzzle stuck-fail guard so the
     // next puzzle can record its own struggle signal independently.
     stuckFailRecordedRef.current = false;
+    // New board = new completion: re-arm the doubler and timeout-continue.
+    doubleGrantedRef.current = false;
+    setRewardDoubled(false);
+    timeExtendUsedRef.current = false;
   }, [board]);
 
   // Adaptive-difficulty struggle signal for modes that DON'T flip
@@ -2252,11 +2357,13 @@ function GameScreenImpl({
   const handleHint = useCallback(() => {
     // Modes that forbid hints (expert, perfectSolve) must refuse here too,
     // not just hide buttons — this is the single choke point every hint
-    // surface routes through.
+    // surface routes through. This gate stays ABOVE the mini-pack fallback:
+    // no-hint modes must never see a purchase sheet for a good they can't use.
     if (!hintsAllowed) return;
     // A dead board has no traceable hint: USE_HINT would silently no-op,
     // so spending the persistent token below bought nothing. Charge only
-    // when the mode-aware picker can actually produce one.
+    // when the mode-aware picker can actually produce one. (Also above the
+    // sheet: selling hints that cannot be produced is charge-for-nothing.)
     if (!canProduceHint(store.getState())) return;
     if (mode !== 'relax') {
       if (prestigeFreeHintsRef.current > 0) {
@@ -2264,8 +2371,12 @@ function GameScreenImpl({
         prestigeFreeHintsRef.current -= 1;
         grantHint();
       } else {
-        // Spend from persistent inventory and grant into game state
-        if (hintTokens <= 0) return;
+        // Out of tokens: the tap used to dead-end on a disabled-looking
+        // button. Open the store bridge for hints instead.
+        if (hintTokens <= 0) {
+          openMiniPack('hints', 'hint_button_empty');
+          return;
+        }
         spendHintToken();
         grantHint();
       }
@@ -2273,7 +2384,7 @@ function GameScreenImpl({
     void soundManager.playSound('hintUsed');
     void analytics.logEvent('hint_used', { level, mode, hintsAvailable });
     useHint();
-  }, [useHint, grantHint, level, mode, hintsAvailable, hintTokens, spendHintToken, hintsAllowed]);
+  }, [useHint, grantHint, level, mode, hintsAvailable, hintTokens, spendHintToken, hintsAllowed, openMiniPack]);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
@@ -2321,10 +2432,37 @@ function GameScreenImpl({
     setShowIdleHint(false);
   }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
 
+  // Timeout continue (Time Pressure): watch a rewarded ad to resume the
+  // timed-out attempt with +30s. Once per attempt (timeExtendUsedRef); the
+  // reducer's EXTEND_TIME only accepts the transition from 'timeout'.
+  // NOTE: 'undo_reward' stands in for a dedicated time-continue
+  // AdRewardType — the union lives in services/ads.ts (outside this
+  // change's ownership); no reward-type-specific caps attach to it.
+  const handleTimeoutContinue = useCallback(async () => {
+    if (timeExtendUsedRef.current) return;
+    const result = await adManager.showRewardedAd('undo_reward');
+    if (!result.rewarded) return;
+    timeExtendUsedRef.current = true;
+    extendTime(TIMEOUT_CONTINUE_SECONDS);
+    setShowFailed(false);
+    setShowPostLoss(false);
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('timeout_continue_used', {
+      level,
+      mode,
+      seconds: TIMEOUT_CONTINUE_SECONDS,
+    });
+  }, [extendTime, level, mode]);
+
   const handleRetry = useCallback(() => {
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
     completionHandled.current = false;
+    // Fresh attempt: the doubler and the timeout-continue are per-completion
+    // / per-attempt goods.
+    doubleGrantedRef.current = false;
+    setRewardDoubled(false);
+    timeExtendUsedRef.current = false;
     // A retry is a fresh attempt and gets a fresh safety net. The guard is
     // keyed on level+mode, neither of which changes on retry, so without
     // this the player who dead-ends, retries, and dead-ends again gets no
@@ -2357,19 +2495,53 @@ function GameScreenImpl({
     void handleWatchAdForHint();
   });
 
+  // Interstitial at the won → next-level transition — the standard genre
+  // placement and the largest untapped revenue wire in the game. Eligibility
+  // is deliberately conservative: never on the daily/weekly celebration,
+  // never during a tutorial, never before `interstitialMinLevel` (RC, default
+  // 13 — clamped so a console slip can't put an ad on a new player's first
+  // puzzle), and never stacked under another offer/sheet. adManager
+  // additionally self-enforces the daily cap, minimum interval, and ad-free
+  // purchase; `canShowInterstitial()` is the fast no-ad path so the
+  // transition stays responsive when nothing will show.
+  const maybeShowNextLevelInterstitial = useCallback(async (): Promise<boolean> => {
+    if (isDaily || mode === 'weekly') return false;
+    if (showModeTutorial || tensionActive) return false;
+    if (activeOffer !== null || miniPack !== null) return false;
+    if (level < getRemoteNumberClamped('interstitialMinLevel', 13, 1, 200)) return false;
+    if (!adManager.canShowInterstitial()) return false;
+    crashReporter.addBreadcrumb(`interstitial requested at next-level (L${level} ${mode})`, 'ads');
+    const shown = await adManager.showInterstitialAd();
+    void analytics.logEvent('interstitial_next_level', {
+      level,
+      mode,
+      shown,
+    });
+    return shown;
+  }, [isDaily, mode, showModeTutorial, tensionActive, activeOffer, miniPack, level]);
+
   const handleNextLevel = useCallback(() => {
     setShowComplete(false);
     completionHandled.current = false;
+    // Leaving this completion: re-arm the per-completion guards.
+    doubleGrantedRef.current = false;
+    setRewardDoubled(false);
+    timeExtendUsedRef.current = false;
     // post_puzzle: show hint upsell if player used all free hints
     if (pendingPostPuzzleOffer && !offerShownThisLevel.current && !offerSuppressed) {
       setPendingPostPuzzleOffer(false);
       showOfferIfAllowed('post_puzzle');
-      // Still proceed to next level after a brief delay for the offer to appear
+      // Still proceed to next level after a brief delay for the offer to
+      // appear. The offer owns this transition moment — no interstitial
+      // stacked underneath it.
       trackTimeout(() => onNextLevel(), 100);
     } else {
-      onNextLevel();
+      void (async () => {
+        await maybeShowNextLevelInterstitial();
+        onNextLevel();
+      })();
     }
-  }, [onNextLevel, pendingPostPuzzleOffer, offerSuppressed, showOfferIfAllowed, trackTimeout]);
+  }, [onNextLevel, pendingPostPuzzleOffer, offerSuppressed, showOfferIfAllowed, trackTimeout, maybeShowNextLevelInterstitial]);
 
   // First-booster ceremony (fires once ever, tracked via tooltipsShown)
   const checkFirstBooster = useCallback(() => {
@@ -2443,7 +2615,10 @@ function GameScreenImpl({
     // An unconsumed in-puzzle wildcard (a cancelled activation, or one
     // granted by an entitlement) re-activates without a new charge.
     if (gameState.boosterCounts.wildcardTile <= 0) {
-      if ((boosterTokens?.wildcardTile ?? 0) <= 0) return;
+      if ((boosterTokens?.wildcardTile ?? 0) <= 0) {
+        openMiniPack('boosters', 'booster_wildcard_empty');
+        return;
+      }
       spendBoosterToken('wildcardTile');
       grantBooster('wildcardTile');
       void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
@@ -2456,7 +2631,10 @@ function GameScreenImpl({
   });
 
   const handleSpotlight = useStableCallback(() => {
-    if ((boosterTokens?.spotlight ?? 0) <= 0) return;
+    if ((boosterTokens?.spotlight ?? 0) <= 0) {
+      openMiniPack('boosters', 'booster_spotlight_empty');
+      return;
+    }
     spendBoosterToken('spotlight');
     grantBooster('spotlight');
     void soundManager.playSound('buttonPress');
@@ -2468,7 +2646,10 @@ function GameScreenImpl({
   });
 
   const handleSmartShuffle = useStableCallback(() => {
-    if ((boosterTokens?.smartShuffle ?? 0) <= 0) return;
+    if ((boosterTokens?.smartShuffle ?? 0) <= 0) {
+      openMiniPack('boosters', 'booster_shuffle_empty');
+      return;
+    }
     // SMART_SHUFFLE preserves remaining word paths, so it can only succeed
     // when every remaining word is currently findable — on a dead board the
     // reducer "refunds" the in-puzzle count by no-oping, but the economy
@@ -2692,7 +2873,10 @@ function GameScreenImpl({
             status={status}
             showIdleHint={showIdleHint}
             hintsAvailable={hintsAvailable}
-            canShowAdHint={hintsAllowed && !isAdFree && adManager.canShowAd('hint_reward')}
+            // Ad-free purchasers keep the ad-hint path: showRewardedAd
+            // auto-grants for them without playing an ad, so hiding the
+            // surface made Remove-Ads a net loss of free hints.
+            canShowAdHint={hintsAllowed && (isAdFree || adManager.canShowAd('hint_reward'))}
             isStuck={isStuck}
             undosLeft={undosLeft}
             strandedWords={strandedWords}
@@ -2704,6 +2888,35 @@ function GameScreenImpl({
             onUndoTap={stableHandleUndo}
             onRetryTap={stableHandleRetry}
           />
+          {/* Ad-undo — second-tier dead-end relief. Renders under the retry
+              banner only when the free stuck rescue has already been spent
+              (or is remotely disabled) and the player has no undos left in
+              either pool. Respects the mode's undo contract (never in
+              expert/perfectSolve/relax) and the ad availability rules
+              (ad-free owners auto-grant without an ad). */}
+          {isStuck &&
+            status === 'playing' &&
+            modeConfig.rules.allowUndo &&
+            !modeConfig.rules.unlimitedUndo &&
+            undosLeft <= 0 &&
+            undoTokens <= 0 &&
+            history.length > 0 &&
+            (freeRescueUsedRef.current || !getRemoteBoolean('freeStuckRescueEnabled')) &&
+            (isAdFree || adManager.canShowAd('undo_reward')) && (
+            <Pressable
+              style={styles.adUndoBanner}
+              onPress={() => void handleWatchAdForUndo()}
+              accessibilityRole="button"
+              accessibilityLabel="Get one undo to step back a move"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                <GameIcon name="undo" size={14} accent={COLORS.green} />
+                <Text style={styles.adUndoBannerText}>
+                  {isAdFree ? 'Claim +1 undo — free' : 'Watch ad for +1 undo'}
+                </Text>
+              </View>
+            </Pressable>
+          )}
         </View>
 
         {/* #1 Word-clear particles — multi-tile bloom queue. Each queue entry
@@ -2777,7 +2990,9 @@ function GameScreenImpl({
           onRetry={handleRetry}
           onDoubleReward={handleWatchAdForDoubleReward}
           rewardDoubled={rewardDoubled}
-          showAdOption={!isAdFree && adManager.canShowAd('double_reward')}
+          // Ad-free purchasers keep the doubler (auto-granted, no ad plays).
+          showAdOption={isAdFree || adManager.canShowAd('double_reward')}
+          adFree={isAdFree}
           onChallengeFriend={() => {
             const challenge = sendChallenge('friend', {
               score: score,
@@ -2894,17 +3109,36 @@ function GameScreenImpl({
               : 'stuck'
           }
           onWatchAd={() => {
+            // The button says "Watch Ad for Hint + Retry" — so after the
+            // grant, actually retry. (It used to grant the hint and strand
+            // the player on the failed board.)
             setShowPostLoss(false);
-            handleWatchAdForHint();
+            void (async () => {
+              const result = await adManager.showRewardedAd('hint_reward');
+              if (result.rewarded) {
+                processAdReward('hint_reward');
+                void soundManager.playSound('hintUsed');
+                handleRetry();
+              } else {
+                setShowFailed(true);
+              }
+            })();
           }}
           onBuyHints={() => {
-            setShowPostLoss(false);
-            // Navigate to shop or trigger IAP for hint_bundle_10
-            if (spendCoins(80)) {
-              addHintTokens(5);
+            // Charge exactly what the label advertises (POST_LOSS_HINT_PACK
+            // is also the source of the modal's price string). When the
+            // player can't afford it, open the store bridge instead of
+            // silently no-oping; the modal stays up (countdown paused)
+            // behind the sheet.
+            if (spendCoins(POST_LOSS_HINT_PACK.costCoins)) {
+              addHintTokens(POST_LOSS_HINT_PACK.hintCount);
+              setShowPostLoss(false);
+              setShowFailed(true);
+            } else {
+              openMiniPack('hints', 'post_loss_broke');
             }
-            setShowFailed(true);
           }}
+          paused={miniPack !== null}
           onDismiss={() => {
             setShowPostLoss(false);
             setShowFailed(true);
@@ -2979,21 +3213,52 @@ function GameScreenImpl({
               <Text style={styles.failedStat}>{t('result.score', { score })}</Text>
             </View>
             <View style={styles.failedButtons}>
+              {/* Timeout continue — resume THIS attempt with +30s for an ad.
+                  Time Pressure only, RC-gated, once per attempt. For
+                  Remove-Ads owners the reward auto-grants without an ad, so
+                  the button stays (they paid for fewer ads, not fewer
+                  rescues) with honest "no ad" copy. */}
+              {status === 'timeout' &&
+                getRemoteBoolean('timeoutContinueEnabled') &&
+                !timeExtendUsedRef.current &&
+                (isAdFree || adManager.canShowAd('undo_reward')) && (
+                <Pressable
+                  style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
+                  onPress={() => void handleTimeoutContinue()}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <GameIcon name="hourglass" size={16} accent={COLORS.green} />
+                    <Text style={styles.adHintButtonText}>
+                      {isAdFree
+                        ? t('result.timeoutContinueFree', { seconds: TIMEOUT_CONTINUE_SECONDS })
+                        : t('result.timeoutContinue', { seconds: TIMEOUT_CONTINUE_SECONDS })}
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
               <Pressable
                 style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
                 onPress={handleRetry}
               >
                 <Text style={styles.retryButtonText}>{t('result.tryAgain').toUpperCase()}</Text>
               </Pressable>
-              {/* Watch ad for a free hint — shown after failure when player has no hints */}
-              {!isAdFree && adManager.canShowAd('hint_reward') && hintsLeft === 0 && (
+              {/* Free hint via rewarded ad — shown after failure when the
+                  player has no hints. Ad-free purchasers KEEP this surface
+                  (showRewardedAd auto-grants without playing an ad for them;
+                  hiding it made Remove-Ads strictly worse). hintsAllowed
+                  gates it out of expert/perfectSolve entirely. */}
+              {hintsAllowed &&
+                hintsAvailable === 0 &&
+                (isAdFree || adManager.canShowAd('hint_reward')) && (
                 <Pressable
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={handleWatchAdForHint}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <GameIcon name="frame" size={16} accent={COLORS.green} />
-                    <Text style={styles.adHintButtonText}>{t('result.watchAdFreeHint')}</Text>
+                    <Text style={styles.adHintButtonText}>
+                      {isAdFree ? t('result.claimFreeHint') : t('result.watchAdFreeHint')}
+                    </Text>
                   </View>
                 </Pressable>
               )}
@@ -3070,6 +3335,23 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     gap: 3,
   },
+  // Ad-undo strip — matches GameBanners' ad-hint banner language (green
+  // "free relief" family, distinct from the red stuck banner above it).
+  adUndoBanner: {
+    backgroundColor: 'rgba(0, 255, 135, 0.10)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 135, 0.28)',
+  },
+  adUndoBannerText: {
+    color: COLORS.green,
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+  },
   modeIntroOverlay: {
     position: 'absolute',
     top: 0,
@@ -3129,6 +3411,10 @@ const styles = StyleSheet.create({
   },
   boosterBarHidden: {
     opacity: 0,
+  },
+  // Zero-inventory "tap to get" state: dimmed but still clearly a button.
+  boosterEmpty: {
+    opacity: 0.55,
   },
   boosterShelf: {
     flexDirection: 'row',

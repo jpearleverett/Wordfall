@@ -167,6 +167,12 @@ interface EconomyContextLike {
   purchaseHistory: readonly unknown[];
   /** True when the Premium Pass SKU is owned — gates the premium mastery lane. */
   isPremiumPassFlag?: boolean;
+  /**
+   * True while a VIP subscription is active (EconomyContext's computed
+   * `isVip` — commercialEntitlements' isVipSubscriber && not expired).
+   * Feeds the advertised "2x XP boost" perk into the XP composition.
+   */
+  isVip?: boolean;
 }
 
 interface UseRewardWiringParams {
@@ -428,8 +434,13 @@ export function useRewardWiring({
       (1 + (cosmeticBonuses.gemMultiplier ?? 0)) * prestigeGem,
       MAX_BONUS_FACTOR,
     );
+    // VIP "2x XP boost" — advertised on every vip_* SKU since launch and
+    // rendered in the shop's perk list, but never applied until Aug 2026.
+    // Composes multiplicatively with cosmetic × prestige under the same
+    // MAX_BONUS_FACTOR ceiling as the other channels.
+    const vipXp = economy.isVip ? 2 : 1;
     const xpBonusFactor = Math.min(
-      (1 + (cosmeticBonuses.xpMultiplier ?? 0)) * prestigeXp,
+      (1 + (cosmeticBonuses.xpMultiplier ?? 0)) * prestigeXp * vipXp,
       MAX_BONUS_FACTOR,
     );
     // Per-difficulty coin payout, remotely tunable. These four keys and

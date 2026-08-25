@@ -40,14 +40,20 @@ const DEAL_POOL: DailyDeal[] = [
     availableHours: 24,
   },
   {
+    // Repriced August 2026: this deal paid 150 coins and handed back
+    // 200 coins + 3 hints — a net +50-coin money printer that also gave
+    // the hints away below every other hint price in the game. The coin
+    // content is gone: it is now a straight hints-at-a-discount deal
+    // (3 hints for 150 coins vs the coin shop's 250), so the buyer
+    // always spends more coins than the deal contains.
     id: 'deal_starter_boost',
     name: 'Power Start',
-    description: 'Coins + hints bundle',
+    description: '3 hints at a big discount!',
     icon: '\u{1F680}',
     originalPrice: 300,
     salePrice: 150,
     currency: 'coins',
-    contents: { coins: 200, hintTokens: 3 },
+    contents: { hintTokens: 3 },
     availableHours: 12,
   },
   {
