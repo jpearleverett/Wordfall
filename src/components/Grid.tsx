@@ -841,9 +841,12 @@ function GameGridImpl({
         Animated.timing(dragGlowAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start();
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
-        // Cancelled gestures (e.g. finger strayed off-grid) skip onEnd, so a
-        // dead trace would stay lit forever without this. onEnd + onFinalize
-        // both firing is fine — the release timer just gets replaced.
+        // Cancelled gestures (e.g. finger strayed off-grid) skip onEnd, so
+        // this is the only lift signal they produce. Firing after onEnd too
+        // is fine: the callback is optional and idempotent for consumers.
+        // PlayField deliberately passes none — a lifted trace stays lit
+        // until the player retraces over it (see its "lifted trace STAYS
+        // lit" note).
         onDragEndRef.current?.(dragCellCountRef.current > 1);
       });
 

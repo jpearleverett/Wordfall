@@ -2419,21 +2419,30 @@
   },
   {
     "id": "dead-trace-release-clips-drag-then-tap",
-    "title": "180ms dead-trace release wiped viable partial traces, breaking drag-then-tap-to-extend",
+    "title": "A lifted partial trace was auto-cleared; the player now owns clearing it (retrace to deselect)",
     "file": "src/screens/game/PlayField.tsx",
     "klass": "C5",
     "severity": "medium",
     "status": "fixed",
     "checks": [
       {
-        "type": "pattern-present",
+        "type": "pattern-absent",
         "file": "src/screens/game/PlayField.tsx",
-        "pattern": "selectionIsLivePrefixRef"
+        "pattern": "type: 'CLEAR_SELECTION'"
       },
       {
-        "type": "pattern-present",
+        "type": "pattern-absent",
         "file": "src/screens/game/PlayField.tsx",
-        "pattern": "if \\(selectionIsLivePrefixRef\\.current\\) return;"
+        "pattern": "releaseTimerRef"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/game/PlayField.tsx",
+        "pattern": "onDragEnd=\\{"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/tracePersistence.test.ts"
       }
     ]
   },
