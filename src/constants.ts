@@ -710,16 +710,24 @@ export const ANIM = {
 };
 
 // Economy
+// August 2026 faucet collapse: a committed free player was earning
+// 7,500–10,000 coins and 50–90 gems per day against sink demand under
+// 1,000 coins / 20 gems, so nothing in the shop ever felt scarce. Base
+// payouts were cut ~5x (50/100/200/400 → 10/15/25/40, star bonus 25 → 5,
+// perfect-clear gems 5 → 1) to meet the ECONOMY_TUNING targets below.
+// These are the shipped defaults; live values flow through
+// data/economyTuning.ts (Remote Config keys coinsPer*Puzzle /
+// gemsPerPerfectClear) so the cut can be re-tuned without a release.
 export const ECONOMY = {
   puzzleCompleteCoins: {
-    easy: 50,
-    medium: 100,
-    hard: 200,
-    expert: 400,
+    easy: 10,
+    medium: 15,
+    hard: 25,
+    expert: 40,
   },
-  starBonus: 25,
+  starBonus: 5,
   comboBonus: 10,
-  perfectClearGems: 5,
+  perfectClearGems: 1,
   dailyCompleteCoins: 150,
   dailyCompleteGems: 2,
   streakBonusMultiplier: 0.1, // +10% per streak day
@@ -1113,7 +1121,26 @@ export const AD_CONFIG = {
   INTERSTITIAL_INTERVAL_MS: 90_000, // 90 seconds
 };
 
-// Economy Tuning — central knobs for balancing the free-to-play economy
+// Economy Tuning — central knobs for balancing the free-to-play economy.
+//
+// This block is the SPEC for the free-currency faucets. As of August 2026
+// the load-bearing targets are actually enforced, not just declared:
+//  - `coinsPerDifficulty` / `gemsPerPerfectClear` are the shipped defaults of
+//    ECONOMY.puzzleCompleteCoins / ECONOMY.perfectClearGems, granted through
+//    data/economyTuning.ts (puzzleCoinPayout / perfectClearGems) and
+//    RC-overridable via coinsPer*Puzzle / gemsPerPerfectClear.
+//  - `dailyGemDripTarget` is enforced by the `dailyFlawlessGemCap` Remote
+//    Config key (default 5/day) via claimFlawlessGems() in
+//    data/economyTuning.ts — flawless-clear gems stop at the cap, and the
+//    remaining drip (gemsPerDailyCompletion, wheel EV ~2 gems/spin) is
+//    bounded per day by design.
+//  - Daily/weekly board REPLAYS pay nothing (useRewardWiring gates base
+//    coins, flawless gems, piggy fill, season XP, and puzzlesSolved-derived
+//    progress behind first-completion flags), so the deterministic shared
+//    boards cannot be farmed.
+// `targetEarnSpendRatio`, `freeHintRunoutLevel`, `firstPurchasePressureLevel`
+// and `freePlayerGemGateDays` remain calibration targets for soft-launch
+// telemetry rather than code-enforced values.
 export const ECONOMY_TUNING = {
   // Coins earned vs spent ratio target: 1.5:1 (earn 50% more than spend)
   targetEarnSpendRatio: 1.5,
@@ -1125,15 +1152,15 @@ export const ECONOMY_TUNING = {
   dailyGemDripTarget: 3,
   // Days until free player hits gem gate: 14-21 days
   freePlayerGemGateDays: 17,
-  // Coins awarded per difficulty tier
+  // Coins awarded per difficulty tier (mirrors ECONOMY.puzzleCompleteCoins)
   coinsPerDifficulty: {
-    easy: 50,
-    medium: 100,
-    hard: 200,
-    expert: 400,
+    easy: 10,
+    medium: 15,
+    hard: 25,
+    expert: 40,
   } as Record<string, number>,
-  // Gem awards
-  gemsPerPerfectClear: 5,
+  // Gem awards (mirror ECONOMY.perfectClearGems / ECONOMY.dailyCompleteGems)
+  gemsPerPerfectClear: 1,
   gemsPerDailyCompletion: 2,
   // Rare tile pity timer (matches COLLECTION.rareTilePityTimer)
   rareTilePityTimer: 10,

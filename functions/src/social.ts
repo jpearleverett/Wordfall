@@ -472,18 +472,26 @@ async function sendPushToUser(
   try {
     const tokenDoc = await db.doc(`users/${userId}/pushToken/current`).get();
     const tokenData = tokenDoc.data();
-    if (!tokenData?.token) return { success: false, reason: 'no_token' };
+    // `token` is the canonical field; `expoToken` is the migration fallback —
+    // clients before Aug 2026 wrote ONLY `expoToken` while this reader looked
+    // at `token`, so every server push returned no_token. The current client
+    // writes both; docs from older installs still need the fallback.
+    const pushToken = (tokenData?.token ?? tokenData?.expoToken) as
+      | string
+      | undefined
+      | null;
+    if (!pushToken) return { success: false, reason: 'no_token' };
 
     const { Expo } = await import('expo-server-sdk');
     const expo = new Expo();
 
-    if (!Expo.isExpoPushToken(tokenData.token)) {
+    if (!Expo.isExpoPushToken(pushToken)) {
       return { success: false, reason: 'invalid_token' };
     }
 
     const [ticket] = await expo.sendPushNotificationsAsync([
       {
-        to: tokenData.token,
+        to: pushToken,
         title,
         body,
         data: (data as Record<string, string> | undefined) ?? {},
@@ -579,6 +587,31 @@ const STREAK_REMINDER_BATCH_SLEEP_MS = 1000;
 const STREAK_REMINDER_TIME_BUDGET_MS = 8 * 60 * 1000;
 /** The local hour we target for streak reminders (player's timezone). */
 const STREAK_REMINDER_TARGET_LOCAL_HOUR = 20; // 8 PM local
+/**
+ * Recency bound (~48h) on lastActiveDate. `currentStreak > 0` alone also
+ * matches users whose profile froze months ago mid-streak — the counter is
+ * only rewritten on puzzle completion, so a lapsed player's doc keeps saying
+ * `currentStreak: 12` forever. Without this bound they would get a daily
+ * false "streak at risk!" push; only players active within the last two
+ * calendar days still have a streak that CAN be saved tonight.
+ */
+export const STREAK_REMINDER_RECENCY_DAYS = 2;
+
+/**
+ * Pure window math, exported for unit tests: a streak reminder is only
+ * eligible when lastActiveDate (YYYY-MM-DD) falls within the recency bound.
+ * YYYY-MM-DD strings compare correctly lexicographically; missing/malformed
+ * dates are treated as NOT recent (no push).
+ */
+export function isWithinStreakReminderRecency(
+  lastActiveDate: unknown,
+  nowMs: number,
+): boolean {
+  if (typeof lastActiveDate !== 'string' || lastActiveDate.length === 0) {
+    return false;
+  }
+  return lastActiveDate >= dateDaysAgo(nowMs, STREAK_REMINDER_RECENCY_DAYS);
+}
 
 /**
  * Compute the local hour (0–23) for a user given their stored tzOffsetMinutes.
@@ -608,6 +641,7 @@ export const processStreakReminders = functions
     let notificationsSent = 0;
     let scanned = 0;
     let skippedByTz = 0;
+    let skippedByRecency = 0;
     let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
 
     while (Date.now() - startedAt < STREAK_REMINDER_TIME_BUDGET_MS) {
@@ -636,6 +670,15 @@ export const processStreakReminders = functions
         const lastPlayDate = userData.lastActiveDate;
         if (lastPlayDate === today) continue; // Already played today
 
+        // Recency bound: only recently-active streak holders get "streak at
+        // risk" — a stale currentStreak from a long-lapsed profile would
+        // otherwise trigger a daily false alarm forever. Lapsed users are
+        // the re-engagement passes' job, not this one's.
+        if (!isWithinStreakReminderRecency(lastPlayDate, nowMs)) {
+          skippedByRecency++;
+          continue;
+        }
+
         // Per-timezone send window: only push when the user's local hour is 20:00.
         const userHour = localHourForUser(userData.tzOffsetMinutes, nowMs);
         if (userHour !== STREAK_REMINDER_TARGET_LOCAL_HOUR) {
@@ -663,6 +706,7 @@ export const processStreakReminders = functions
       notificationsSent,
       scanned,
       skippedByTz,
+      skippedByRecency,
       hourUtc: new Date(nowMs).getUTCHours(),
       durationMs: Date.now() - startedAt,
     });
@@ -689,9 +733,36 @@ const REENG_BATCH_SLEEP_MS = 1000;
 const REENG_TIME_BUDGET_MS = 8 * 60 * 1000;
 const REENG_TARGET_LOCAL_HOUR = 19; // 7 PM local — bucket for both D2 + D7
 
-function dateDaysAgo(nowMs: number, days: number): string {
+/**
+ * UTC calendar date exactly `days` days before `nowMs`, as YYYY-MM-DD.
+ * Pure window math, exported for unit tests: it is both the re-engagement
+ * target-date selector AND (via isWithinStreakReminderRecency) the streak
+ * recency cutoff.
+ */
+export function dateDaysAgo(nowMs: number, days: number): string {
   return new Date(nowMs - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
+
+/**
+ * Days-lapsed values for the win-back pushes, matched to the client's
+ * dynamicPricing lapsedLadder tiers (src/data/dynamicPricing.ts) so each
+ * push lands while its offer tier is live when the player opens the app:
+ *   - 2  → Day 2–3 "lightly lapsed" (50% off starter, "COME BACK")
+ *   - 7  → Day 4–7 "lapsed" (70% off starter, "WELCOME BACK")
+ *   - 14 → Day 8–14 "deeply lapsed" (75% off first-purchase special, "WE MISS YOU")
+ *   - 30 → Day 15+ "churned" (30% off Champion Pack, "LAST CALL")
+ *
+ * Once-per-window dedup is structural, same as the D2/D7 passes: each pass
+ * queries `lastActiveDate == today - N` EXACTLY, so a user matches a given
+ * pass on precisely one calendar day of their lapse (and the per-timezone
+ * hour gate limits that day to a single hourly run).
+ */
+export const REENGAGEMENT_WINDOW_DAYS = {
+  day2: 2,
+  day7: 7,
+  day14: 14,
+  day30: 30,
+} as const;
 
 async function runReengagementPass(opts: {
   daysAgo: number;
@@ -773,7 +844,7 @@ export const processDay2Reengagement = functions
   .timeZone('UTC')
   .onRun(async () => {
     await runReengagementPass({
-      daysAgo: 2,
+      daysAgo: REENGAGEMENT_WINDOW_DAYS.day2,
       title: 'Come back, 2× coins waiting',
       body: 'Your puzzle board is waiting. Tap to pick up where you left off.',
       notificationType: 'day2_reengagement',
@@ -805,10 +876,43 @@ export const processDay7Reengagement = functions
   .timeZone('UTC')
   .onRun(async () => {
     await runReengagementPass({
-      daysAgo: 7,
+      daysAgo: REENGAGEMENT_WINDOW_DAYS.day7,
       title: 'We miss you — your spot is saved',
       body: 'Special welcome-back offer inside. Open to claim.',
       notificationType: 'day7_reengagement',
+    });
+  });
+
+// D14 lands inside dynamicPricing's Day 8–14 "deeply lapsed" tier: the app
+// open this push produces surfaces the 75%-off first-purchase special
+// ("WE MISS YOU") plus the gems comeback bonus. Same structure and
+// structural once-per-window dedup as D2/D7 (see REENGAGEMENT_WINDOW_DAYS).
+export const processDay14Reengagement = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 * * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    await runReengagementPass({
+      daysAgo: REENGAGEMENT_WINDOW_DAYS.day14,
+      title: 'We saved everything — 75% off inside',
+      body: 'Your progress is intact and your biggest discount yet is waiting. Come claim it.',
+      notificationType: 'day14_reengagement',
+    });
+  });
+
+// D30 lands inside the Day 15+ "churned" tier: the return open surfaces the
+// "LAST CALL" 30%-off Champion Pack + 60%-off starter ladder rung. Final
+// scheduled win-back touch — past this the account is treated as churned.
+export const processDay30Reengagement = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 * * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    await runReengagementPass({
+      daysAgo: REENGAGEMENT_WINDOW_DAYS.day30,
+      title: 'Last call — one final welcome-back deal',
+      body: 'Your puzzles are right where you left them, and your best offer yet expires soon.',
+      notificationType: 'day30_reengagement',
     });
   });
 

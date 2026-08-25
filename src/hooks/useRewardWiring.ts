@@ -36,7 +36,12 @@ import {
   getPrestigeXpMultiplier,
 } from '../data/prestigeSystem';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
-import { puzzleCoinPayout, perfectClearGems } from '../data/economyTuning';
+import {
+  puzzleCoinPayout,
+  perfectClearGems,
+  claimFlawlessGems,
+  claimWeeklyBoardPayout,
+} from '../data/economyTuning';
 
 /** Tier 6 B3 — defensive ceiling on the composed (cosmetic × prestige) bonus
  *  factor so a level-5 whale with a legendary frame doesn't accidentally
@@ -245,6 +250,22 @@ export function useRewardWiring({
     // so every daily-specific grant below keys off this flag instead.
     const todayUtc = new Date().toISOString().split('T')[0];
     const isFirstDailyToday = isDaily && !(player.dailyCompleted ?? []).includes(todayUtc);
+    // The weekly board shares this completion path and is just as
+    // deterministic/replayable, but has no profile-side completion array —
+    // its first-completion-of-the-week gate lives in the local faucet
+    // ledger (data/economyTuning.ts). handleComplete runs exactly once per
+    // completion (GameScreen guards double-fires), so claiming here is safe.
+    const isWeekly = mode === 'weekly';
+    const isFirstWeeklyThisWeek = isWeekly && claimWeeklyBoardPayout();
+    // A REPLAY of an already-paid shared board earns nothing: no base coins,
+    // no flawless gems, no piggy fill, no season-pass XP, and no advance of
+    // any puzzlesSolved-derived reward counter (mastery tiers, wheel-spin
+    // progress, stamps). Score submission and analytics still run — the
+    // leaderboard paths carry their own dedup.
+    const isRepeatBoard = (isDaily && !isFirstDailyToday) || (isWeekly && !isFirstWeeklyThisWeek);
+    // How much this completion moves the lifetime solve counter — 0 on a
+    // repeat board so replays cannot farm counter-derived rewards.
+    const solvedDelta = isRepeatBoard ? 0 : 1;
     // consecutiveFailures increments on every loss (recordFailure) and is
     // cleared below on wins, so a non-zero read here means at least one loss
     // landed since the previous win — the win streak must break before this
@@ -303,14 +324,24 @@ export function useRewardWiring({
       // Non-classic modes carry their own ladder's level (or 0) — only
       // classic wins can move the reported global player level.
       player_level: isClassicProgression ? Math.max(level + 1, player.currentLevel) : player.currentLevel,
-      total_puzzles_solved: player.puzzlesSolved + 1,
-      player_stage: playerStageFromPuzzles(player.puzzlesSolved + 1),
+      total_puzzles_solved: player.puzzlesSolved + solvedDelta,
+      player_stage: playerStageFromPuzzles(player.puzzlesSolved + solvedDelta),
       // Tier 6 B3 — attribute every subsequent event to the player's
       // prestige tier for whale-cohort funnel analysis.
       prestige_tier: player.prestige?.prestigeLevel ?? 0,
     });
     if (isClassicProgression) {
       player.recordPuzzleComplete(level, score, stars, isPerfect);
+    } else if (isRepeatBoard) {
+      // Replay of an already-paid daily/weekly board: the lifetime reward
+      // counters stay frozen (puzzlesSolved feeds mastery tiers, stamp
+      // milestones and wheel-spin progress; perfectSolves feeds milestones)
+      // so the deterministic board cannot be farmed. Score and recency still
+      // record — replays are legitimate play, just not paid play.
+      player.updateProgress({
+        totalScore: player.totalScore + score,
+        lastActiveDate: todayUtc,
+      });
     } else {
       // Non-classic wins still count toward the lifetime totals everything
       // below (mastery, stamps, achievements, profile sync) reads, but must
@@ -411,18 +442,32 @@ export function useRewardWiring({
     // moves it.
     const baseCoinReward =
       puzzleCoinPayout(difficulty) + (stars * ECONOMY.starBonus);
-    const coinReward = Math.round(baseCoinReward * eventMultipliers.coins * coinBonusFactor);
-    economy.addCoins(coinReward);
+    // Repeat daily/weekly boards pay zero — the base payout was the largest
+    // single leak in the replay farm (known solution, fresh coins each run).
+    const coinReward = isRepeatBoard
+      ? 0
+      : Math.round(baseCoinReward * eventMultipliers.coins * coinBonusFactor);
+    if (coinReward > 0) {
+      economy.addCoins(coinReward);
+    }
 
     // Track total rewards for animated victory tally
     let totalCoinsAwarded = coinReward;
     let totalGemsAwarded = 0;
 
-    // Award gems for perfect clears (cosmetic gem multiplier applies)
-    if (isPerfect) {
-      const perfectGems = Math.round(perfectClearGems() * gemBonusFactor);
-      economy.addGems(perfectGems);
-      totalGemsAwarded += perfectGems;
+    // Award gems for perfect clears (cosmetic gem multiplier applies).
+    // claimFlawlessGems enforces the per-UTC-day `dailyFlawlessGemCap`
+    // (default 5) and returns what is actually grantable — credit exactly
+    // that so the tally, the grant, and the persisted counter agree.
+    // Streak-MILESTONE gems (ceremonyGrants) are deliberately not routed
+    // through this cap: they are bounded by streak progression already.
+    if (isPerfect && !isRepeatBoard) {
+      const requestedGems = Math.round(perfectClearGems() * gemBonusFactor);
+      const perfectGems = claimFlawlessGems(requestedGems);
+      if (perfectGems > 0) {
+        economy.addGems(perfectGems);
+        totalGemsAwarded += perfectGems;
+      }
     }
 
     // Slow-fill piggy bank — accumulates gems per puzzle complete (capped
@@ -430,14 +475,16 @@ export function useRewardWiring({
     // path is separate from `addGems` so the jar doesn't inflate the victory
     // tally or totalEarned.gems on fill — only on break.
     const piggyFill = Math.max(0, Math.round(getRemoteNumber('piggyBankFillPerPuzzle')));
-    if (piggyFill > 0) {
+    if (piggyFill > 0 && !isRepeatBoard) {
       economy.addPiggyBankGems(piggyFill);
       void analytics.logEvent('piggy_bank_filled', { amount: piggyFill });
     }
 
-    // Season pass XP — scaled by star bonus + daily/perfect kickers.
+    // Season pass XP — scaled by star bonus + daily/perfect kickers. Repeat
+    // shared boards earn none at all (they used to keep the base solve XP,
+    // which made the known daily solution a season-pass ladder treadmill).
     const baseXp = Math.max(0, Math.round(getRemoteNumber('seasonPassXpPerPuzzle')));
-    if (baseXp > 0) {
+    if (baseXp > 0 && !isRepeatBoard) {
       const xpGain = Math.round(
         (baseXp +
           stars * 50 +
@@ -580,7 +627,7 @@ export function useRewardWiring({
 
     // Activate starter pack timer after enough puzzles to understand value
     // Tier 3: no ceremony — player discovers via Shop screen badge dot
-    const puzzlesAfterThis = player.puzzlesSolved + 1;
+    const puzzlesAfterThis = player.puzzlesSolved + solvedDelta;
     if (puzzlesAfterThis === STARTER_PACK_DELAY_PUZZLES && economy.starterPackExpiresAt === 0) {
       economy.activateStarterPack();
     }
@@ -926,8 +973,10 @@ export function useRewardWiring({
     // post-completion convention the rest of this callback and
     // MasteryScreen use. The old (count-1)/count pair fired every tier-up
     // one puzzle late (or never, if the player churned first).
+    // solvedDelta is 0 on a repeat shared board, so prev === new and no tier
+    // can cross — replays cannot walk the mastery ladder.
     const prevMasteryXP = player.puzzlesSolved * 100;
-    const newMasteryXP = (player.puzzlesSolved + 1) * 100;
+    const newMasteryXP = (player.puzzlesSolved + solvedDelta) * 100;
     const prevMasteryTier = getMasteryTierForXP(prevMasteryXP);
     const newMasteryTier = getMasteryTierForXP(newMasteryXP);
     if (newMasteryTier > prevMasteryTier) {
@@ -972,8 +1021,12 @@ export function useRewardWiring({
       });
     }
 
-    // Award mystery wheel free spin progress
-    player.awardFreeSpin();
+    // Award mystery wheel free spin progress — a repeat shared board must
+    // not tick the every-N-puzzles free-spin counter (each spin carries
+    // ~2 gems of expected value, so replays were indirect gem income).
+    if (!isRepeatBoard) {
+      player.awardFreeSpin();
+    }
 
     // Update win streak. Losses only go through recordFailure — nothing
     // calls updateWinStreak(false) on them — so the "consecutive" streak
@@ -1001,9 +1054,11 @@ export function useRewardWiring({
       player.recordDailyQuestEvent({ type: 'flawless_streak_hit', value: streakAfter });
     }
 
-    // Award seasonal stamp based on puzzles solved this season
+    // Award seasonal stamp based on puzzles solved this season. Skipped on
+    // repeat shared boards: the counter isn't advancing, so re-detecting the
+    // same milestone would be wrong.
     const currentAlbum = getCurrentSeasonAlbum();
-    if (currentAlbum) {
+    if (currentAlbum && !isRepeatBoard) {
       const puzzleCount = player.puzzlesSolved + 1;
       // Award stamps at puzzle milestones: 1, 3, 5, 10, 15, 20, 30, 40, 50, 60,
       // 75, 90, 100, 120, 150, 175, 200, 250, 300, 500
@@ -1088,7 +1143,10 @@ export function useRewardWiring({
       });
     }
 
-    if (userId) {
+    // Profile sync is skipped on repeat shared boards: the lifetime solve
+    // counter did not advance, so the +1 projection below would overstate
+    // it. The next real completion syncs the fresher totals anyway.
+    if (userId && !isRepeatBoard) {
       void firestoreService.syncPlayerProfile(userId, {
         displayName,
         level: newLevel,

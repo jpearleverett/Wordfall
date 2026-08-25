@@ -30,6 +30,15 @@ export interface RemoteConfigValues {
   coinsPerExpertPuzzle: number;
   gemsPerPerfectClear: number;
   gemsPerDailyCompletion: number;
+  /**
+   * Hard per-UTC-day ceiling on gems from flawless clears. Enforced at the
+   * grant site via claimFlawlessGems() in data/economyTuning.ts, which reads
+   * this clamped to [0, 100]. Without it a fast player replaying easy levels
+   * flawlessly is an unbounded gem faucet. 0 is a valid value (kills the
+   * flawless gem drip entirely); streak-MILESTONE gems are separate and
+   * unaffected.
+   */
+  dailyFlawlessGemCap: number;
   // Energy
   maxEnergy: number;
   energyRegenMinutes: number;
@@ -37,6 +46,13 @@ export interface RemoteConfigValues {
   maxAdsPerDay: number;
   maxInterstitialsPerDay: number;
   interstitialIntervalMs: number;
+  /**
+   * First level at which interstitial ads may show. Callers must read this
+   * through getRemoteNumberClamped(key, 13, 1, 200) — an accidental 0 would
+   * put an interstitial on a brand-new player's very first puzzle.
+   * (Declared August 2026; the interstitial call site wires it in wave 2.)
+   */
+  interstitialMinLevel: number;
   // Events
   weekendBlitzEnabled: boolean;
   flashSaleEnabled: boolean;
@@ -96,6 +112,18 @@ export interface RemoteConfigValues {
   seasonPassDurationDays: number;
   seasonPassXpPerPuzzle: number;
   seasonPassXpMultiplier: number;
+  /**
+   * Gem price to skip one season-pass tier. Callers must read this through
+   * getRemoteNumberClamped(key, 20, 1, 500) — 0 would make every tier free
+   * to skip. (Declared August 2026; the tier-skip UI wires it in wave 2.)
+   */
+  seasonTierSkipGemCost: number;
+  /**
+   * Offer a paid continue when a Time Pressure run times out (instead of a
+   * flat fail). Kill switch for the timeout-continue monetization surface;
+   * wave 2 wires the GameScreen caller.
+   */
+  timeoutContinueEnabled: boolean;
 
   // Home UI — render deprecated Daily Missions / Weekly Goals / Seasonal Quest cards.
   // Default off; Daily Quests + Season Pass are the live surfaces. Flip to restore legacy cards.
@@ -254,13 +282,19 @@ export type RemoteConfigKey = keyof RemoteConfigValues;
 // ---------------------------------------------------------------------------
 
 const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
-  // Economy tuning
-  coinsPerEasyPuzzle: 50,
-  coinsPerMediumPuzzle: 100,
-  coinsPerHardPuzzle: 200,
-  coinsPerExpertPuzzle: 400,
-  gemsPerPerfectClear: 5,
+  // Economy tuning — August 2026 faucet collapse: defaults cut ~5x (were
+  // 50/100/200/400 and 5 gems per perfect clear) so free-currency income
+  // lands near the ECONOMY_TUNING spec instead of 8-10x over it. Must stay
+  // equal to constants.ts ECONOMY.puzzleCompleteCoins / perfectClearGems.
+  coinsPerEasyPuzzle: 10,
+  coinsPerMediumPuzzle: 15,
+  coinsPerHardPuzzle: 25,
+  coinsPerExpertPuzzle: 40,
+  gemsPerPerfectClear: 1,
   gemsPerDailyCompletion: 2,
+  // Per-UTC-day gem ceiling for flawless clears (clamped [0,100] at the
+  // read in data/economyTuning.ts).
+  dailyFlawlessGemCap: 5,
   // Energy
   maxEnergy: 30,
   energyRegenMinutes: 15,
@@ -268,6 +302,10 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   maxAdsPerDay: 10,
   maxInterstitialsPerDay: 5,
   interstitialIntervalMs: 90_000,
+  // No interstitials before level 13 (clamped [1,200] at the call site —
+  // wired in wave 2). Matches ECONOMY_TUNING.firstPurchasePressureLevel:
+  // players see zero forced ads until they've hit real difficulty.
+  interstitialMinLevel: 13,
   // Events — both ON by default. The features have been live (via the
   // authored event rotation and getFlashSale hash) for a while; these
   // flags are now real ops kill-switches wired in getCurrentEvent
@@ -327,16 +365,25 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // coincide with the Season Pass 30-day rotation. Ignored for the 7-day
   // A/B variant. Flip to 0 via Remote Config to disable.
   loginCalendarOffsetDays: 5,
-  // Piggy bank — 2 gems per puzzle, 200-gem cap, $4.99 to break
+  // Piggy bank — 2 gems per puzzle, 300-gem cap, $4.99 to break.
+  // Capacity raised 200 → 300 (Aug 2026): at 200 a full break paid 40
+  // gems/$, strictly worse than the equal-priced gems_250 pack (50.1/$),
+  // so the piggy's "earned savings" pitch was a lie. 300 pays 60.1/$ —
+  // comfortably the best per-dollar gem price, as a slow-fill reward
+  // should be.
   piggyBankEnabled: true,
   piggyBankFillPerPuzzle: 2,
-  piggyBankCapacity: 200,
+  piggyBankCapacity: 300,
   piggyBankPriceUSD: 4.99,
   // Season pass — 30-day rotation, 100 XP per puzzle, no multiplier by default
   seasonPassEnabled: true,
   seasonPassDurationDays: 30,
   seasonPassXpPerPuzzle: 100,
   seasonPassXpMultiplier: 1.0,
+  // Tier-skip price (clamped [1,500] at the call site — wired in wave 2).
+  seasonTierSkipGemCost: 20,
+  // Time Pressure timeout-continue offer (wave 2 wires the caller).
+  timeoutContinueEnabled: true,
 
   legacyTaskCardsEnabled: false,
 

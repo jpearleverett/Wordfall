@@ -764,8 +764,15 @@ The April 2026 ship-readiness audit had false-positive gaps. These are
   (`firestore.rules`, 195 lines).
 - Android App Links `autoVerify: true` configured for
   `https://wordfallgame.app` in `app.json:97–111`.
-- FCM push token registration — written to
-  `users/{uid}/pushToken/current` on init.
+- Push token registration — `notificationManager.init()` persists the
+  Expo + device tokens to `users/{uid}/pushToken/current` (writing both
+  `token`, which the server reads, and legacy `expoToken`) on the default
+  path, gated by the persisted `notificationsEnabled` setting; the
+  Settings toggle re-registers on ON and deletes the doc on OFF.
+  (Fixed Aug 2026: previously the ONLY caller was the Settings
+  false→true transition — never taken, since the default is true — so
+  no install ever wrote the token, and the server read `token` while
+  the client wrote `expoToken`; the channel reached 0% of installs.)
 
 ---
 

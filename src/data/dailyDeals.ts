@@ -23,12 +23,18 @@ const DEAL_POOL: DailyDeal[] = [
     availableHours: 24,
   },
   {
+    // Repriced August 2026: 15 gems for 300 coins was a 20:1 soft→hard
+    // conversion — cheap enough that coins WERE gems, collapsing the
+    // two-currency separation (why buy a gem pack when the coin grind
+    // converts at 20:1?). Kept as a deal rather than removed (a visible
+    // coins→gems bridge is a good coin sink), but at 100:1 — a real
+    // premium that costs multiple days of post-collapse coin income.
     id: 'deal_gem_pack',
     name: 'Gem Rush',
     description: '15 gems, today only!',
     icon: '\u{1F48E}',
-    originalPrice: 500,
-    salePrice: 300,
+    originalPrice: 2500,
+    salePrice: 1500,
     currency: 'coins',
     contents: { gems: 15 },
     availableHours: 24,
