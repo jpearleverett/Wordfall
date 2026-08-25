@@ -33,6 +33,13 @@ interface NoLivesModalProps {
   onClose: () => void;
   onWatchAd: () => Promise<void> | void;
   onSpendGems: () => void;
+  /**
+   * Store bridge for the broke case: when the player cannot afford the gem
+   * refill, the gem CTA stays TAPPABLE and routes here (a gem MiniPackSheet
+   * in App.tsx) instead of sitting dead at 45% opacity. Omit to restore the
+   * old disabled-button behavior.
+   */
+  onGetGems?: () => void;
 }
 
 function formatCountdown(msRemaining: number): string {
@@ -52,6 +59,7 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
   onClose,
   onWatchAd,
   onSpendGems,
+  onGetGems,
 }) => {
   const { t } = useTranslation();
   const [countdown, setCountdown] = useState<string>('--:--');
@@ -128,19 +136,25 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={onSpendGems}
-            disabled={!canAffordGems}
-            activeOpacity={canAffordGems ? 0.85 : 1}
-            style={[styles.ctaSecondary, !canAffordGems && styles.ctaDisabled]}
+            onPress={canAffordGems ? onSpendGems : onGetGems}
+            disabled={!canAffordGems && !onGetGems}
+            activeOpacity={canAffordGems || onGetGems ? 0.85 : 1}
+            style={[styles.ctaSecondary, !canAffordGems && !onGetGems && styles.ctaDisabled]}
             accessibilityRole="button"
-            accessibilityLabel={t('lives.refillA11y', { count: gemRefillCost })}
-            accessibilityState={{ disabled: !canAffordGems }}
+            accessibilityLabel={
+              canAffordGems || !onGetGems
+                ? t('lives.refillA11y', { count: gemRefillCost })
+                : t('lives.getMoreGemsA11y')
+            }
+            accessibilityState={{ disabled: !canAffordGems && !onGetGems }}
           >
             <Text style={styles.ctaSecondaryText}>
               {t('lives.fullRefillGems', { count: gemRefillCost })}
             </Text>
             <Text style={styles.ctaSecondarySubtext}>
-              {t('lives.youHaveGems', { count: gemsAvailable })}
+              {canAffordGems || !onGetGems
+                ? t('lives.youHaveGems', { count: gemsAvailable })
+                : t('lives.getMoreGems', { count: gemsAvailable })}
             </Text>
           </TouchableOpacity>
 

@@ -52,6 +52,8 @@
     "watchAdA11y": "広告を見てライフを1つ獲得",
     "fullRefillGems": "💎 ジェム{{count}}個 — 全回復",
     "youHaveGems": "所持ジェム：{{count}}個",
+    "getMoreGems": "所持{{count}}個 — タップでジェムを入手",
+    "getMoreGemsA11y": "ジェムが足りません。ジェムの入手画面を開きます",
     "refillA11y": "ジェム{{count}}個でライフを全回復",
     "nextLifeIn": "次のライフまで",
     "illWait": "待ちます",
@@ -66,49 +68,49 @@
       "title": "ヒントレスキューパック",
       "description": "ヒント5個でこのレベルを攻略しよう。クリアはもう目前です！",
       "button": "ヒント5個をゲット",
-      "price": "ジェム5個"
+      "price": "コイン{{amount}}枚"
     },
     "lifeRefill": {
       "ribbon": "ライフ切れ",
       "title": "今すぐ全回復",
       "description": "待つ必要なし！ライフ5個を即座に全回復。",
       "button": "今すぐ回復",
-      "price": "ジェム10個"
+      "price": "ジェム{{amount}}個"
     },
     "streakShield": {
       "ribbon": "連続記録のピンチ",
       "title": "連続記録を守ろう",
       "description": "{{streak}}日連続記録が今夜途切れてしまいます。シールドで守ろう！",
       "button": "シールドを発動",
-      "price": "ジェム30個"
+      "price": "ジェム{{amount}}個"
     },
     "closeFinish": {
       "ribbon": "あと少し！",
       "title": "残り1ワード",
       "description": "勝利まであと1ワード！ヒントで一気に決めよう。",
       "button": "ヒントをゲット",
-      "price": "ジェム3個"
+      "price": "コイン{{amount}}枚"
     },
     "closeFinishPremium": {
       "ribbon": "逃さないで",
       "title": "パズルを完成させよう",
       "description": "残りは1ワードだけ。その答えを公開します。勝利をつかもう！",
       "button": "最後のワードを表示",
-      "price": "ジェム9個"
+      "price": "ジェム{{amount}}個"
     },
     "postPuzzle": {
       "ribbon": "ヒント残りわずか",
       "title": "ヒントを補充",
       "description": "お見事！次の挑戦に備えてヒントを補充しよう。",
       "button": "ヒント10個をゲット",
-      "price": "ジェム10個"
+      "price": "コイン{{amount}}枚"
     },
     "boosterPack": {
       "ribbon": "難関レベルが目前",
       "title": "パワーアップパック",
       "description": "この{{difficulty}}パズルに、スポットライト＋ワイルドカード＋シャッフルをセットで！",
       "button": "ブースター3個をゲット",
-      "price": "ジェム15個"
+      "price": "ジェム{{amount}}個"
     }
   },
   "home": {
@@ -280,6 +282,9 @@
     "usedAllMoves": "{{count}}手をすべて使い切りました。",
     "wordsCounter": "{{found}}/{{total}} ワード",
     "watchAdFreeHint": "広告を見て無料ヒント",
+    "claimFreeHint": "無料ヒントを受け取る（広告なし）",
+    "timeoutContinue": "広告を見て+{{seconds}}秒続行",
+    "timeoutContinueFree": "+{{seconds}}秒続行 — 無料",
     "undoLastMove": "1手戻す",
     "dayStreak": "日連続記録",
     "keepItGoing": "この調子で続けよう！",

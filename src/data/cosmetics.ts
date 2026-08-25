@@ -4,7 +4,7 @@ import { EVENT_TEMPLATES } from './events';
 import { GRAND_CHALLENGES } from './grandChallenges';
 import { PRESTIGE_LEVELS } from './prestigeSystem';
 import { REFERRAL_MILESTONES } from './referralSystem';
-import { SEASON_PASS_TIERS } from './seasonPass';
+import { buildSeasonPassTiers } from './seasonPass';
 import { SEASONAL_QUESTS } from './seasonalQuests';
 import { SEASONAL_WHEELS } from './seasonalWheels';
 import { VIP_STREAK_BONUSES } from './vipBenefits';
@@ -631,7 +631,13 @@ const GRAND_CHALLENGE_TITLE_SEEDS: TitleSeed[] = GRAND_CHALLENGES
     ),
   );
 
-const SEASON_PASS_FRAME_SEEDS: FrameSeed[] = SEASON_PASS_TIERS
+// Season-pass seeds come from the CANONICAL season-1 ladder (unsuffixed base
+// ids like `frame_season_bronze`), NOT the current season's — later seasons
+// mint `_s{n}`-suffixed variants of these ids, which resolve dynamically
+// against the base entries below (see the season-suffix layer in Helpers).
+const SEASON_ONE_PASS_TIERS = buildSeasonPassTiers(1);
+
+const SEASON_PASS_FRAME_SEEDS: FrameSeed[] = SEASON_ONE_PASS_TIERS
   .filter((tier) => inferCosmeticKind(tier.premiumReward.cosmeticId) === 'frame')
   .map((tier) =>
     frameSeed(
@@ -642,7 +648,7 @@ const SEASON_PASS_FRAME_SEEDS: FrameSeed[] = SEASON_PASS_TIERS
     ),
   );
 
-const SEASON_PASS_TITLE_SEEDS: TitleSeed[] = SEASON_PASS_TIERS
+const SEASON_PASS_TITLE_SEEDS: TitleSeed[] = SEASON_ONE_PASS_TIERS
   .filter((tier) => inferCosmeticKind(tier.premiumReward.cosmeticId) === 'title')
   .map((tier) =>
     titleSeed(
@@ -746,6 +752,65 @@ export const PROFILE_TITLES: ProfileTitle[] = dedupeById([
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// ── Season-suffix layer ─────────────────────────────────────────────────────
+// Season pass premium cosmetics for season n > 1 are minted under
+// `${baseId}_s${n}` (see data/seasonPass.ts seasonCosmeticId) so each season
+// grants a DISTINCT ownership id instead of re-selling a season-1 unlock.
+// The catalog stores only the season-1 base entries; suffixed ids resolve
+// here to a synthesized copy carrying the base art/rarity, the full suffixed
+// id, and a season-decorated display name — so ProfileScreen's
+// getFrame/getTitleLabel render any season's cosmetic without per-season
+// catalog rows. Synthesized entries are cached for stable identities.
+
+const SEASON_SUFFIX_RE = /^(.+)_s(\d+)$/;
+
+function splitSeasonSuffix(id: string): { baseId: string; season: number } | null {
+  const m = SEASON_SUFFIX_RE.exec(id);
+  if (!m) return null;
+  const season = Number(m[2]);
+  if (!Number.isInteger(season) || season < 2) return null;
+  return { baseId: m[1], season };
+}
+
+const seasonFrameCache = new Map<string, ProfileFrame>();
+const seasonTitleCache = new Map<string, ProfileTitle>();
+
+function resolveSeasonFrame(id: string): ProfileFrame | undefined {
+  const cached = seasonFrameCache.get(id);
+  if (cached) return cached;
+  const parts = splitSeasonSuffix(id);
+  if (!parts) return undefined;
+  const base = PROFILE_FRAMES.find((f) => f.id === parts.baseId);
+  if (!base) return undefined;
+  const frame: ProfileFrame = {
+    ...base,
+    id,
+    name: `${base.name} (Season ${parts.season})`,
+    source: `Season ${parts.season} Pass`,
+    owned: false,
+  };
+  seasonFrameCache.set(id, frame);
+  return frame;
+}
+
+function resolveSeasonTitle(id: string): ProfileTitle | undefined {
+  const cached = seasonTitleCache.get(id);
+  if (cached) return cached;
+  const parts = splitSeasonSuffix(id);
+  if (!parts) return undefined;
+  const base = PROFILE_TITLES.find((t) => t.id === parts.baseId);
+  if (!base) return undefined;
+  const title: ProfileTitle = {
+    ...base,
+    id,
+    title: `${base.title} (Season ${parts.season})`,
+    source: `Season ${parts.season} Pass`,
+    owned: false,
+  };
+  seasonTitleCache.set(id, title);
+  return title;
+}
+
 export function getTheme(id: string): CosmeticTheme | undefined {
   return COSMETIC_THEMES.find((t) => t.id === id);
 }
@@ -760,11 +825,11 @@ export function getThemesByRarity(rarity: CosmeticRarity): CosmeticTheme[] {
 }
 
 export function getFrame(id: string): ProfileFrame | undefined {
-  return PROFILE_FRAMES.find((f) => f.id === id);
+  return PROFILE_FRAMES.find((f) => f.id === id) ?? resolveSeasonFrame(id);
 }
 
 export function getTitle(id: string): ProfileTitle | undefined {
-  return PROFILE_TITLES.find((t) => t.id === id);
+  return PROFILE_TITLES.find((t) => t.id === id) ?? resolveSeasonTitle(id);
 }
 
 export function hasTheme(id: string): boolean {
@@ -772,11 +837,11 @@ export function hasTheme(id: string): boolean {
 }
 
 export function hasFrame(id: string): boolean {
-  return PROFILE_FRAMES.some((frame) => frame.id === id);
+  return getFrame(id) !== undefined;
 }
 
 export function hasTitle(id: string): boolean {
-  return PROFILE_TITLES.some((title) => title.id === id);
+  return getTitle(id) !== undefined;
 }
 
 export function hasDecoration(id: string): boolean {

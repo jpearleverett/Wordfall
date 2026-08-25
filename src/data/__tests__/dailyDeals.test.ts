@@ -35,6 +35,35 @@ describe('DEAL_POOL', () => {
       expect(deal.availableHours).toBeGreaterThan(0);
     }
   });
+
+  it('coins→gems conversion is never cheaper than 100 coins per gem', () => {
+    // The Gem Rush deal shipped at 20:1 (15 gems for 300 coins), which made
+    // the soft currency a hard-currency printer and collapsed the two-tier
+    // economy. Any coin-priced deal that grants gems must price them at a
+    // real premium — at least 100 coins per gem.
+    for (const deal of DEAL_POOL) {
+      if (deal.currency === 'coins' && (deal.contents.gems ?? 0) > 0) {
+        expect(deal.salePrice / deal.contents.gems!).toBeGreaterThanOrEqual(100);
+      }
+    }
+  });
+
+  it('a coins→gems→coins round trip always loses value (no arbitrage loop)', () => {
+    // Cheapest coins-per-gem across coin-priced gem deals, and highest
+    // coins-per-gem across gem-priced coin deals: buying gems with coins and
+    // converting back must never profit.
+    const buyGemRates = DEAL_POOL
+      .filter((d) => d.currency === 'coins' && (d.contents.gems ?? 0) > 0)
+      .map((d) => d.salePrice / d.contents.gems!);
+    const sellGemRates = DEAL_POOL
+      .filter((d) => d.currency === 'gems' && (d.contents.coins ?? 0) > 0)
+      .map((d) => d.contents.coins! / d.salePrice);
+    for (const buy of buyGemRates) {
+      for (const sell of sellGemRates) {
+        expect(sell).toBeLessThan(buy);
+      }
+    }
+  });
 });
 
 describe('getDailyDeal', () => {

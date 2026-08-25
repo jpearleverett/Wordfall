@@ -115,6 +115,15 @@ class IAPManager {
    * getAvailablePurchases, making next-launch recovery impossible).
    */
   private fulfillmentFlushers: FulfillmentFlusher[] = [];
+  /**
+   * Android subscription offer tokens by store SKU, captured from the
+   * `fetchProducts({ type: 'subs' })` result at load. Play Billing 5+
+   * requires an offerToken in BillingFlowParams for every subscription
+   * purchase — without it `requestPurchase({ type: 'subs' })` fails on
+   * Android, which is why the vip_* SKUs could never be sold while they
+   * were requested as `type: 'in-app'`.
+   */
+  private subscriptionOfferTokens: Map<string, { sku: string; offerToken: string }[]> = new Map();
 
   private recordTransactionId(transactionId: string): void {
     this.processedTransactionIds.add(transactionId);
@@ -244,14 +253,39 @@ class IAPManager {
     }
 
     const storeIds = getAllStoreProductIds();
+    // Subscriptions must be fetched with type 'subs' — Google returns
+    // nothing for a SUBS SKU queried as in-app, and the subs result is
+    // also where Android offer tokens (required at purchase time) live.
+    const subStoreIds = new Set(
+      SHOP_PRODUCTS.filter((p) => p.category === 'subscription').map((p) => p.storeProductId),
+    );
+    const inAppIds = storeIds.filter((id) => !subStoreIds.has(id));
 
     try {
-      const storeProducts = await this.rniap.fetchProducts({ skus: storeIds });
+      const [inAppProducts, subProducts] = await Promise.all([
+        inAppIds.length > 0
+          ? this.rniap.fetchProducts({ skus: inAppIds, type: 'in-app' })
+          : Promise.resolve([]),
+        subStoreIds.size > 0
+          ? this.rniap
+              .fetchProducts({ skus: Array.from(subStoreIds), type: 'subs' })
+              .catch((e: unknown) => {
+                // A subs fetch failure must not take down the whole shop.
+                logger.warn('[IAP] fetchProducts(subs) failed:', e);
+                return [];
+              })
+          : Promise.resolve([]),
+      ]);
 
-      if (!storeProducts) {
+      if (!inAppProducts && !subProducts) {
         return this.mockLoadProducts();
       }
 
+      for (const sp of subProducts ?? []) {
+        this.captureSubscriptionOffers(sp);
+      }
+
+      const storeProducts = [...(inAppProducts ?? []), ...(subProducts ?? [])];
       const products: IAPProduct[] = storeProducts.map((sp: any) => {
         const shopProduct = getProductByStoreId(sp.id);
         const product: IAPProduct = {
@@ -279,6 +313,42 @@ class IAPManager {
       logger.warn('[IAP] loadProducts failed, using fallback data:', e);
       return this.mockLoadProducts();
     }
+  }
+
+  /**
+   * Stash the Android offer token(s) for a fetched subscription product.
+   * react-native-iap v15 exposes them on the standardized
+   * `subscriptionOffers` array (offerTokenAndroid) with the deprecated
+   * `subscriptionOfferDetailsAndroid[].offerToken` as fallback shape.
+   */
+  private captureSubscriptionOffers(sp: any): void {
+    if (!sp?.id) return;
+    const offers: { sku: string; offerToken: string }[] = [];
+    for (const offer of sp.subscriptionOffers ?? []) {
+      const token = offer?.offerTokenAndroid ?? offer?.offerToken;
+      if (typeof token === 'string' && token.length > 0) {
+        offers.push({ sku: sp.id, offerToken: token });
+      }
+    }
+    if (offers.length === 0) {
+      for (const detail of sp.subscriptionOfferDetailsAndroid ?? []) {
+        if (typeof detail?.offerToken === 'string' && detail.offerToken.length > 0) {
+          offers.push({ sku: sp.id, offerToken: detail.offerToken });
+        }
+      }
+    }
+    if (offers.length > 0) {
+      // Base-plan offer first is fine: Play picks the offer matching the
+      // token we pass; we pass every eligible token and let the sheet
+      // present the correct one.
+      this.subscriptionOfferTokens.set(sp.id, offers);
+    }
+  }
+
+  /** Whether an internal or store product id maps to a subscription SKU */
+  private isSubscriptionProduct(productId: string): boolean {
+    const internalId = this.resolveInternalId(productId);
+    return getProductById(internalId)?.category === 'subscription';
   }
 
   /** Get all loaded products */
@@ -335,14 +405,42 @@ class IAPManager {
     await this.storePendingPurchase(internalId);
 
     try {
-      // Request the purchase — the result comes through the listener
-      await this.rniap.requestPurchase({
-        request: {
-          apple: { sku: storeId, andDangerouslyFinishTransactionAutomatically: false },
-          google: { skus: [storeId] },
-        },
-        type: 'in-app',
-      });
+      if (this.isSubscriptionProduct(internalId)) {
+        // Subscriptions go through the 'subs' flow. Android additionally
+        // needs the offerToken(s) captured from the subs product fetch;
+        // if the load-time fetch failed (network blip), retry once here
+        // so the purchase isn't doomed before the sheet opens.
+        if (Platform.OS === 'android' && !this.subscriptionOfferTokens.has(storeId)) {
+          try {
+            const refetched = await this.rniap.fetchProducts({ skus: [storeId], type: 'subs' });
+            for (const sp of refetched ?? []) {
+              this.captureSubscriptionOffers(sp);
+            }
+          } catch (refetchError) {
+            logger.warn('[IAP] subs offer refetch failed:', refetchError);
+          }
+        }
+        const subscriptionOffers = this.subscriptionOfferTokens.get(storeId) ?? [];
+        await this.rniap.requestPurchase({
+          request: {
+            apple: { sku: storeId, andDangerouslyFinishTransactionAutomatically: false },
+            google: {
+              skus: [storeId],
+              ...(subscriptionOffers.length > 0 ? { subscriptionOffers } : {}),
+            },
+          },
+          type: 'subs',
+        });
+      } else {
+        // Request the purchase — the result comes through the listener
+        await this.rniap.requestPurchase({
+          request: {
+            apple: { sku: storeId, andDangerouslyFinishTransactionAutomatically: false },
+            google: { skus: [storeId] },
+          },
+          type: 'in-app',
+        });
+      }
 
       // Wait for the purchase listener to resolve
       return new Promise<PurchaseResult>((resolve) => {
@@ -649,11 +747,16 @@ class IAPManager {
       }
       await this.flushFulfillment();
 
-      // Acknowledge / finish the transaction
+      // Acknowledge / finish the transaction. Subscriptions are NEVER
+      // consumable: consuming a Play subscription purchase invalidates
+      // the token the renewal pipeline (onSubscriptionRenew) references,
+      // so subs are acknowledged only, and iOS finishes them
+      // non-consumable.
       let acknowledged = true;
       if (this.rniap) {
         const shopProduct = getProductById(internalId);
-        const isConsumable = !(shopProduct?.isNonConsumable ?? false);
+        const isSubscription = shopProduct?.category === 'subscription';
+        const isConsumable = !isSubscription && !(shopProduct?.isNonConsumable ?? false);
 
         try {
           if (Platform.OS === 'ios') {

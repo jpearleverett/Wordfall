@@ -28,9 +28,16 @@ describe('WHEEL_SEGMENTS data', () => {
     }
   });
 
-  it('weights sum to 100', () => {
+  it('weights sum to 991 (×10 percent scale with a 1/991 legendary)', () => {
     const totalWeight = WHEEL_SEGMENTS.reduce((sum, s) => sum + s.weight, 0);
-    expect(totalWeight).toBe(100);
+    expect(totalWeight).toBe(991);
+  });
+
+  it('the 500-gem jackpot is ultra-rare (≤ 0.2% per spin)', () => {
+    const totalWeight = WHEEL_SEGMENTS.reduce((sum, s) => sum + s.weight, 0);
+    const jackpot = WHEEL_SEGMENTS.find((s) => s.id === 'gems_500_jackpot')!;
+    expect(jackpot.reward.gems).toBe(500);
+    expect(jackpot.weight / totalWeight).toBeLessThanOrEqual(0.002);
   });
 
   it('has reasonable rarity distribution', () => {
@@ -62,6 +69,67 @@ describe('WHEEL_SEGMENTS data', () => {
         r.cosmetic;
       expect(hasReward).toBeTruthy();
     }
+  });
+});
+
+describe('gem expected value stays inside the design band', () => {
+  // August 2026 faucet collapse: the wheel used to pay ~6.5 gems of EV per
+  // spin (the 500-gem wedge at 1% alone was 5.0), making the free wheel the
+  // single largest gem faucet in the game. The design band is 1.5–2.5 gems
+  // per spin, INCLUDING the pity system's amortized boost — these tests pin
+  // the band itself so a future weight/value edit cannot quietly reopen it.
+
+  /** Expected gems of one draw from the mystery box secondary table. */
+  function mysteryBoxGemEV(): number {
+    const total = MYSTERY_BOX_REWARDS.reduce((sum, r) => sum + r.weight, 0);
+    return (
+      MYSTERY_BOX_REWARDS.reduce((sum, r) => sum + (r.reward.gems ?? 0) * r.weight, 0) / total
+    );
+  }
+
+  /** Expected gems per spin over an arbitrary segment list. */
+  function gemEV(segments: typeof WHEEL_SEGMENTS): number {
+    const boxEV = mysteryBoxGemEV();
+    const total = segments.reduce((sum, s) => sum + s.weight, 0);
+    return (
+      segments.reduce(
+        (sum, s) => sum + ((s.reward.gems ?? 0) + (s.reward.mysteryBox ? boxEV : 0)) * s.weight,
+        0,
+      ) / total
+    );
+  }
+
+  it('base spin EV is 1.5–2.5 gems', () => {
+    const ev = gemEV(WHEEL_SEGMENTS);
+    expect(ev).toBeGreaterThanOrEqual(1.5);
+    expect(ev).toBeLessThanOrEqual(2.5);
+  });
+
+  it('pity amortization does not restore the old EV (worst case ≤ 2.5)', () => {
+    // The pity system forces one rare+ spin at most every `jackpotPity`
+    // spins. Worst-case long-run EV is the base EV plus 1/jackpotPity of the
+    // (richer) forced-rare+ spin's excess. This is what a player farming the
+    // pity timer actually experiences — it must stay inside the band too.
+    const rarePlus = WHEEL_SEGMENTS.filter(
+      (s) => s.rarity === 'rare' || s.rarity === 'epic' || s.rarity === 'legendary',
+    );
+    expect(rarePlus.length).toBeGreaterThan(0);
+    const base = gemEV(WHEEL_SEGMENTS);
+    const pity = gemEV(rarePlus);
+    const worstCase = base + (pity - base) / DEFAULT_MYSTERY_WHEEL_STATE.jackpotPity;
+    expect(worstCase).toBeLessThanOrEqual(2.5);
+  });
+
+  it('a paid spin is a net gem sink even against the pity-boosted EV', () => {
+    const rarePlus = WHEEL_SEGMENTS.filter(
+      (s) => s.rarity === 'rare' || s.rarity === 'epic' || s.rarity === 'legendary',
+    );
+    const base = gemEV(WHEEL_SEGMENTS);
+    const worstCase = base + (gemEV(rarePlus) - base) / DEFAULT_MYSTERY_WHEEL_STATE.jackpotPity;
+    // 15 gems buys ~2.3 gems of expected gem return — spins are entertainment
+    // plus coins/hints/boosters, never gem arbitrage.
+    expect(worstCase).toBeLessThan(SPIN_COST_GEMS / 2);
+    expect(base).toBeLessThan(SPIN_BUNDLE_COST_GEMS / SPIN_BUNDLE_COUNT);
   });
 });
 

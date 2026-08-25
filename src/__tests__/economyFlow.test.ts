@@ -236,10 +236,19 @@ describe('Economy Flow Integration', () => {
       for (const offer of offers) {
         expect(offer.discountPercent).toBeLessThanOrEqual(75);
       }
-      // Non-welcome-gift offers should not exceed 50%
+      // Non-welcome-gift badges are DERIVED from the catalog (anchor vs.
+      // real charged price) — never freehand — so each must equal the
+      // product's own catalog ratio. (The old freehand pin of "≤ 50%"
+      // predates derived badges: starter_pack's honest everyday anchor
+      // ratio is 60%.)
       const nonWelcome = offers.filter(o => o.productId !== 'first_purchase_special');
       for (const offer of nonWelcome) {
-        expect(offer.discountPercent).toBeLessThanOrEqual(50);
+        const product = getProductById(offer.productId)!;
+        const derived = product.originalPriceAmount
+          ? Math.round((1 - product.fallbackPriceAmount / product.originalPriceAmount) * 100)
+          : 0;
+        expect(offer.discountPercent).toBe(derived);
+        expect(offer.discountPercent).toBeLessThanOrEqual(60);
       }
     });
 

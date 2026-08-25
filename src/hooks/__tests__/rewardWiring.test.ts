@@ -66,11 +66,20 @@ jest.mock('../../services/eventManager', () => ({
 }));
 jest.mock('../../services/remoteConfig', () => ({
   getRemoteBoolean: jest.fn(() => false),
-  getRemoteNumber: jest.fn((key: string) => (key === 'seasonPassXpPerPuzzle' ? 100 : 0)),
+  getRemoteNumber: jest.fn((key: string) => {
+    if (key === 'seasonPassXpPerPuzzle') return 100;
+    if (key === 'piggyBankFillPerPuzzle') return 2;
+    return 0;
+  }),
 }));
 jest.mock('../../data/economyTuning', () => ({
   puzzleCoinPayout: jest.fn(() => 10),
-  perfectClearGems: jest.fn(() => 5),
+  perfectClearGems: jest.fn(() => 1),
+  // Default: the daily flawless-gem cap has headroom (grant = requested) and
+  // the weekly board has not been completed this week. Individual tests
+  // override with mockReturnValueOnce.
+  claimFlawlessGems: jest.fn((requested: number) => requested),
+  claimWeeklyBoardPayout: jest.fn(() => true),
 }));
 jest.mock('../../data/seasonalQuests', () => ({
   ...jest.requireActual('../../data/seasonalQuests'),
@@ -95,6 +104,10 @@ jest.mock('../../data/seasonalQuests', () => ({
 import { useRewardWiring } from '../useRewardWiring';
 import { MODE_CONFIGS, ECONOMY } from '../../constants';
 import { firestoreService } from '../../services/firestore';
+import { claimFlawlessGems, claimWeeklyBoardPayout } from '../../data/economyTuning';
+
+const mockClaimFlawless = claimFlawlessGems as jest.Mock;
+const mockClaimWeekly = claimWeeklyBoardPayout as jest.Mock;
 
 const TODAY_UTC = new Date().toISOString().split('T')[0];
 
@@ -244,28 +257,114 @@ describe('global progression is classic-only', () => {
 describe('daily rewards pay once per daily board', () => {
   const dailyParams = { level: 0, mode: 'daily', isDaily: true };
 
-  it('first completion of the day grants daily coins/gems, streak, and submits the score', () => {
+  it('first completion of the day grants base + daily coins/gems, piggy fill, streak, and submits the score', () => {
     const { player, economy } = run({ dailyCompleted: [] }, {}, dailyParams);
     expect(player.recordDailyComplete).toHaveBeenCalledWith(TODAY_UTC);
     expect(economy.addGems).toHaveBeenCalledWith(ECONOMY.dailyCompleteGems);
+    // base solve payout: mocked puzzleCoinPayout 10 + 3 stars * starBonus 5
+    expect(economy.addCoins).toHaveBeenCalledWith(10 + 3 * ECONOMY.starBonus);
     expect(economy.addCoins).toHaveBeenCalledWith(ECONOMY.dailyCompleteCoins);
+    expect(economy.addPiggyBankGems).toHaveBeenCalledWith(2);
     expect(player.updateStreak).toHaveBeenCalled();
+    expect(player.awardFreeSpin).toHaveBeenCalled();
     expect(player.updateWeeklyGoalProgress).toHaveBeenCalledWith('daily_completed', 1);
     expect(firestoreService.submitDailyScore).toHaveBeenCalledTimes(1);
     // base 100 + 3 stars * 50 + 200 daily kicker
     expect(economy.addSeasonPassXp).toHaveBeenCalledWith(450);
   });
 
-  it('replaying the completed daily earns base solve rewards only', () => {
-    const { player, economy } = run({ dailyCompleted: [TODAY_UTC] }, {}, dailyParams);
+  it('replaying the completed daily pays nothing at all', () => {
+    const { player, economy, navigation } = run({ dailyCompleted: [TODAY_UTC] }, {}, dailyParams);
     expect(player.recordDailyComplete).not.toHaveBeenCalled();
+    // No currency of any kind: base coins, daily coins/gems, flawless gems,
+    // piggy fill and season-pass XP are all first-completion-only.
+    expect(economy.addCoins).not.toHaveBeenCalled();
     expect(economy.addGems).not.toHaveBeenCalled();
-    expect(economy.addCoins).not.toHaveBeenCalledWith(ECONOMY.dailyCompleteCoins);
+    expect(economy.addPiggyBankGems).not.toHaveBeenCalled();
+    expect(economy.addSeasonPassXp).not.toHaveBeenCalled();
+    // No counter-derived progress: the lifetime solve counter stays frozen,
+    // so mastery tiers and the every-N-puzzles wheel spin cannot be farmed.
+    expect(player.awardFreeSpin).not.toHaveBeenCalled();
+    const solvedWrites = player.updateProgress.mock.calls.filter(
+      (c) => 'puzzlesSolved' in (c[0] ?? {}),
+    );
+    expect(solvedWrites).toHaveLength(0);
     expect(player.updateStreak).not.toHaveBeenCalled();
     expect(player.updateWeeklyGoalProgress).not.toHaveBeenCalledWith('daily_completed', 1);
     expect(firestoreService.submitDailyScore).not.toHaveBeenCalled();
-    // no 200 XP daily kicker on replay: base 100 + 3 stars * 50
+    const data = completionData(navigation);
+    expect(data.totalCoinsAwarded).toBe(0);
+    expect(data.totalGemsAwarded).toBe(0);
+  });
+
+  it('a flawless daily replay earns no flawless gems either', () => {
+    const { economy } = run({ dailyCompleted: [TODAY_UTC] }, {}, dailyParams, 3, 500, true);
+    expect(mockClaimFlawless).not.toHaveBeenCalled();
+    expect(economy.addGems).not.toHaveBeenCalled();
+  });
+});
+
+describe('weekly board pays once per week', () => {
+  const weeklyParams = { level: 0, mode: 'weekly' };
+
+  it('first completion of the week pays base rewards and claims the week', () => {
+    const { player, economy } = run({}, {}, weeklyParams);
+    expect(mockClaimWeekly).toHaveBeenCalledTimes(1);
+    expect(economy.addCoins).toHaveBeenCalledWith(10 + 3 * ECONOMY.starBonus);
+    expect(economy.addPiggyBankGems).toHaveBeenCalledWith(2);
+    // base 100 + 3 stars * 50 (no daily kicker on the weekly)
     expect(economy.addSeasonPassXp).toHaveBeenCalledWith(250);
+    expect(player.awardFreeSpin).toHaveBeenCalled();
+  });
+
+  it('replaying the weekly board pays nothing but still submits the score', () => {
+    mockClaimWeekly.mockReturnValueOnce(false);
+    const { player, economy, navigation } = run({}, {}, weeklyParams);
+    expect(economy.addCoins).not.toHaveBeenCalled();
+    expect(economy.addGems).not.toHaveBeenCalled();
+    expect(economy.addPiggyBankGems).not.toHaveBeenCalled();
+    expect(economy.addSeasonPassXp).not.toHaveBeenCalled();
+    expect(player.awardFreeSpin).not.toHaveBeenCalled();
+    const solvedWrites = player.updateProgress.mock.calls.filter(
+      (c) => 'puzzlesSolved' in (c[0] ?? {}),
+    );
+    expect(solvedWrites).toHaveLength(0);
+    // Leaderboard submission is deliberately unaffected — score improvement
+    // is the one legitimate reason to replay the shared board.
+    expect(firestoreService.submitWeeklyScore).toHaveBeenCalledTimes(1);
+    expect(completionData(navigation).totalCoinsAwarded).toBe(0);
+  });
+
+  it('non-shared modes never consult the weekly gate', () => {
+    run({}, {}, { level: 12, mode: 'classic' });
+    expect(mockClaimWeekly).not.toHaveBeenCalled();
+  });
+});
+
+describe('flawless gems flow through the daily cap', () => {
+  // Level 13 deliberately: no EARLY_GAME_BONUSES entry and no mastery
+  // crossing at the default 20 puzzlesSolved, so every addGems call below is
+  // attributable to the flawless grant alone.
+  const classicParams = { level: 13, mode: 'classic' };
+
+  it('credits exactly what the cap allows and tallies the same figure', () => {
+    const { economy, navigation } = run({}, {}, classicParams, 3, 500, true);
+    // requested = round(perfectClearGems() * gemBonusFactor) = 1
+    expect(mockClaimFlawless).toHaveBeenCalledWith(1);
+    expect(economy.addGems).toHaveBeenCalledWith(1);
+    expect(completionData(navigation).totalGemsAwarded).toBe(1);
+  });
+
+  it('grants nothing once the daily cap is spent', () => {
+    mockClaimFlawless.mockReturnValueOnce(0);
+    const { economy, navigation } = run({}, {}, classicParams, 3, 500, true);
+    expect(economy.addGems).not.toHaveBeenCalled();
+    expect(completionData(navigation).totalGemsAwarded).toBe(0);
+  });
+
+  it('non-flawless completions never touch the cap', () => {
+    run({}, {}, classicParams, 3, 500, false);
+    expect(mockClaimFlawless).not.toHaveBeenCalled();
   });
 });
 
@@ -368,5 +467,41 @@ describe("seasonal 'modes_played' steps count distinct modes", () => {
       { level: 12, mode: 'classic' },
     );
     expect(player.updateSeasonalQuest).not.toHaveBeenCalled();
+  });
+});
+
+// ─── VIP 2× XP boost (Aug 2026 — the perk was advertised on every vip_* SKU
+// and rendered in the shop's benefit list, but never applied anywhere) ───────
+describe('VIP 2x XP boost composition', () => {
+  const classicParams = { level: 12, mode: 'classic' };
+
+  it('non-VIP baseline: base 100 + 3 stars * 50 with no multiplier', () => {
+    const { economy } = run({}, { isVip: false }, classicParams);
+    expect(economy.addSeasonPassXp).toHaveBeenCalledWith(250);
+  });
+
+  it('an active VIP subscription doubles season-pass XP', () => {
+    const { economy } = run({}, { isVip: true }, classicParams);
+    expect(economy.addSeasonPassXp).toHaveBeenCalledWith(500);
+  });
+
+  it('VIP composes multiplicatively with prestige under the MAX_BONUS_FACTOR 5.0 cap', () => {
+    // Prestige level 5 alone is a 3.0x XP multiplier; x2 VIP = 6.0, which
+    // must clamp to the shared 5.0 ceiling: (100 + 150) * 5 = 1250.
+    const prestige = { prestigeLevel: 5, permanentBonuses: [] as string[] };
+    const { economy } = run({ prestige }, { isVip: true }, classicParams);
+    expect(economy.addSeasonPassXp).toHaveBeenCalledWith(1250);
+
+    // Sanity: without VIP the same prestige pays 3.0x = 750, proving the
+    // clamp above came from composing the two channels.
+    const { economy: economyNoVip } = run({ prestige }, { isVip: false }, classicParams);
+    expect(economyNoVip.addSeasonPassXp).toHaveBeenCalledWith(750);
+  });
+
+  it('VIP does not touch coin or gem payouts (XP-only perk)', () => {
+    const { economy: vip } = run({}, { isVip: true }, classicParams);
+    const { economy: nonVip } = run({}, { isVip: false }, classicParams);
+    expect(vip.addCoins).toHaveBeenCalledWith(10 + 3 * ECONOMY.starBonus);
+    expect(nonVip.addCoins).toHaveBeenCalledWith(10 + 3 * ECONOMY.starBonus);
   });
 });

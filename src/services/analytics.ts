@@ -81,6 +81,8 @@ export type AnalyticsEventName =
   | 'season_pass_tier_claimed'
   | 'season_pass_premium_purchased'
   | 'season_pass_season_rolled'
+  | 'season_pass_tier_skipped'
+  | 'season_pass_tier_skip_blocked'
   | 'referral_code_applied'
   | 'referral_success_grant'
   | 'referral_reward_claimed'

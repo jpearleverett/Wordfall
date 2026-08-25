@@ -38,6 +38,25 @@ function generateCompletionId(): string {
   return `puz_${generateIdempotencyKey()}`;
 }
 
+/**
+ * EXTEND_TIME — the Time Pressure "watch ad → continue" action. Valid ONLY
+ * from status 'timeout': it restores 'playing' with `timeRemaining = seconds`
+ * so the ticker effect (keyed on status) resumes on the next commit.
+ *
+ * Defined locally rather than in types.ts' GameAction union because that
+ * file is outside this change's ownership — promote it into GameAction on
+ * the next types sweep. The zustand redux middleware infers the dispatch
+ * type from the reducer signature, so `store.dispatch({ type: 'EXTEND_TIME',
+ * seconds })` typechecks end to end.
+ */
+export interface ExtendTimeAction {
+  type: 'EXTEND_TIME';
+  seconds: number;
+}
+
+/** EXTEND_TIME is now part of the GameAction union in types.ts. */
+export type GameActionWithExtensions = GameAction;
+
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
 
 function getHintsForMode(mode: GameMode): number {
@@ -406,7 +425,7 @@ export function computeStars(
   return assistsUsed === 0 ? 3 : assistsUsed === 1 ? 2 : 1;
 }
 
-function gameReducer(state: GameState, action: GameAction): GameState {
+function gameReducer(state: GameState, action: GameActionWithExtensions): GameState {
   switch (action.type) {
     case 'SELECT_CELL': {
       return applySelectionStep(state, action.position);
@@ -982,6 +1001,27 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'EXTEND_TIME': {
+      // Timeout continue (Time Pressure only — 'timeout' is unreachable in
+      // any other mode). Restores play with exactly `seconds` on the clock.
+      // Persistence stays consistent by construction: the terminal-status
+      // effect already cleared the puzzle snapshot when 'timeout' landed,
+      // and returning to 'playing' simply resumes the normal
+      // save-on-background flow for the continued attempt. Once-per-attempt
+      // is enforced at the UI layer (the offer is hidden after one use);
+      // the reducer only validates the transition itself.
+      if (state.status !== 'timeout') return state;
+      const seconds = Math.floor(action.seconds);
+      if (!Number.isFinite(seconds) || seconds <= 0) return state;
+      return {
+        ...state,
+        status: 'playing',
+        timeRemaining: seconds,
+        selectedCells: [],
+        selectionDirection: null,
+      };
+    }
+
     case 'MARK_FAILED': {
       // Dispatched from the deferred shrink-solvability effect. Ignore
       // stale checks (an older shrink number) so a slow check from N-1
@@ -1281,6 +1321,10 @@ export function useGame(
     store.dispatch({ type: 'EXPIRE_BOOSTER_COMBO' });
   }, [store]);
 
+  const extendTime = useCallback((seconds: number) => {
+    store.dispatch({ type: 'EXTEND_TIME', seconds });
+  }, [store]);
+
   return {
     store,
     selectCell,
@@ -1302,6 +1346,7 @@ export function useGame(
     activateBoardFreeze,
     activateBoosterCombo,
     expireBoosterCombo,
+    extendTime,
     isStuck,
     stars,
     foundWords,

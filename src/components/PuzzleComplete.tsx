@@ -70,10 +70,23 @@ interface PuzzleCompleteProps {
   onDoubleReward?: () => void;
   rewardDoubled?: boolean;
   showAdOption?: boolean;
+  /**
+   * Remove-Ads owner: the doubler auto-grants without playing an ad
+   * (adManager.showRewardedAd short-circuits), so the button copy must not
+   * promise an ad that never plays.
+   */
+  adFree?: boolean;
   onChallengeFriend?: () => void;
   showTomorrowPreview?: boolean;
   summaryItems?: VictorySummaryItem[];
   onNavigate?: (screen: string, params?: Record<string, unknown>) => void;
+  /**
+   * Authoritative post-cap totals from the reward wiring. `undefined` means
+   * "not delivered yet" (the estimate below renders meanwhile); an explicit
+   * 0 is a REAL zero award (repeat board, cap-exhausted clear) and must
+   * display as 0 — falling back to the estimate here showed players rewards
+   * that were never paid.
+   */
   totalCoinsAwarded?: number;
   totalGemsAwarded?: number;
   nextUnlockPreview?: { icon: string; name: string; unlockLevel: number } | null;
@@ -945,12 +958,14 @@ export function PuzzleComplete({
   onDoubleReward,
   rewardDoubled = false,
   showAdOption = false,
+  adFree = false,
   onChallengeFriend,
   showTomorrowPreview = false,
   summaryItems = [],
   onNavigate,
-  totalCoinsAwarded = 0,
-  totalGemsAwarded = 0,
+  // No `= 0` defaults — undefined and 0 mean different things (see props doc).
+  totalCoinsAwarded,
+  totalGemsAwarded,
   nextUnlockPreview = null,
 }: PuzzleCompleteProps) {
   const { t } = useTranslation();
@@ -1238,6 +1253,21 @@ export function PuzzleComplete({
   const difficulty = economyDifficultyForLevel(level);
   const coinReward = puzzleCoinReward(difficulty, stars);
 
+  // What the chips actually show. Authoritative totals win UNCONDITIONALLY
+  // when present — an explicit 0 (repeat board / daily-cap-exhausted clear)
+  // renders as 0 instead of the estimate, which used to display rewards that
+  // were never paid. The estimate only covers the frame(s) before the reward
+  // wiring delivers. rewardDoubled means the ad grant landed (a delta equal
+  // to the awarded totals), so the truthful display is exactly 2×.
+  const coinsAwardedBase = totalCoinsAwarded !== undefined ? totalCoinsAwarded : coinReward;
+  const gemsAwardedBase =
+    totalGemsAwarded !== undefined ? totalGemsAwarded : perfectRun ? perfectClearGems() : 0;
+  const coinsDisplay = coinsAwardedBase * (rewardDoubled ? 2 : 1);
+  const gemsDisplay = gemsAwardedBase * (rewardDoubled ? 2 : 1);
+  // Nothing awarded ⇒ nothing to double ⇒ no doubler button. Offering an ad
+  // whose grant is provably 0 is a trust trap, not monetization.
+  const hasSomethingToDouble = coinsAwardedBase > 0 || gemsAwardedBase > 0;
+
   // 20 confetti is plenty visually — 40 was overkill and doubled the number
   // of concurrent Animated drivers during the puzzle-complete celebration.
   const confetti = useMemo(
@@ -1498,10 +1528,11 @@ export function PuzzleComplete({
                       <View style={[styles.rewardIconHalo, { backgroundColor: COLORS.goldGlow, shadowColor: COLORS.gold }]} />
                       <GameIcon name="coin" size={20} />
                     </View>
-                    <Text style={styles.rewardText}>+{totalCoinsAwarded > 0 ? totalCoinsAwarded : coinReward} coins</Text>
+                    <Text style={styles.rewardText}>+{coinsDisplay} coins</Text>
                   </LinearGradient>
-                  {/* Gems: purple/cyan glass capsule */}
-                  {(perfectRun || totalGemsAwarded > 0) && (
+                  {/* Gems: purple/cyan glass capsule — only when gems were
+                      actually awarded (or estimated, pre-delivery). */}
+                  {gemsDisplay > 0 && (
                     <LinearGradient
                       colors={['rgba(200,77,255,0.22)', 'rgba(0,229,255,0.10)'] as [string, string, ...string[]]}
                       start={{ x: 0, y: 0 }}
@@ -1517,12 +1548,12 @@ export function PuzzleComplete({
                         <View style={[styles.rewardIconHalo, { backgroundColor: COLORS.purpleGlow, shadowColor: COLORS.purple }]} />
                         <GameIcon name="gem" size={20} />
                       </View>
-                      <Text style={styles.rewardTextGold}>+{totalGemsAwarded > 0 ? totalGemsAwarded : perfectClearGems()} gems</Text>
+                      <Text style={styles.rewardTextGold}>+{gemsDisplay} gems</Text>
                     </LinearGradient>
                   )}
                 </View>
                 {/* Double rewards ad button */}
-                {showAdOption && !rewardDoubled && onDoubleReward && (
+                {showAdOption && !rewardDoubled && onDoubleReward && hasSomethingToDouble && (
                   <Pressable
                     style={({ pressed }) => [{
                       flexDirection: 'row',
@@ -1538,11 +1569,13 @@ export function PuzzleComplete({
                     }, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
                     onPress={onDoubleReward}
                     accessibilityRole="button"
-                    accessibilityLabel="Watch ad to double rewards"
+                    accessibilityLabel={
+                      adFree ? 'Double rewards, free, no ad' : 'Watch ad to double rewards'
+                    }
                   >
                     <GameIcon name="frame" size={15} />
                     <Text style={{ color: COLORS.green, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5, marginLeft: 6 }}>
-                      Watch Ad to DOUBLE Rewards
+                      {adFree ? 'DOUBLE Rewards — FREE (no ad)' : 'Watch Ad to DOUBLE Rewards'}
                     </Text>
                   </Pressable>
                 )}

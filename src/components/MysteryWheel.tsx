@@ -10,6 +10,7 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { getActiveWheel } from '../data/seasonalWheels';
 import GameIcon from './icons/GameIcon';
+import { formatOddsPercent } from './monetizationModel';
 import {
   MysteryBoxReward,
   MysteryWheelState,
@@ -499,7 +500,12 @@ export function MysteryWheel({
                       {segment.rarity.toUpperCase()}
                     </Text>
                   </View>
-                  <Text style={styles.oddsPercent}>{percent.toFixed(2)}%</Text>
+                  {/* formatOddsPercent widens precision until sub-1% wedges
+                      (the 500-gem jackpot sits near 0.1% since the faucet
+                      collapse) print a non-zero figure — a disclosure that
+                      rounds a real probability to 0% is a false statement
+                      on a compliance surface. */}
+                  <Text style={styles.oddsPercent}>{formatOddsPercent(percent)}</Text>
                 </View>
               ))}
 
@@ -516,7 +522,7 @@ export function MysteryWheel({
                   <View style={styles.oddsRowText}>
                     <Text style={styles.oddsLabel}>{reward.label}</Text>
                   </View>
-                  <Text style={styles.oddsPercent}>{percent.toFixed(2)}%</Text>
+                  <Text style={styles.oddsPercent}>{formatOddsPercent(percent)}</Text>
                 </View>
               ))}
               <Text style={styles.oddsFootnote}>

@@ -60,8 +60,22 @@ export const DEFAULT_MYSTERY_WHEEL_STATE: MysteryWheelState = {
 };
 
 /**
- * Standard wheel segments — 10 slices.
- * Weights sum to 100 for easy percentage reasoning.
+ * Standard wheel segments — 11 slices.
+ *
+ * Weights are ×10 the old percentage scale (sum = 991) so the legendary
+ * wedge can sit below 1% while every other weight stays an integer.
+ * Probability of a wedge is weight / total — the odds-disclosure sheet in
+ * MysteryWheel.tsx computes exactly that, so no consumer assumes a sum.
+ *
+ * EV retune (August 2026 faucet collapse): the wheel paid ~6.5 gems of
+ * expected value per spin — dominated by the 500-gem wedge at 1% — which
+ * made the "free" wheel the single biggest gem faucet in the game (free
+ * players earned 50-90 gems/day against a 3/day target). The 500-gem
+ * jackpot KEEPS its full value (the dream is the point) but its weight
+ * drops to 1/991 ≈ 0.1%, an ultra-rare that averages one hit per ~991
+ * spins. Total gem EV is now ~2.0 per spin (~2.3 worst-case with pity
+ * amortized) — inside the 1.5-2.5 design band pinned by
+ * __tests__/mysteryWheel.test.ts.
  */
 export const WHEEL_SEGMENTS: WheelSegment[] = [
   {
@@ -70,7 +84,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1FA99}',
     iconName: 'coin',
     reward: { coins: 50 },
-    weight: 21,
+    weight: 210,
     color: '#cd7f32',
     rarity: 'common',
   },
@@ -80,7 +94,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1FA99}',
     iconName: 'chest',
     reward: { coins: 150 },
-    weight: 15,
+    weight: 150,
     color: '#daa520',
     rarity: 'common',
   },
@@ -90,7 +104,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1F4A1}',
     iconName: 'hint',
     reward: { hints: 2 },
-    weight: 18,
+    weight: 180,
     color: '#5c9ead',
     rarity: 'common',
   },
@@ -100,7 +114,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1F500}',
     iconName: 'shuffle',
     reward: { booster: 'shuffleFiller' },
-    weight: 12,
+    weight: 120,
     color: '#6c5ce7',
     rarity: 'uncommon',
   },
@@ -110,7 +124,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1F48E}',
     iconName: 'gem',
     reward: { gems: 5 },
-    weight: 10,
+    weight: 100,
     color: '#00d4ff',
     rarity: 'uncommon',
   },
@@ -120,7 +134,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1F441}\u{FE0F}',
     iconName: 'eye',
     reward: { booster: 'boardPreview' },
-    weight: 8,
+    weight: 80,
     color: '#a855f7',
     rarity: 'uncommon',
   },
@@ -130,7 +144,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1F381}',
     iconName: 'gift',
     reward: { mysteryBox: true },
-    weight: 5,
+    weight: 50,
     color: '#ff6b6b',
     rarity: 'rare',
   },
@@ -140,7 +154,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{2B50}',
     iconName: 'cascadeCrystal',
     reward: { rareTile: true },
-    weight: 4,
+    weight: 40,
     color: '#ffd700',
     rarity: 'rare',
   },
@@ -150,7 +164,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1F48E}\u{2728}',
     iconName: 'crystalDisplay',
     reward: { gems: 25 },
-    weight: 3,
+    weight: 30,
     color: '#00ffcc',
     rarity: 'epic',
   },
@@ -160,7 +174,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     icon: '\u{1F680}',
     iconName: 'rocket',
     reward: { xpMultiplier: { multiplier: 2, durationMinutes: 30 } },
-    weight: 3,
+    weight: 30,
     color: '#ff9f43',
     rarity: 'epic',
   },

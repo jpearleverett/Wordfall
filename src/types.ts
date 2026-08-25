@@ -195,7 +195,8 @@ export type GameAction =
    * etc.) so the player resumes exactly where they left off. Emitted by
    * GameScreen on mount if a valid snapshot exists for the target level.
    */
-  | { type: 'HYDRATE_FROM_SNAPSHOT'; state: GameState };
+  | { type: 'HYDRATE_FROM_SNAPSHOT'; state: GameState }
+  | { type: 'EXTEND_TIME'; seconds: number };
 
 /**
  * Serializable snapshot of an in-progress puzzle. Written to AsyncStorage on
@@ -623,13 +624,14 @@ export type IAPProductId =
   | 'shuffle_pack_5'
   | 'premium_pass'
   | 'ad_removal'
-  | 'gems_30'
   | 'gems_50'
   | 'gems_120'
-  | 'gems_200'
   | 'gems_250'
+  | 'gems_250_sale_30'
+  | 'gems_250_sale_50'
   | 'gems_400'
   | 'gems_500'
+  | 'gems_500_sale_40'
   | 'gems_1000'
   | 'coins_500'
   | 'coins_2000'
@@ -638,6 +640,11 @@ export type IAPProductId =
   | 'weekly_champion'
   | 'event_special'
   | 'season_pass_bundle'
+  | 'second_purchase_special'
+  | 'starter_pack_sale_50'
+  | 'starter_pack_sale_60'
+  | 'starter_pack_sale_70'
+  | 'chapter_bundle_sale_50'
   | 'quick_boost'
   | 'power_pack'
   | 'super_bundle'

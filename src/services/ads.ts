@@ -26,7 +26,8 @@ export type AdRewardType =
   | 'spin_reward'
   | 'coins_reward'
   | 'double_reward'
-  | 'life_reward';
+  | 'life_reward'
+  | 'time_continue';
 
 export interface AdRewardResult {
   rewarded: boolean;
@@ -41,6 +42,7 @@ export const AD_REWARD_VALUES: Record<AdRewardType, { currency: string; amount: 
   coins_reward: { currency: 'coins', amount: 50 },
   double_reward: { currency: 'double', amount: 2 },
   life_reward: { currency: 'lives', amount: 1 },
+  time_continue: { currency: 'time', amount: 30 },
 };
 
 // ── Daily tracking persistence ─────────────────────────────────────────────────
@@ -119,12 +121,37 @@ function adCap(
   return getRemoteNumberClamped(key, fallback, min, max);
 }
 
+/**
+ * How long to wait for an ad to load before giving up. A no-fill or dead
+ * network must resolve the caller's promise (rewarded:false) — never hang
+ * the button that triggered it.
+ */
+const AD_LOAD_TIMEOUT_MS = 15_000;
+
+/**
+ * Minimum gap between automatic rewarded-preload retries after a failure,
+ * so a no-fill region doesn't re-request on every render that asks
+ * `canShowAd()`.
+ */
+const PRELOAD_RETRY_INTERVAL_MS = 30_000;
+
 class AdManager {
   private static instance: AdManager;
   private adsRemoved = false;
   private rewardedAdReady = false;
   private initialized = false;
   private useMock = true;
+
+  /**
+   * Native mode only: a RewardedAd instance that has fired LOADED and is
+   * waiting to be shown. `rewardedAdReady` mirrors whether this cache is
+   * populated (in mock mode it stays permanently true instead).
+   */
+  private preloadedRewardedAd: any = null;
+  /** Guard so only one preload runs at a time */
+  private preloadingRewarded = false;
+  /** Timestamp of the last failed preload — throttles automatic retries */
+  private lastPreloadFailureAt = 0;
   private tracking: AdTracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
 
   /**
@@ -213,7 +240,7 @@ class AdManager {
       if (instance && typeof instance.initialize === 'function') {
         await instance.initialize();
         this.useMock = false;
-        this.preloadRewardedAd();
+        void this.preloadRewardedAd();
         logger.log('[Ads] Native ad module (react-native-google-mobile-ads) initialised');
         crashReporter.addBreadcrumb('AdMob initialized', 'ads');
       }
@@ -422,6 +449,9 @@ class AdManager {
 
   /** Whether an ad can be shown right now (all checks combined) */
   canShowAd(rewardType?: AdRewardType): boolean {
+    // Native mode: opportunistically re-preload after a failure so ad entry
+    // points come back once fill returns (fire-and-forget, throttled).
+    this.maybeRefreshRewardedPreload();
     if (this.adsRemoved) return false;
     if (!this.rewardedAdReady) return false;
     if (!this.isCooldownElapsed()) return false;
@@ -503,45 +533,206 @@ class AdManager {
     return Math.max(0, adCap('maxInterstitialsPerDay', AD_CONFIG.MAX_INTERSTITIALS_PER_DAY) - this.tracking.interstitialCount);
   }
 
+  // ── Native ad plumbing (react-native-google-mobile-ads v16) ────────────
+  //
+  // v16 contract (see node_modules/react-native-google-mobile-ads/src/ads/
+  // MobileAd.ts): `addAdEventListener` THROWS on an unknown event name,
+  // `RewardedAd` additionally throws on AdEventType.LOADED (rewarded ads
+  // load via RewardedAdEventType.LOADED = 'rewarded_loaded'), and `show()`
+  // throws synchronously when the ad has not loaded. Every path below is
+  // therefore: create → listen → load() → wait for LOADED → show() → wait
+  // for CLOSED, with EARNED_REWARD (which fires BEFORE closed) captured as
+  // a flag along the way. Nothing here may reject — callers await these
+  // promises unprotected.
+
+  /** Event-name constants, resolved from the module with string fallbacks. */
+  private adEventNames(mobileAds: any) {
+    return {
+      loaded: mobileAds?.AdEventType?.LOADED ?? 'loaded',
+      rewardedLoaded: mobileAds?.RewardedAdEventType?.LOADED ?? 'rewarded_loaded',
+      earnedReward: mobileAds?.RewardedAdEventType?.EARNED_REWARD ?? 'rewarded_earned_reward',
+      error: mobileAds?.AdEventType?.ERROR ?? 'error',
+      closed: mobileAds?.AdEventType?.CLOSED ?? 'closed',
+      paid: mobileAds?.AdEventType?.PAID ?? 'paid',
+    };
+  }
+
+  private subscribeAdEvent(
+    ad: any,
+    type: string,
+    cb: (payload?: any) => void,
+    unsubs: Array<() => void>,
+  ): void {
+    const unsub = ad.addAdEventListener(type, cb);
+    if (typeof unsub === 'function') unsubs.push(unsub);
+  }
+
+  /**
+   * load() the ad and resolve true once LOADED fires, false on ERROR or
+   * after AD_LOAD_TIMEOUT_MS (no-fill / offline must not hang the UI).
+   * Never rejects; removes its listeners on settle.
+   */
+  private loadAd(mobileAds: any, ad: any, kind: 'rewarded' | 'interstitial'): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const unsubs: Array<() => void> = [];
+      const settle = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        for (const unsub of unsubs) {
+          try {
+            unsub();
+          } catch {
+            // Listener already removed — ignore
+          }
+        }
+        resolve(ok);
+      };
+      try {
+        const events = this.adEventNames(mobileAds);
+        const loadedEvent = kind === 'rewarded' ? events.rewardedLoaded : events.loaded;
+        this.subscribeAdEvent(ad, loadedEvent, () => settle(true), unsubs);
+        this.subscribeAdEvent(
+          ad,
+          events.error,
+          (err: unknown) => {
+            crashReporter.addBreadcrumb(
+              `${kind} ad failed to load: ${err instanceof Error ? err.message : String(err)}`,
+              'ads',
+            );
+            settle(false);
+          },
+          unsubs,
+        );
+        timer = setTimeout(() => {
+          crashReporter.addBreadcrumb(`${kind} ad load timed out`, 'ads');
+          settle(false);
+        }, AD_LOAD_TIMEOUT_MS);
+        ad.load();
+      } catch (e) {
+        crashReporter.addBreadcrumb(
+          `${kind} ad load setup failed: ${e instanceof Error ? e.message : String(e)}`,
+          'ads',
+        );
+        settle(false);
+      }
+    });
+  }
+
+  /**
+   * show() an ALREADY-LOADED ad and resolve when it closes or errors.
+   * `completed` = the ad ran and closed normally; `earned` = the user
+   * earned the reward (rewarded ads only — EARNED_REWARD fires before
+   * CLOSED, and also survives an error-after-earn, matching AdMob's own
+   * crediting). show()'s synchronous throw and rejected promise are both
+   * absorbed. Never rejects; removes its listeners on settle.
+   */
+  private showLoadedAd(
+    mobileAds: any,
+    ad: any,
+    kind: 'rewarded' | 'interstitial',
+  ): Promise<{ completed: boolean; earned: boolean }> {
+    return new Promise<{ completed: boolean; earned: boolean }>((resolve) => {
+      let settled = false;
+      let earned = false;
+      const unsubs: Array<() => void> = [];
+      const settle = (completed: boolean) => {
+        if (settled) return;
+        settled = true;
+        for (const unsub of unsubs) {
+          try {
+            unsub();
+          } catch {
+            // Listener already removed — ignore
+          }
+        }
+        resolve({ completed, earned });
+      };
+      try {
+        const events = this.adEventNames(mobileAds);
+        if (kind === 'rewarded') {
+          this.subscribeAdEvent(ad, events.earnedReward, () => {
+            earned = true;
+          }, unsubs);
+        }
+        this.subscribeAdEvent(ad, events.closed, () => settle(true), unsubs);
+        this.subscribeAdEvent(
+          ad,
+          events.error,
+          (err: unknown) => {
+            crashReporter.addBreadcrumb(
+              `${kind} ad error during show: ${err instanceof Error ? err.message : String(err)}`,
+              'ads',
+            );
+            settle(false);
+          },
+          unsubs,
+        );
+        // AdMob impression-level revenue event (v15+). `data` includes
+        // { valueMicros, currency, precision } when available.
+        this.subscribeAdEvent(ad, events.paid, (data: any) => {
+          const valueMicros = Number(data?.valueMicros ?? 0);
+          const estimated = valueMicros ? valueMicros / 1_000_000 : 0;
+          void analytics.trackAdRevenue(kind, estimated);
+        }, unsubs);
+
+        let shown: unknown;
+        try {
+          shown = ad.show();
+        } catch (err) {
+          // show() throws synchronously when the ad is not (or no longer) loaded.
+          crashReporter.addBreadcrumb(
+            `${kind} ad show() threw: ${err instanceof Error ? err.message : String(err)}`,
+            'ads',
+          );
+          settle(false);
+          return;
+        }
+        if (shown && typeof (shown as Promise<void>).catch === 'function') {
+          (shown as Promise<void>).catch((err: unknown) => {
+            crashReporter.addBreadcrumb(
+              `${kind} ad show() rejected: ${err instanceof Error ? err.message : String(err)}`,
+              'ads',
+            );
+            settle(false);
+          });
+        }
+      } catch (e) {
+        crashReporter.addBreadcrumb(
+          `${kind} ad show setup failed: ${e instanceof Error ? e.message : String(e)}`,
+          'ads',
+        );
+        settle(false);
+      }
+    });
+  }
+
   // ── Native interstitial implementation ─────────────────────────────────
 
   private async nativeShowInterstitialAd(): Promise<boolean> {
     try {
       const mobileAds = await import('react-native-google-mobile-ads' as string);
-      if (mobileAds.InterstitialAd) {
-        return new Promise<boolean>((resolve) => {
-          const ad = mobileAds.InterstitialAd.createForAdRequest(
-            AD_CONFIG.INTERSTITIAL_AD_UNIT_ID,
-            this.buildRequestOptions(),
-          );
-          ad.addAdEventListener('closed', () => resolve(true));
-          // AdMob impression-level revenue event (v15+). `data` includes
-          // { valueMicros, currency, precision } when available.
-          ad.addAdEventListener?.('paid', (data: any) => {
-            const valueMicros = Number(data?.valueMicros ?? 0);
-            const estimated = valueMicros ? valueMicros / 1_000_000 : 0;
-            void analytics.trackAdRevenue('interstitial', estimated);
-          });
-          ad.addAdEventListener('error', (err: unknown) => {
-            crashReporter.addBreadcrumb(
-              `Interstitial ad error: ${err instanceof Error ? err.message : String(err)}`,
-              'ads',
-            );
-            resolve(false);
-          });
-          ad.load();
-          ad.show().catch((err: unknown) => {
-            crashReporter.addBreadcrumb(
-              `Interstitial ad show() rejected: ${err instanceof Error ? err.message : String(err)}`,
-              'ads',
-            );
-            resolve(false);
-          });
-        });
+      if (mobileAds?.InterstitialAd) {
+        const ad = mobileAds.InterstitialAd.createForAdRequest(
+          AD_CONFIG.INTERSTITIAL_AD_UNIT_ID,
+          this.buildRequestOptions(),
+        );
+        const loaded = await this.loadAd(mobileAds, ad, 'interstitial');
+        if (!loaded) {
+          logger.warn('[Ads] Failed to show native interstitial ad');
+          return false;
+        }
+        const { completed } = await this.showLoadedAd(mobileAds, ad, 'interstitial');
+        return completed;
       }
     } catch (e) {
       crashReporter.addBreadcrumb(
-        `Interstitial ad import failed: ${e instanceof Error ? e.message : String(e)}`,
+        `Interstitial ad flow failed: ${e instanceof Error ? e.message : String(e)}`,
         'ads',
       );
     }
@@ -579,60 +770,111 @@ class AdManager {
   private async nativeShowRewardedAd(rewardType: AdRewardType): Promise<AdRewardResult> {
     try {
       const mobileAds = await import('react-native-google-mobile-ads' as string);
-      if (mobileAds.RewardedAd) {
-        const result: AdRewardResult = await new Promise<AdRewardResult>((resolve) => {
-          const ad = mobileAds.RewardedAd.createForAdRequest(
-            AD_CONFIG.REWARDED_AD_UNIT_ID,
-            this.buildRequestOptions(),
-          );
-          ad.addAdEventListener('rewarded', () => {
-            resolve({ rewarded: true, rewardType });
-          });
-          ad.addAdEventListener('closed', () => {
-            resolve({ rewarded: false, rewardType });
-          });
-          ad.addAdEventListener?.('paid', (data: any) => {
-            const valueMicros = Number(data?.valueMicros ?? 0);
-            const estimated = valueMicros ? valueMicros / 1_000_000 : 0;
-            void analytics.trackAdRevenue('rewarded', estimated);
-          });
-          ad.addAdEventListener('error', (err: unknown) => {
-            crashReporter.addBreadcrumb(
-              `Rewarded ad error: ${err instanceof Error ? err.message : String(err)}`,
-              'ads',
-            );
-            resolve({ rewarded: false, rewardType });
-          });
-          ad.load();
-          ad.show().catch((err: unknown) => {
-            crashReporter.addBreadcrumb(
-              `Rewarded ad show() rejected: ${err instanceof Error ? err.message : String(err)}`,
-              'ads',
-            );
-            resolve({ rewarded: false, rewardType });
-          });
-        });
-        this.preloadRewardedAd();
-        return result;
+      if (!mobileAds?.RewardedAd) {
+        return { rewarded: false, rewardType };
       }
+
+      // Prefer the preloaded instance — no load latency for the player.
+      let ad = this.takePreloadedRewardedAd();
+
+      if (!ad) {
+        // Nothing cached (or the cache went stale) — fresh load-and-show.
+        ad = mobileAds.RewardedAd.createForAdRequest(
+          AD_CONFIG.REWARDED_AD_UNIT_ID,
+          this.buildRequestOptions(),
+        );
+        const loaded = await this.loadAd(mobileAds, ad, 'rewarded');
+        if (!loaded) {
+          return { rewarded: false, rewardType };
+        }
+      }
+
+      const { earned } = await this.showLoadedAd(mobileAds, ad, 'rewarded');
+      // Warm the next ad so the following tap shows instantly.
+      void this.preloadRewardedAd();
+      return { rewarded: earned, rewardType };
     } catch (e) {
       crashReporter.addBreadcrumb(
-        `Rewarded ad import failed: ${e instanceof Error ? e.message : String(e)}`,
+        `Rewarded ad flow failed: ${e instanceof Error ? e.message : String(e)}`,
         'ads',
       );
+      return { rewarded: false, rewardType };
     }
-    return { rewarded: false, rewardType };
   }
 
+  /**
+   * Consume the cached preloaded rewarded ad, if any. Clearing
+   * `rewardedAdReady` here keeps `isRewardedAdReady()` honest until the
+   * next preload lands. A cached instance whose `loaded` flag has gone
+   * false (closed/expired) cannot be show()n again — discard it so the
+   * caller falls back to a fresh load instead of hitting show()'s throw.
+   */
+  private takePreloadedRewardedAd(): any {
+    const ad = this.preloadedRewardedAd;
+    if (!ad) return null;
+    this.preloadedRewardedAd = null;
+    this.rewardedAdReady = false;
+    this.notifyListeners();
+    return ad.loaded === false ? null : ad;
+  }
+
+  /**
+   * Load a rewarded ad ahead of the tap that shows it. In native mode
+   * `rewardedAdReady` reflects the REAL loaded state of the cached
+   * instance; in mock mode the ad is always "ready" (unchanged behavior).
+   * Never rejects — init() and the post-show warmup call this
+   * fire-and-forget.
+   */
   private async preloadRewardedAd(): Promise<void> {
     if (this.useMock) {
       this.rewardedAdReady = true;
       this.notifyListeners();
       return;
     }
-    // Preloading requires react-native-google-mobile-ads — skip if unavailable
-    this.rewardedAdReady = true;
-    this.notifyListeners();
+    if (this.preloadingRewarded || this.preloadedRewardedAd) return;
+    this.preloadingRewarded = true;
+    try {
+      const mobileAds = await import('react-native-google-mobile-ads' as string);
+      if (!mobileAds?.RewardedAd) return;
+      const ad = mobileAds.RewardedAd.createForAdRequest(
+        AD_CONFIG.REWARDED_AD_UNIT_ID,
+        this.buildRequestOptions(),
+      );
+      const loaded = await this.loadAd(mobileAds, ad, 'rewarded');
+      if (loaded) {
+        this.preloadedRewardedAd = ad;
+        this.rewardedAdReady = true;
+        this.lastPreloadFailureAt = 0;
+      } else {
+        this.rewardedAdReady = false;
+        this.lastPreloadFailureAt = Date.now();
+      }
+      this.notifyListeners();
+    } catch (e) {
+      this.rewardedAdReady = false;
+      this.lastPreloadFailureAt = Date.now();
+      crashReporter.addBreadcrumb(
+        `Rewarded ad preload failed: ${e instanceof Error ? e.message : String(e)}`,
+        'ads',
+      );
+      this.notifyListeners();
+    } finally {
+      this.preloadingRewarded = false;
+    }
+  }
+
+  /**
+   * Native-mode self-heal: if the last preload failed (no fill / offline at
+   * app start) and nothing is cached or in flight, quietly try again the
+   * next time the UI asks whether an ad is available — otherwise a single
+   * failed preload would hide every ad entry point until the next app
+   * start. Throttled by PRELOAD_RETRY_INTERVAL_MS.
+   */
+  private maybeRefreshRewardedPreload(): void {
+    if (this.useMock || !this.initialized || this.adsRemoved) return;
+    if (this.preloadedRewardedAd || this.preloadingRewarded) return;
+    if (Date.now() - this.lastPreloadFailureAt < PRELOAD_RETRY_INTERVAL_MS) return;
+    void this.preloadRewardedAd();
   }
 
   // ── Mock implementation ─────────────────────────────────────────────────

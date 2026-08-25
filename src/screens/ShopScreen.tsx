@@ -16,7 +16,7 @@ import {
   StyleProp,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, FONTS, SHADOWS, RADIUS } from '../constants';
+import { AD_CONFIG, COLORS, GRADIENTS, FONTS, SHADOWS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
 import PrimaryButton from '../components/common/PrimaryButton';
@@ -55,9 +55,27 @@ import {
 } from '../data/rotatingShop';
 import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
-import { getFlashSale, FlashSale, getDynamicOffers, DynamicOffer } from '../data/dynamicPricing';
-import { getRemoteBoolean } from '../services/remoteConfig';
-import { getProductById, getVipDailyDrip } from '../data/shopProducts';
+import {
+  getFlashSale,
+  FlashSale,
+  getDynamicOffers,
+  DynamicOffer,
+  resolveSalePricing,
+  isOfferExpired,
+  offerExpiresAt,
+  getSecondPurchaseFollowupOffer,
+  hydratePurchaseFollowup,
+} from '../data/dynamicPricing';
+import { getRemoteBoolean, getRemoteString } from '../services/remoteConfig';
+import {
+  getProductById,
+  getVipDailyDrip,
+  getStorefrontShelf,
+  bundleContentsFromRewards,
+  BundleContentEntry,
+  resolveFeaturedProductId,
+  ShopProduct,
+} from '../data/shopProducts';
 import { soundManager } from '../services/sound';
 import {
   getVipStreakBonus,
@@ -75,9 +93,20 @@ import {
 import { getRemoteNumber } from '../services/remoteConfig';
 import { bentoPanel } from '../styles/bentoPanel';
 import { analytics } from '../services/analytics';
+import { COIN_SHOP_TRACKING_KEY } from '../components/monetizationModel';
 
 const { width } = Dimensions.get('window');
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * End of the current UTC day — the Featured card countdown target. Derived
+ * from a stable calendar anchor rather than `Date.now() + 24h` at mount, so
+ * remounting the shop no longer resets the "expiry" (the timer used to be
+ * fiction: every visit restarted a fresh 24h clock).
+ */
+function endOfUtcDayMs(now: number = Date.now()): number {
+  const d = new Date(now);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
+}
 
 /**
  * Per-tier reward illustrations for the VIP streak cosmetic ladder — every
@@ -995,34 +1024,103 @@ const UNDO_BUNDLES: ShopItem[] = [
   { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'undo_bundle_50' },
 ];
 
+// The COMPLETE coin ladder \u2014 every coins_* SKU in SHOP_PRODUCTS. The old
+// middle row was 'coins_1500', which maps to no catalog SKU (the catalog
+// tier is coins_2000 at the same $2.99), so its purchase always failed.
 const COIN_PACKS: ShopItem[] = [
-  { id: 'coins_500', name: '500 Coins', icon: '\u{1FA99}', iconName: 'coinStack', price: '$0.99', quantity: 500 },
-  { id: 'coins_1500', name: '1,500 Coins', icon: '\u{1FA99}', iconName: 'coinPile', price: '$2.99', quantity: 1500 },
-  { id: 'coins_5000', name: '5,000 Coins', icon: '\u{1FA99}', iconName: 'coinChestSpill', price: '$7.99', quantity: 5000, bestValue: true },
+  { id: 'coins_500', name: '500 Coins', icon: '\u{1FA99}', iconName: 'coinStack', price: '$0.99', quantity: 500, iapProductId: 'coins_500' },
+  { id: 'coins_2000', name: '2,000 Coins', icon: '\u{1FA99}', iconName: 'coinPile', price: '$2.99', quantity: 2000, iapProductId: 'coins_2000' },
+  { id: 'coins_5000', name: '5,000 Coins', icon: '\u{1FA99}', iconName: 'coinChestSpill', price: '$4.99', quantity: 5000, bestValue: true, iapProductId: 'coins_5000' },
 ];
 
+// The COMPLETE gem ladder \u2014 gems_120 / gems_400 / gems_1000 existed in the
+// catalog but were never rendered anywhere (dark SKUs).
 const GEM_PACKS: ShopItem[] = [
   { id: 'gems_50', name: '50 Gems', icon: '\u{1F48E}', iconName: 'gemSingle', price: '$0.99', quantity: 50, iapProductId: 'gems_50' },
+  { id: 'gems_120', name: '120 Gems', icon: '\u{1F48E}', iconName: 'gemSingle', price: '$2.99', quantity: 120, iapProductId: 'gems_120' },
   { id: 'gems_250', name: '250 Gems', icon: '\u{1F48E}', iconName: 'gemCluster', price: '$4.99', quantity: 250, iapProductId: 'gems_250' },
+  { id: 'gems_400', name: '400 Gems', icon: '\u{1F48E}', iconName: 'gemCluster', price: '$7.99', quantity: 400, iapProductId: 'gems_400' },
   { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', iconName: 'gemHoard', price: '$9.99', quantity: 500, bestValue: true, iapProductId: 'gems_500' },
+  { id: 'gems_1000', name: '1,000 Gems', icon: '\u{1F48E}', iconName: 'gemHoard', price: '$19.99', quantity: 1000, iapProductId: 'gems_1000' },
 ];
 
-// Stacked-contents rows for the hardcoded bundle cards (mini medallions).
-const STARTER_PACK_CONTENTS: { icon?: GameIconName; glyph?: string; label: string }[] = [
-  { icon: 'coin', label: '500' },
-  { icon: 'gem', label: '50' },
-  { icon: 'hint', label: '10' },
-  { glyph: '\u{1F3A8}', label: 'DECOR' },
+// Per-booster packs (M2 SKUs) \u2014 in the catalog since April 2026, never
+// rendered until now. The trio crate renders as a full-width row below.
+const BOOSTER_PACKS: ShopItem[] = [
+  { id: 'wildcard_pack_5', name: 'Wildcard \u00D75', icon: '\u2B50', price: '$1.99', quantity: 5, iapProductId: 'wildcard_pack_5' },
+  { id: 'spotlight_pack_5', name: 'Spotlight \u00D75', icon: '\u{1F4A1}', price: '$1.99', quantity: 5, iapProductId: 'spotlight_pack_5' },
+  { id: 'shuffle_pack_5', name: 'Shuffle \u00D75', icon: '\u{1F500}', price: '$1.99', quantity: 5, iapProductId: 'shuffle_pack_5' },
 ];
-const WEEKEND_BUNDLE_CONTENTS: { icon?: GameIconName; glyph?: string; label: string }[] = [
-  { icon: 'gem', label: '100' },
-  { icon: 'coin', label: '3,000' },
-  { glyph: '\u{1F5BC}\uFE0F', label: 'FRAME' },
+
+// Products already sold through a dedicated shop surface (hero cards, the
+// VIP card, the ladders above, other screens). The generic catalog shelf
+// skips these so no SKU renders twice.
+const SHELF_EXCLUDED_IDS: string[] = [
+  // Ladders / rows on this screen
+  ...COIN_PACKS.map((i) => i.iapProductId!),
+  ...GEM_PACKS.map((i) => i.iapProductId!),
+  ...BOOSTER_PACKS.map((i) => i.iapProductId!),
+  'booster_crate',
+  'streak_freeze',
+  'hint_bundle_10',
+  'hint_bundle_25',
+  'hint_bundle_50',
+  'undo_bundle_10',
+  'undo_bundle_25',
+  'undo_bundle_50',
+  // Dedicated cards on this screen
+  'starter_pack',
+  'chapter_bundle',
+  'daily_value_pack',
+  'premium_pass',
+  'ad_removal',
+  'piggy_bank_break',
+  'weekend_warrior',
+  // Sold on their own screens
+  'season_pass_premium',
 ];
+
+/** Mini-medallion art for a derived bundle-contents entry. */
+function bundleEntryArt(entry: BundleContentEntry): { icon?: GameIconName; glyph?: string } {
+  switch (entry.kind) {
+    case 'coins':
+      return { icon: 'coin' };
+    case 'gems':
+      return { icon: 'gem' };
+    case 'hints':
+      return { icon: 'hint' };
+    case 'undos':
+      return { glyph: '\u21A9\uFE0F' };
+    case 'boosters':
+      return { glyph: '\u2B50' };
+    case 'decor':
+      return { glyph: '\u{1F3A8}' };
+    default:
+      return { glyph: '\u{1F381}' };
+  }
+}
+
+/** Contents strip for a catalog product, derived from its REAL rewards. */
+function contentsRowsForProduct(product: ShopProduct): { icon?: GameIconName; glyph?: string; label: string }[] {
+  return bundleContentsFromRewards(product.rewards).map((entry) => ({
+    ...bundleEntryArt(entry),
+    label: entry.label,
+  }));
+}
 
 // ─── Coin Shop categories ────────────────────────────────────────────────────
 
-const COIN_SHOP_TRACKING_KEY = '@wordfall_coinshop_daily';
+
+/**
+ * Daily instant-claim tracking for ad-free buyers. adManager.showRewardedAd
+ * auto-grants without an ad when Remove Ads is owned, but its early return
+ * skips the ad-side daily caps — so the FREE REWARDS section keeps its own
+ * per-type counter (same cap as the coin-ad limit) instead of handing
+ * ad-free buyers an unbounded currency faucet. Persisted like the coin-shop
+ * daily limits so backing out of the screen doesn't reset it.
+ */
+const AD_FREE_CLAIMS_KEY = '@wordfall_adfree_free_rewards';
+const AD_FREE_DAILY_CAP = AD_CONFIG.MAX_COIN_ADS_PER_DAY;
 
 const COIN_SHOP_CATEGORIES: { key: string; label: string }[] = [
   { key: 'consumables', label: 'Consumables' },
@@ -1154,6 +1252,19 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     () => getVipDailyDrip(isVip ? purchaseHistory : []),
     [isVip, purchaseHistory],
   );
+  // Card title for an ACTIVE subscriber: the tier they actually bought
+  // (same newest-first purchase-history walk as getVipDailyDrip), so a
+  // monthly/annual subscriber is never shown a "VIP WEEKLY" header.
+  const activeVipTierName = useMemo(() => {
+    if (!isVip) return undefined;
+    for (let i = purchaseHistory.length - 1; i >= 0; i--) {
+      const item = (purchaseHistory[i] as { item?: unknown })?.item;
+      if (typeof item === 'string' && item.startsWith('vip_')) {
+        return getProductById(item)?.name.toUpperCase();
+      }
+    }
+    return undefined;
+  }, [isVip, purchaseHistory]);
   // Tier 6 B6 — read player segments + current level to compute the dynamic
   // "For You" row. When segments haven't been computed yet (first session),
   // the hook returns an empty offer list so the section simply doesn't render.
@@ -1192,9 +1303,48 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const adsRemoved = adsRemovedProp ?? isAdFreeComputed;
   const premiumPass = premiumPassProp ?? isPremiumPassFlag;
   const { commerceStatus, checkPurchaseAllowed, purchaseProduct, restorePurchases } = useCommerce();
-  const featuredExpiryAtRef = useRef(Date.now() + DAY_IN_MS);
+  // Stable calendar anchor (end of the current UTC day) — survives remounts.
+  const featuredExpiryAt = useMemo(() => endOfUtcDayMs(), []);
+
+  // ── Second-purchase follow-up (48h after the first real-money purchase) ──
+  // Hydrates the persisted follow-up ledger, then reads the live offer.
+  // Refreshed after every purchase (conversion closes the window) and
+  // filtered through the same isOfferExpired path as every offer surface.
+  const [followupOffer, setFollowupOffer] = useState<DynamicOffer | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void hydratePurchaseFollowup().then(() => {
+      if (!cancelled) setFollowupOffer(getSecondPurchaseFollowupOffer());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const followupSurfacedRef = useRef(false);
+  useEffect(() => {
+    if (!followupOffer || followupSurfacedRef.current) return;
+    followupSurfacedRef.current = true;
+    void analytics.logEvent('offer_followup_surfaced', {
+      product_id: followupOffer.productId,
+      discount_percent: followupOffer.discountPercent,
+    });
+  }, [followupOffer]);
+
+  // The For You carousel's actual content: the follow-up offer (highest
+  // priority) ahead of the segment offers, with anything past its expiry
+  // filtered out at render — expiry is real, not decorative.
+  const visibleOffers = useMemo<DynamicOffer[]>(() => {
+    const merged = followupOffer ? [followupOffer, ...dynamicOffers] : dynamicOffers;
+    return merged.filter((o) => !isOfferExpired(o.createdAt, o.expiresInHours));
+  }, [followupOffer, dynamicOffers]);
 
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
+  // Which VIP tier the SUBSCRIBE button will buy. All three vip_* SKUs are
+  // sellable — monthly/annual used to exist only in the catalog with no
+  // purchase surface anywhere in the app.
+  const [selectedVipTier, setSelectedVipTier] = useState<
+    'vip_weekly' | 'vip_monthly' | 'vip_annual'
+  >('vip_weekly');
   const [watchingAd, setWatchingAd] = useState(false);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
   const [mockAdState, setMockAdState] = useState<{
@@ -1240,6 +1390,56 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const [coinShopConfirmation, setCoinShopConfirmation] = useState<string | null>(null);
   const coinShopConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Ad-free instant-claim daily tracking (see AD_FREE_CLAIMS_KEY above).
+  const [adFreeClaims, setAdFreeClaims] = useState<Record<string, number>>({});
+  const [adFreeClaimsDate, setAdFreeClaimsDate] = useState<string>(
+    () => new Date().toISOString().slice(0, 10),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(AD_FREE_CLAIMS_KEY);
+        if (!stored || cancelled) return;
+        const parsed = JSON.parse(stored) as { date: string; counts: Record<string, number> };
+        if (parsed.date === new Date().toISOString().slice(0, 10)) {
+          setAdFreeClaims(parsed.counts ?? {});
+          setAdFreeClaimsDate(parsed.date);
+        }
+      } catch {
+        // Unreadable tracking = fresh day — fail open.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (Object.keys(adFreeClaims).length === 0) return;
+    void AsyncStorage.setItem(
+      AD_FREE_CLAIMS_KEY,
+      JSON.stringify({ date: adFreeClaimsDate, counts: adFreeClaims }),
+    ).catch(() => {});
+  }, [adFreeClaims, adFreeClaimsDate]);
+
+  const adFreeClaimsRemaining = useCallback(
+    (rewardType: string): number => {
+      const currentDate = new Date().toISOString().slice(0, 10);
+      const counts = currentDate === adFreeClaimsDate ? adFreeClaims : {};
+      return Math.max(0, AD_FREE_DAILY_CAP - (counts[rewardType] ?? 0));
+    },
+    [adFreeClaims, adFreeClaimsDate],
+  );
+  const recordAdFreeClaim = useCallback(
+    (rewardType: string) => {
+      const currentDate = new Date().toISOString().slice(0, 10);
+      const counts = currentDate === adFreeClaimsDate ? adFreeClaims : {};
+      setAdFreeClaims({ ...counts, [rewardType]: (counts[rewardType] ?? 0) + 1 });
+      setAdFreeClaimsDate(currentDate);
+    },
+    [adFreeClaims, adFreeClaimsDate],
+  );
+
   // Flash sale state
   const flashSale = useMemo(() => getFlashSale(new Date()), []);
   // The advertised buy price must be what the store sheet will actually
@@ -1249,6 +1449,23 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const flashSaleBuyPrice = flashSale
     ? iapManager.getPrice(flashSale.productId) || flashSale.salePrice
     : '';
+
+  // Remote-Config featured pin: ops can point the first Featured card at
+  // any purchasable catalog SKU without a rebuild. Invalid / offer-only /
+  // empty values fall back to starter_pack (validated in shopProducts.ts).
+  const featuredPinnedId = useMemo(
+    () => resolveFeaturedProductId(getRemoteString('featuredProductId')),
+    [],
+  );
+
+  // The previously-dark catalog: every purchasable bundle/premium SKU not
+  // already sold by a dedicated surface, cheapest first — including the
+  // $14.99–$99.99 shelf that used to be visible only to dolphin/whale
+  // segments through dynamic offers.
+  const bundleShelf = useMemo(
+    () => getStorefrontShelf(['bundles', 'premium'], [...SHELF_EXCLUDED_IDS, featuredPinnedId]),
+    [featuredPinnedId],
+  );
 
   // Today's rotating items
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -1345,6 +1562,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         Alert.alert('Purchase Error', e?.message ?? 'Something went wrong');
       } finally {
         setPurchasingId(null);
+        // A purchase can open (first real-money charge) or close (follow-up
+        // SKU bought) the second-purchase window — re-read the live offer.
+        setFollowupOffer(getSecondPurchaseFollowupOffer());
       }
 
       // Also call the legacy prop callback if provided
@@ -1357,10 +1577,19 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
   const handleWatchAdForHint = useCallback(async () => {
     if (watchingAd) return;
+    // Ad-free buyers claim instantly (adManager auto-grants without an ad)
+    // but against this screen's own daily cap — the auto-grant path skips
+    // the ad-side caps entirely, so without this the button would be an
+    // unbounded hint faucet.
+    if (adsRemoved && adFreeClaimsRemaining('hint_reward') <= 0) {
+      Alert.alert('Daily Limit Reached', 'Come back tomorrow for more free hints!');
+      return;
+    }
     setWatchingAd(true);
     try {
       const result = await adManager.showRewardedAd('hint_reward');
       if (result.rewarded) {
+        if (adsRemoved) recordAdFreeClaim('hint_reward');
         processAdReward('hint_reward');
         Alert.alert('Reward Earned!', 'You received 1 free hint!');
       }
@@ -1369,14 +1598,19 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     } finally {
       setWatchingAd(false);
     }
-  }, [watchingAd, processAdReward]);
+  }, [watchingAd, processAdReward, adsRemoved, adFreeClaimsRemaining, recordAdFreeClaim]);
 
   const handleWatchAdForCoins = useCallback(async () => {
     if (watchingAd) return;
+    if (adsRemoved && adFreeClaimsRemaining('coins_reward') <= 0) {
+      Alert.alert('Daily Limit Reached', 'Come back tomorrow for more free coins!');
+      return;
+    }
     setWatchingAd(true);
     try {
       const result = await adManager.showRewardedAd('coins_reward');
       if (result.rewarded) {
+        if (adsRemoved) recordAdFreeClaim('coins_reward');
         processAdReward('coins_reward');
         Alert.alert('Reward Earned!', 'You received 50 coins!');
       }
@@ -1385,10 +1619,14 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     } finally {
       setWatchingAd(false);
     }
-  }, [watchingAd, processAdReward]);
+  }, [watchingAd, processAdReward, adsRemoved, adFreeClaimsRemaining, recordAdFreeClaim]);
 
   const handleWatchAdForSpin = useCallback(async () => {
     if (watchingAd) return;
+    if (adsRemoved && adFreeClaimsRemaining('spin_reward') <= 0) {
+      Alert.alert('Daily Limit Reached', 'Come back tomorrow for more free spins!');
+      return;
+    }
     setWatchingAd(true);
     try {
       const result = await adManager.showRewardedAd('spin_reward');
@@ -1401,6 +1639,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         // on every 5th call — 4 of 5 ad watches delivered nothing while the
         // alert claimed a spin, and each watch corrupted the every-5-puzzles
         // pacing counter.
+        if (adsRemoved) recordAdFreeClaim('spin_reward');
         updateMysteryWheel({ spinsAvailable: mysteryWheelSpins + 1 });
         Alert.alert('Reward Earned!', 'You received 1 free Mystery Wheel spin!');
       }
@@ -1409,7 +1648,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     } finally {
       setWatchingAd(false);
     }
-  }, [watchingAd, updateMysteryWheel, mysteryWheelSpins]);
+  }, [watchingAd, updateMysteryWheel, mysteryWheelSpins, adsRemoved, adFreeClaimsRemaining, recordAdFreeClaim]);
 
   // ── Restore purchases handler ───────────────────────────────────────────
 
@@ -1673,6 +1912,124 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     </View>
   );
 
+  /** Rows of 3 for ladders longer than one row (gem ladder is 6 SKUs). */
+  const renderItemGrid = (items: ShopItem[], accent: string) => {
+    const rows: ShopItem[][] = [];
+    for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
+    return rows.map((row) => (
+      <View key={row[0].id} style={[styles.itemRow, { marginBottom: 12 }]}>
+        {row.map((item) => renderItemCard(item, accent))}
+      </View>
+    ));
+  };
+
+  /**
+   * Featured hero card driven ENTIRELY by the catalog: name, contents,
+   * charged price, and anchor all come from the product + resolveSalePricing,
+   * so the card can never advertise contents or a price the purchase does
+   * not honor (the old "Weekend Bundle" card sold a product that existed in
+   * no catalog and promised rewards nothing granted).
+   */
+  const renderFeaturedCatalogCard = (
+    productId: string,
+    opts: { badge: string; accent: string; alt?: boolean },
+  ) => {
+    const product = getProductById(productId);
+    if (!product) return null;
+    const pricing = resolveSalePricing(productId);
+    const price = iapManager.getPrice(productId) || product.fallbackPrice;
+    const anchorLabel =
+      pricing && pricing.discountPercent > 0 ? pricing.anchorLabel : undefined;
+    const contents = contentsRowsForProduct(product);
+    return (
+      <PressableScale
+        key={productId}
+        style={[styles.featuredCard, opts.alt && styles.featuredCardAlt]}
+        onPress={() => handlePurchase(productId)}
+        disabled={!!purchasingId}
+        accessibilityLabel={`Buy ${product.name}: ${product.description} for ${price}`}
+      >
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        <LinearGradient
+          colors={[opts.accent + '30', 'transparent'] as [string, string]}
+          style={styles.featuredGlow}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+        <View style={[styles.featuredBadge, opts.alt && { backgroundColor: COLORS.purple }]}>
+          <Text style={styles.featuredBadgeText}>{opts.badge}</Text>
+        </View>
+        <HaloMedallion size={64} accent={opts.accent} aura="soft" style={styles.featuredMedallion}>
+          <HeroProductGlyph icon={product.icon} accent={opts.accent} size={40} />
+        </HaloMedallion>
+        <Text style={styles.featuredName}>{product.name}</Text>
+        <BundleContentsRow items={contents} accent={opts.accent} />
+        <View style={styles.featuredPriceRow}>
+          <PriceCapsule
+            price={price}
+            originalPrice={anchorLabel}
+            loading={isLoading(productId)}
+            accent={COLORS.green}
+          />
+        </View>
+        <View
+          style={[styles.timerContainer, opts.alt && { backgroundColor: COLORS.purple + '30' }]}
+        >
+          <LiveCountdownText
+            style={[styles.timerText, opts.alt ? { color: COLORS.purpleLight } : null]}
+            targetTime={featuredExpiryAt}
+          />
+        </View>
+      </PressableScale>
+    );
+  };
+
+  /**
+   * Full-width catalog row (premium-card visual) for shelf products —
+   * name, description, charged price, and anchor badge all from the
+   * catalog entry.
+   */
+  const renderCatalogShelfRow = (product: ShopProduct, accent: string) => {
+    const price = iapManager.getPrice(product.id) || product.fallbackPrice;
+    const pricing = resolveSalePricing(product.id);
+    const anchorLabel =
+      pricing && pricing.discountPercent > 0 ? pricing.anchorLabel : undefined;
+    return (
+      <PressableScale
+        key={product.id}
+        style={[styles.premiumCard, { borderColor: accent + '3D' }]}
+        onPress={() => handlePurchase(product.id)}
+        disabled={!!purchasingId}
+        accessibilityLabel={`Buy ${product.name} for ${price}: ${product.description}`}
+      >
+        <LinearGradient
+          colors={[accent + '12', 'rgba(26,10,46,0.94)']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        <DrawnMedallion size={44} accent={accent} style={styles.premiumMedallion}>
+          <ProductGlyph icon={product.icon} accent={accent} size={24} />
+        </DrawnMedallion>
+        <View style={styles.premiumInfo}>
+          <Text style={styles.premiumName}>{product.name}</Text>
+          <Text style={styles.premiumDesc}>{product.description}</Text>
+        </View>
+        <PriceCapsule
+          price={price}
+          originalPrice={anchorLabel}
+          loading={isLoading(product.id)}
+          accent={accent}
+        />
+      </PressableScale>
+    );
+  };
+
   return (
     <View style={styles.root}>
       <ScreenScaffold
@@ -1776,17 +2133,27 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           </View>
         )}
 
-        {/* ── Free Rewards (Watch Ads) ──────────────────────────────── */}
-        {!adsRemoved && (
+        {/* ── Free Rewards ──────────────────────────────────────────────
+            Visible to EVERYONE. Ad-free buyers used to lose this section
+            entirely — paying $4.99 removed their daily free rewards along
+            with the ads. Now they claim instantly (adManager auto-grants
+            without showing an ad), capped by the same daily limits. */}
+        {(
           <View style={styles.adSection}>
-            <SectionHeader label="FREE REWARDS" accent={COLORS.green} />
+            <SectionHeader
+              label="FREE REWARDS"
+              accent={COLORS.green}
+              meta={adsRemoved ? 'NO ADS FOR YOU' : undefined}
+            />
 
-            {/* Watch Ad for Hint */}
+            {/* Watch Ad for Hint / instant claim when ad-free */}
             <PressableScale
               style={styles.adBanner}
               onPress={handleWatchAdForHint}
-              disabled={watchingAd}
-              accessibilityLabel="Watch ad for 1 free hint"
+              disabled={watchingAd || (adsRemoved && adFreeClaimsRemaining('hint_reward') <= 0)}
+              accessibilityLabel={
+                adsRemoved ? 'Claim 1 free hint instantly' : 'Watch ad for 1 free hint'
+              }
             >
               <LinearGradient
                 colors={[COLORS.green + '1A', 'rgba(26,10,46,0.94)']}
@@ -1802,9 +2169,17 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 </DrawnMedallion>
               )}
               <View style={styles.adInfo}>
-                <Text style={styles.adTitle}>Watch Ad for 1 Free Hint</Text>
+                <Text style={styles.adTitle}>
+                  {adsRemoved ? 'Claim 1 Free Hint' : 'Watch Ad for 1 Free Hint'}
+                </Text>
                 <Text style={styles.adSubtitle}>
-                  {watchingAd ? 'Watching ad...' : 'Tap to watch a short video'}
+                  {watchingAd
+                    ? 'Watching ad...'
+                    : adsRemoved
+                    ? adFreeClaimsRemaining('hint_reward') > 0
+                      ? `Instant — no ad needed (${adFreeClaimsRemaining('hint_reward')} left today)`
+                      : 'Daily limit reached — back tomorrow'
+                    : 'Tap to watch a short video'}
                 </Text>
               </View>
               <View style={styles.adBadge}>
@@ -1812,13 +2187,17 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               </View>
             </PressableScale>
 
-            {/* Watch Ad for Coins (max 3/day) */}
-            {adManager.canWatchCoinAd() && (
+            {/* Watch Ad for Coins (max 3/day) / instant claim when ad-free */}
+            {(adsRemoved ? adFreeClaimsRemaining('coins_reward') > 0 : adManager.canWatchCoinAd()) && (
               <PressableScale
                 style={[styles.adBanner, { borderColor: COLORS.gold + '40' }]}
                 onPress={handleWatchAdForCoins}
                 disabled={watchingAd}
-                accessibilityLabel={`Watch ad for 50 coins, ${adManager.coinAdsRemaining()} remaining today`}
+                accessibilityLabel={
+                  adsRemoved
+                    ? `Claim 50 free coins instantly, ${adFreeClaimsRemaining('coins_reward')} remaining today`
+                    : `Watch ad for 50 coins, ${adManager.coinAdsRemaining()} remaining today`
+                }
               >
                 <LinearGradient
                   colors={[COLORS.gold + '1A', 'rgba(26,10,46,0.94)']}
@@ -1834,9 +2213,15 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   </DrawnMedallion>
                 )}
                 <View style={styles.adInfo}>
-                  <Text style={[styles.adTitle, { color: COLORS.gold }]}>Watch Ad for 50 Coins</Text>
+                  <Text style={[styles.adTitle, { color: COLORS.gold }]}>
+                    {adsRemoved ? 'Claim 50 Free Coins' : 'Watch Ad for 50 Coins'}
+                  </Text>
                   <Text style={styles.adSubtitle}>
-                    {watchingAd ? 'Watching ad...' : `${adManager.coinAdsRemaining()} remaining today`}
+                    {watchingAd
+                      ? 'Watching ad...'
+                      : adsRemoved
+                      ? `Instant — ${adFreeClaimsRemaining('coins_reward')} remaining today`
+                      : `${adManager.coinAdsRemaining()} remaining today`}
                   </Text>
                 </View>
                 <View style={[styles.adBadge, { backgroundColor: COLORS.gold + '20' }]}>
@@ -1845,13 +2230,17 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               </PressableScale>
             )}
 
-            {/* Watch Ad for Mystery Wheel Spin */}
-            {adManager.canShowAd('spin_reward') && (
+            {/* Watch Ad for Mystery Wheel Spin / instant claim when ad-free */}
+            {(adsRemoved ? adFreeClaimsRemaining('spin_reward') > 0 : adManager.canShowAd('spin_reward')) && (
               <PressableScale
                 style={[styles.adBanner, { borderColor: COLORS.purple + '40' }]}
                 onPress={handleWatchAdForSpin}
                 disabled={watchingAd}
-                accessibilityLabel="Watch ad for mystery wheel spin"
+                accessibilityLabel={
+                  adsRemoved
+                    ? 'Claim a free mystery wheel spin instantly'
+                    : 'Watch ad for mystery wheel spin'
+                }
               >
                 <LinearGradient
                   colors={[COLORS.purple + '1A', 'rgba(26,10,46,0.94)']}
@@ -1867,9 +2256,15 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   </DrawnMedallion>
                 )}
                 <View style={styles.adInfo}>
-                  <Text style={[styles.adTitle, { color: COLORS.purple }]}>Watch Ad for Mystery Spin</Text>
+                  <Text style={[styles.adTitle, { color: COLORS.purple }]}>
+                    {adsRemoved ? 'Claim a Mystery Spin' : 'Watch Ad for Mystery Spin'}
+                  </Text>
                   <Text style={styles.adSubtitle}>
-                    {watchingAd ? 'Watching ad...' : 'Get a free Mystery Wheel spin'}
+                    {watchingAd
+                      ? 'Watching ad...'
+                      : adsRemoved
+                      ? `Instant — ${adFreeClaimsRemaining('spin_reward')} remaining today`
+                      : 'Get a free Mystery Wheel spin'}
                   </Text>
                 </View>
                 <View style={[styles.adBadge, { backgroundColor: COLORS.purple + '20' }]}>
@@ -1906,7 +2301,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               <GameIcon name="vipTrophy" size={44} />
             </HaloMedallion>
             <View style={{ flex: 1 }}>
-              <Text style={styles.vipTitle}>{t('shop.vipWeekly')}</Text>
+              <Text style={styles.vipTitle}>
+                {isVip
+                  ? activeVipTierName ?? t('shop.vipWeekly')
+                  : (getProductById(selectedVipTier)?.name ?? 'VIP').toUpperCase()}
+              </Text>
               <Text style={styles.vipSubtitle}>The ultimate Wordfall experience</Text>
             </View>
             {isVip && (
@@ -1915,20 +2314,31 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               </View>
             )}
           </View>
-          <View style={styles.vipBenefits}>
-            {([
-              [<GameIcon key="g" name="sparkle" size={13} accent={COLORS.gold} />, 'Ad-free experience'],
-              [<GameIcon key="g" name="gem" size={13} accent={COLORS.cyan} />, `${vipDrip.gems} daily gems`],
-              [<GameIcon key="g" name="hint" size={13} />, `${vipDrip.hintTokens} daily hints`],
-              [<GameIcon key="g" name="frame" size={13} accent={COLORS.purpleLight} />, 'Exclusive VIP frame'],
-              [<GameIcon key="g" name="rocket" size={13} accent={COLORS.teal} />, '2x XP boost'],
-            ] as [React.ReactNode, string][]).map(([g, label]) => (
-              <View key={label} style={styles.vipBenefitItem}>
-                {g}
-                <Text style={styles.vipBenefit}>{label}</Text>
+          {(() => {
+            // Active subscribers see the drip of the tier they actually
+            // bought (vipDrip walks purchaseHistory); prospects see the
+            // drip of the tier the selector currently points at, straight
+            // from the catalog so copy can never diverge from the grant.
+            const selectedDrip = isVip
+              ? vipDrip
+              : getProductById(selectedVipTier)?.rewards?.dailyDrip ?? vipDrip;
+            return (
+              <View style={styles.vipBenefits}>
+                {([
+                  [<GameIcon key="g" name="sparkle" size={13} accent={COLORS.gold} />, 'Ad-free experience'],
+                  [<GameIcon key="g" name="gem" size={13} accent={COLORS.cyan} />, `${selectedDrip.gems ?? 0} daily gems`],
+                  [<GameIcon key="g" name="hint" size={13} />, `${selectedDrip.hintTokens ?? 0} daily hints`],
+                  [<GameIcon key="g" name="frame" size={13} accent={COLORS.purpleLight} />, 'Exclusive VIP frame'],
+                  [<GameIcon key="g" name="rocket" size={13} accent={COLORS.teal} />, '2x XP boost'],
+                ] as [React.ReactNode, string][]).map(([g, label]) => (
+                  <View key={label} style={styles.vipBenefitItem}>
+                    {g}
+                    <Text style={styles.vipBenefit}>{label}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            );
+          })()}
           {isVip ? (
             <View style={styles.vipActions}>
               <PrimaryButton
@@ -1957,21 +2367,70 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 Renews {new Date(vipExpiresAt).toLocaleDateString()}
               </Text>
             </View>
-          ) : isLoading('vip_weekly') ? (
+          ) : isLoading(selectedVipTier) ? (
             <View style={styles.vipLoadingRow}>
               <ActivityIndicator size="small" color={COLORS.gold} />
             </View>
           ) : (
-            <PrimaryButton
-              label="SUBSCRIBE  $4.99/WEEK"
-              onPress={() => handlePurchase('vip_weekly')}
-              variant="primary"
-              size="large"
-              fullWidth
-              disabled={!!purchasingId}
-              style={{ borderRadius: RADIUS.xl }}
-              accessibilityLabel="Subscribe to VIP Weekly for $4.99 per week"
-            />
+            (() => {
+              const tiers = [
+                { id: 'vip_weekly' as const, label: 'WEEKLY', per: '/week' },
+                { id: 'vip_monthly' as const, label: 'MONTHLY', per: '/month' },
+                { id: 'vip_annual' as const, label: 'ANNUAL', per: '/year', tag: 'BEST VALUE' },
+              ];
+              const selectedProduct = getProductById(selectedVipTier);
+              const selectedPrice =
+                iapManager.getPrice(selectedVipTier) || selectedProduct?.fallbackPrice || '';
+              return (
+                <View>
+                  <View style={styles.vipTierRow}>
+                    {tiers.map((tier) => {
+                      const product = getProductById(tier.id);
+                      const price = iapManager.getPrice(tier.id) || product?.fallbackPrice || '';
+                      const selected = selectedVipTier === tier.id;
+                      return (
+                        <Pressable
+                          key={tier.id}
+                          style={[styles.vipTierChip, selected && styles.vipTierChipSelected]}
+                          onPress={() => setSelectedVipTier(tier.id)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`${tier.label} VIP, ${price}${
+                            tier.tag ? ', best value' : ''
+                          }`}
+                        >
+                          {tier.tag && (
+                            <View style={styles.vipTierTag}>
+                              <Text style={styles.vipTierTagText}>{tier.tag}</Text>
+                            </View>
+                          )}
+                          <Text
+                            style={[styles.vipTierLabel, selected && styles.vipTierLabelSelected]}
+                          >
+                            {tier.label}
+                          </Text>
+                          <Text
+                            style={[styles.vipTierPrice, selected && styles.vipTierPriceSelected]}
+                          >
+                            {price}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <PrimaryButton
+                    label={`SUBSCRIBE  ${selectedPrice.toUpperCase()}`}
+                    onPress={() => handlePurchase(selectedVipTier)}
+                    variant="primary"
+                    size="large"
+                    fullWidth
+                    disabled={!!purchasingId}
+                    style={{ borderRadius: RADIUS.xl }}
+                    accessibilityLabel={`Subscribe to ${selectedProduct?.name ?? 'VIP'} for ${selectedPrice}`}
+                  />
+                </View>
+              );
+            })()
           )}
         </View>
 
@@ -2113,8 +2572,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           </View>
         )}
 
-        {/* ── Tier 6 B6 — For You (dynamic offers) ─────────────────────── */}
-        {dynamicOffers.length > 0 && (
+        {/* ── Tier 6 B6 — For You (dynamic offers + follow-up) ─────────── */}
+        {visibleOffers.length > 0 && (
           <View style={styles.dynamicOffersSection}>
             <SectionHeader label="FOR YOU" accent={COLORS.pink} meta="PERSONAL" />
             <ScrollView
@@ -2122,7 +2581,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.featuredContent}
             >
-              {dynamicOffers.map((offer) => {
+              {visibleOffers.map((offer) => {
                 const product = getProductById(offer.productId as any);
                 // Never render an offer whose product isn't in the catalog:
                 // it can't be purchased (iap.ts can't map the SKU and
@@ -2170,7 +2629,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                     </HaloMedallion>
                     <Text style={styles.featuredName}>{name}</Text>
                     <Text style={styles.featuredDesc}>
-                      {`${offer.discountPercent}% off for you`}
+                      {offer.discountPercent > 0
+                        ? `${offer.discountPercent}% off for you`
+                        : 'Picked for you'}
                     </Text>
                     <View style={styles.featuredPriceRow}>
                       <PriceCapsule
@@ -2178,6 +2639,15 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                         originalPrice={originalPrice}
                         loading={isLoading(offer.productId)}
                         accent={COLORS.green}
+                      />
+                    </View>
+                    {/* Real countdown to the offer's actual expiry (the
+                        same createdAt + expiresInHours the render filter
+                        enforces) — not a decorative timer. */}
+                    <View style={styles.timerContainer}>
+                      <LiveCountdownText
+                        style={styles.timerText}
+                        targetTime={offerExpiresAt(offer)}
                       />
                     </View>
                   </PressableScale>
@@ -2195,89 +2665,24 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           style={styles.featuredScroll}
           contentContainerStyle={styles.featuredContent}
         >
-          <PressableScale
-            style={styles.featuredCard}
-            onPress={() => handlePurchase('starter_pack')}
-            disabled={!!purchasingId}
-            accessibilityLabel="Buy Starter Pack: 500 coins, 50 gems, 10 hints, and exclusive decoration for $1.99"
-          >
-            <LinearGradient
-              colors={[...GRADIENTS.surfaceCard] as [string, string]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-            />
-            <LinearGradient
-              colors={[COLORS.accent + '30', 'transparent'] as [string, string]}
-              style={styles.featuredGlow}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-            />
-            <View style={styles.featuredBadge}>
-              <Text style={styles.featuredBadgeText}>LIMITED TIME</Text>
-            </View>
-            <HaloMedallion size={64} accent={COLORS.accent} aura="soft" style={styles.featuredMedallion}>
-              <GameIcon name="gift" size={40} />
-            </HaloMedallion>
-            <Text style={styles.featuredName}>Starter Pack</Text>
-            <BundleContentsRow items={STARTER_PACK_CONTENTS} accent={COLORS.accent} />
-            <View style={styles.featuredPriceRow}>
-              <PriceCapsule
-                price="$1.99"
-                originalPrice="$4.99"
-                loading={isLoading('starter_pack')}
-                accent={COLORS.green}
-              />
-            </View>
-            <View style={styles.timerContainer}>
-              <LiveCountdownText
-                style={styles.timerText}
-                targetTime={featuredExpiryAtRef.current}
-              />
-            </View>
-          </PressableScale>
+          {/* Card 1 — RC-pinnable (featuredProductId), falls back to
+              starter_pack. Everything on the card derives from the catalog. */}
+          {renderFeaturedCatalogCard(featuredPinnedId, {
+            badge: 'LIMITED TIME',
+            accent: COLORS.accent,
+          })}
 
-          <PressableScale
-            style={[styles.featuredCard, styles.featuredCardAlt]}
-            onPress={() => handlePurchase('chapter_bundle')}
-            disabled={!!purchasingId}
-            accessibilityLabel="Buy Weekend Bundle: 100 gems, 3000 coins, and rare frame for $4.99"
-          >
-            <LinearGradient
-              colors={[...GRADIENTS.surfaceCard] as [string, string]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-            />
-            <LinearGradient
-              colors={[COLORS.purple + '33', 'transparent'] as [string, string]}
-              style={styles.featuredGlow}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-            />
-            <View style={[styles.featuredBadge, { backgroundColor: COLORS.purple }]}>
-              <Text style={styles.featuredBadgeText}>SPECIAL</Text>
-            </View>
-            <HaloMedallion size={64} accent={COLORS.purple} aura="soft" style={styles.featuredMedallion}>
-              <GameIcon name="sparkle" size={40} accent={COLORS.purple} />
-            </HaloMedallion>
-            <Text style={styles.featuredName}>Weekend Bundle</Text>
-            <BundleContentsRow items={WEEKEND_BUNDLE_CONTENTS} accent={COLORS.purple} />
-            <View style={styles.featuredPriceRow}>
-              <PriceCapsule
-                price="$4.99"
-                originalPrice="$14.99"
-                loading={isLoading('chapter_bundle')}
-                accent={COLORS.green}
-              />
-            </View>
-            <View style={[styles.timerContainer, { backgroundColor: COLORS.purple + '30' }]}>
-              <LiveCountdownText
-                style={[styles.timerText, { color: COLORS.purpleLight }]}
-                targetTime={featuredExpiryAtRef.current}
-              />
-            </View>
-          </PressableScale>
+          {/* Card 2 — the weekend card now sells the ACTUAL weekend_warrior
+              product (name, contents, price, anchor all from the catalog).
+              The old hardcoded card advertised "100 gems + 3000 coins + rare
+              frame for $4.99" while charging chapter_bundle ($2.99 — 20
+              gems, no coins, no frame): every field was a lie. */}
+          {featuredPinnedId !== 'weekend_warrior' &&
+            renderFeaturedCatalogCard('weekend_warrior', {
+              badge: 'SPECIAL',
+              accent: COLORS.purple,
+              alt: true,
+            })}
         </ScrollView>
 
         {/* ── Rotating Exclusive Shop ────────────────────────────────── */}
@@ -2371,13 +2776,27 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         <SectionHeader label={t('shop.undoBundles').toUpperCase()} accent={COLORS.teal} />
         {renderItemRow(UNDO_BUNDLES, COLORS.teal)}
 
+        {/* ── Booster Packs (previously dark catalog SKUs) ───────────── */}
+        <SectionHeader label="BOOSTER PACKS" accent={COLORS.purple} />
+        {renderItemRow(BOOSTER_PACKS, COLORS.purple)}
+        <View style={[styles.premiumSection, { marginTop: 12 }]}>
+          {(() => {
+            const crate = getProductById('booster_crate');
+            return crate ? renderCatalogShelfRow(crate, COLORS.purple) : null;
+          })()}
+          {(() => {
+            const freeze = getProductById('streak_freeze');
+            return freeze ? renderCatalogShelfRow(freeze, COLORS.cyan) : null;
+          })()}
+        </View>
+
         {/* ── Coin Packs ─────────────────────────────────────────────── */}
         <SectionHeader label={t('shop.coinPacks').toUpperCase()} accent={COLORS.orange} />
         {renderItemRow(COIN_PACKS, COLORS.orange)}
 
-        {/* ── Gem Packs ──────────────────────────────────────────────── */}
+        {/* ── Gem Packs (full ladder) ────────────────────────────────── */}
         <SectionHeader label={t('shop.gemPacks').toUpperCase()} accent={COLORS.cyan} />
-        {renderItemRow(GEM_PACKS, COLORS.cyan)}
+        {renderItemGrid(GEM_PACKS, COLORS.cyan)}
 
         {/* ── Premium ────────────────────────────────────────────────── */}
         <SectionHeader label={t('shop.premium').toUpperCase()} accent={COLORS.purple} />
@@ -2502,6 +2921,20 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             )}
           </PressableScale>
         </View>
+
+        {/* ── Bundle Shelf (the full catalog, cheapest first) ─────────
+            Every purchasable bundle/premium SKU not already sold above —
+            including the $14.99–$99.99 tier that used to be visible only
+            to dolphin/whale segments via dynamic offers. Enumerated from
+            SHOP_PRODUCTS so newly-registered SKUs surface automatically. */}
+        {bundleShelf.length > 0 && (
+          <>
+            <SectionHeader label="VALUE BUNDLES" accent={COLORS.gold} meta="ALL PLAYERS" />
+            <View style={styles.premiumSection}>
+              {bundleShelf.map((product) => renderCatalogShelfRow(product, COLORS.gold))}
+            </View>
+          </>
+        )}
 
         {/* ── Coin Shop (spend coins on consumables) ─────────────────── */}
         <SectionHeader
@@ -2752,6 +3185,58 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  // ── VIP tier selector (weekly / monthly / annual) ─────────────────────
+  vipTierRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  vipTierChip: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(26,10,46,0.6)',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  vipTierChipSelected: {
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.gold + '1F',
+  },
+  vipTierLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+  },
+  vipTierLabelSelected: {
+    color: COLORS.gold,
+  },
+  vipTierPrice: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textSecondary,
+    marginTop: 3,
+    textAlign: 'center',
+  },
+  vipTierPriceSelected: {
+    color: COLORS.textPrimary,
+  },
+  vipTierTag: {
+    backgroundColor: COLORS.gold,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginBottom: 4,
+  },
+  vipTierTagText: {
+    fontSize: 8,
+    fontFamily: FONTS.bodyBold,
+    color: '#1a0a2e',
+    letterSpacing: 0.5,
   },
   vipTitle: {
     fontSize: 22,

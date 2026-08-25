@@ -7,6 +7,11 @@
  * recurring coin + gem faucet. onPuzzleComplete must route the increment by
  * the active template's bonusType, and the tier display/claim payload must
  * use `hintTokens` (the key EventScreen credits), not the authored `hints`.
+ *
+ * MAIN weekly events have the identical unit contract: perfectClear authors
+ * its thresholds in PERFECT CLEARS (3/7/15/25) and mysteryWords in WORDS
+ * FOUND — feeding raw score (~1,000+/puzzle) cleared both entire ladders
+ * with one puzzle. onPuzzleComplete now routes by the event TYPE.
  */
 
 jest.mock('../remoteConfig', () => ({
@@ -125,6 +130,74 @@ describe('eventManager mini-event progress units', () => {
     expect(mini!.progress).toBe(600); // thresholds 500/1500/3000 points
     expect(mini!.rewards[0].reached).toBe(true);
     expect(mini!.rewards[1].reached).toBe(false);
+  });
+});
+
+describe('eventManager MAIN-event progress units', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** Pin a UTC noon inside main-event rotation week `week` (Mon Jan 5 2026 + 7w). */
+  function pinMainWeek(week: number, dayOffset: number = 1): void {
+    jest.setSystemTime(
+      new Date(Date.UTC(2026, 0, 5) + (week * 7 + dayOffset) * DAY_MS + 12 * 60 * 60 * 1000),
+    );
+  }
+
+  function activeMain() {
+    return eventManager
+      .getActiveEvents()
+      .find((e) => e.type === 'main' && e.id.startsWith('event_w'));
+  }
+
+  it('perfectClear accrues PERFECT CLEARS — a huge imperfect score moves nothing', () => {
+    pinMainWeek(1); // template index 1 = perfectClear (thresholds 3/7/15/25)
+    eventManager.init({});
+    eventManager.onPuzzleComplete(2500, 3, false, 9);
+
+    let main = activeMain();
+    expect(main).toBeDefined();
+    expect(main!.name).toBe('Perfect Week');
+    expect(main!.progress).toBe(0);
+
+    eventManager.onPuzzleComplete(2500, 3, true, 9);
+    main = activeMain();
+    expect(main!.progress).toBe(1);
+    // One perfect puzzle reaches NO tier (bronze needs 3 clears).
+    expect(main!.rewards.filter((r) => r.reached)).toHaveLength(0);
+  });
+
+  it('mysteryWords accrues WORDS FOUND, and without a word count moves nothing', () => {
+    pinMainWeek(4); // template index 4 = mysteryWords (thresholds 60/180/350/600)
+    eventManager.init({});
+    eventManager.onPuzzleComplete(2500, 3, true); // caller passed no wordsFound
+    let main = activeMain();
+    expect(main).toBeDefined();
+    expect(main!.name).toBe('Mystery Words');
+    expect(main!.progress).toBe(0);
+
+    eventManager.onPuzzleComplete(1200, 2, false, 8);
+    main = activeMain();
+    expect(main!.progress).toBe(8);
+    // One puzzle's words reach no tier (bronze needs 60 words).
+    expect(main!.rewards.filter((r) => r.reached)).toHaveLength(0);
+  });
+
+  it('score-authored mains keep raw score, and one puzzle reaches no tier', () => {
+    pinMainWeek(0); // template index 0 = speedSolve (bronze 15,000)
+    eventManager.init({});
+    eventManager.onPuzzleComplete(2500, 3, true, 9);
+
+    const main = activeMain();
+    expect(main).toBeDefined();
+    expect(main!.name).toBe('Speed Blitz');
+    expect(main!.progress).toBe(2500);
+    expect(main!.rewards.filter((r) => r.reached)).toHaveLength(0);
   });
 });
 

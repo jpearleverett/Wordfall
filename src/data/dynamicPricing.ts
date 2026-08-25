@@ -5,12 +5,14 @@
  * conversion without alienating non-payers or under-serving whales.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   SpendingSegment,
   EngagementSegment,
 } from '../services/playerSegmentation';
 import { ShopProduct, getProductById } from './shopProducts';
 import { getRemoteString } from '../services/remoteConfig';
+import { logger } from '../utils/logger';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -19,10 +21,16 @@ export interface DynamicOffer {
    * Product ID — MUST exist in SHOP_PRODUCTS. Anything else is
    * unpurchasable (iap.ts can't map it to a store SKU and
    * applyCatalogPurchase would deliver nothing), so the offer card
-   * would be a dead end.
+   * would be a dead end. Deep-discount offers point at REAL sale-variant
+   * SKUs (starter_pack_sale_70, …) so the advertised price is the price
+   * the store sheet charges.
    */
   productId: string;
-  /** Discount percentage (0-70) */
+  /**
+   * Discount percentage — ALWAYS derived from the catalog anchor vs. the
+   * real charged price by getDynamicOffers (never freehand), so the badge
+   * can never overstate the deal.
+   */
   discountPercent: number;
   /** Optional badge text ("BEST VALUE", "POPULAR", "VIP EXCLUSIVE") */
   badge?: string;
@@ -30,6 +38,25 @@ export interface DynamicOffer {
   expiresInHours: number;
   /** Sort priority (lower = shown first) */
   priority: number;
+  /**
+   * Epoch ms the offer window opened. Segment offers are derived per
+   * render, so this is anchored to the start of the current UTC day —
+   * stable across remounts — while the follow-up offer anchors to the
+   * actual first-purchase timestamp. Feed it to isOfferExpired /
+   * offerExpiresAt for filtering and real countdowns.
+   */
+  createdAt: number;
+}
+
+/** Epoch ms at which an offer stops being available. */
+export function offerExpiresAt(offer: Pick<DynamicOffer, 'createdAt' | 'expiresInHours'>): number {
+  return offer.createdAt + offer.expiresInHours * 60 * 60 * 1000;
+}
+
+/** Start of the current UTC day — the stable anchor for derived offers. */
+function startOfUtcDayMs(now: number = Date.now()): number {
+  const d = new Date(now);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
 // ─── Mega Bundles (for dolphins and whales) ──────────────────────────────────
@@ -110,32 +137,38 @@ export const MEGA_BUNDLES: ShopProduct[] = [
 // ─── Offer Strategy Logic ────────────────────────────────────────────────────
 
 /**
+ * Offer under construction — discountPercent and createdAt are stamped by
+ * getDynamicOffers from the catalog, never authored per-branch, so a
+ * branch literal can never advertise a % the store won't honor.
+ */
+type OfferSeed = Omit<DynamicOffer, 'createdAt' | 'discountPercent'>;
+
+/**
  * Tier 6 B6 — 4-tier comeback ladder keyed off `daysSinceActive`.
  *
- *  - Day 2–3 ("lightly lapsed"): 50% off starter, 24h "COME BACK"
- *  - Day 4–7 ("lapsed"): 70% off starter, 48h "WELCOME BACK"
- *  - Day 8–14 ("deeply lapsed"): 75% off first-purchase-special + 100 gems, 48h "WE MISS YOU"
- *  - Day 15+ ("churned"): 30% off Champion Pack + cosmetic frame, 72h "LAST CALL"
+ * Deep discounts point at REAL sale-variant SKUs (see shopProducts.ts):
+ *  - Day 2–3 ("lightly lapsed"): starter @ real 50% off, 24h "COME BACK"
+ *  - Day 4–7 ("lapsed"): starter @ real 70% off, 48h "WELCOME BACK"
+ *  - Day 8–14 ("deeply lapsed"): first-purchase-special (real 75% anchor) + gems, 48h "WE MISS YOU"
+ *  - Day 15+ ("churned"): Champion Pack (catalog anchor) + starter @ real 60% off, 72h "LAST CALL"
  *
  * Returns an empty array when the player is still Day-0 or Day-1 active;
  * callers should fall through to the standard segment-based branches.
  */
-function lapsedLadder(daysSinceActive: number, playerLevel: number): DynamicOffer[] {
+function lapsedLadder(daysSinceActive: number, playerLevel: number): OfferSeed[] {
   if (daysSinceActive < 2) return [];
 
   if (daysSinceActive <= 3) {
-    // Lightly lapsed: soft 50% nudge
-    const offers: DynamicOffer[] = [{
-      productId: 'starter_pack',
-      discountPercent: 50,
+    // Lightly lapsed: soft 50% nudge (real sale variant)
+    const offers: OfferSeed[] = [{
+      productId: 'starter_pack_sale_50',
       badge: 'COME BACK',
       expiresInHours: 24,
       priority: 1,
     }];
     if (playerLevel >= 10) {
       offers.push({
-        productId: 'gems_250',
-        discountPercent: 30,
+        productId: 'gems_250_sale_30',
         expiresInHours: 24,
         priority: 2,
       });
@@ -144,18 +177,16 @@ function lapsedLadder(daysSinceActive: number, playerLevel: number): DynamicOffe
   }
 
   if (daysSinceActive <= 7) {
-    // Classic 4-7 day lapsed window
-    const offers: DynamicOffer[] = [{
-      productId: 'starter_pack',
-      discountPercent: 70,
+    // Classic 4-7 day lapsed window (real 70% / 50% sale variants)
+    const offers: OfferSeed[] = [{
+      productId: 'starter_pack_sale_70',
       badge: 'WELCOME BACK',
       expiresInHours: 48,
       priority: 1,
     }];
     if (playerLevel >= 10) {
       offers.push({
-        productId: 'gems_250',
-        discountPercent: 50,
+        productId: 'gems_250_sale_50',
         badge: 'COMEBACK DEAL',
         expiresInHours: 48,
         priority: 2,
@@ -165,18 +196,18 @@ function lapsedLadder(daysSinceActive: number, playerLevel: number): DynamicOffe
   }
 
   if (daysSinceActive <= 14) {
-    // Deeply lapsed: pull out the first-purchase special + extra gems
+    // Deeply lapsed: pull out the first-purchase special + extra gems.
+    // first_purchase_special's catalog anchor already delivers a real 75%
+    // ($0.49 vs $1.99); the gems ride the real 40%-off gems_500 variant.
     return [
       {
         productId: 'first_purchase_special',
-        discountPercent: 75,
         badge: 'WE MISS YOU',
         expiresInHours: 48,
         priority: 0,
       },
       {
-        productId: 'gems_500',
-        discountPercent: 40,
+        productId: 'gems_500_sale_40',
         badge: 'COMEBACK BONUS',
         expiresInHours: 48,
         priority: 1,
@@ -184,22 +215,21 @@ function lapsedLadder(daysSinceActive: number, playerLevel: number): DynamicOffe
     ];
   }
 
-  // Day 15+: churned tier — premium bundle at 30% + cosmetic frame hook.
+  // Day 15+: churned tier — premium bundle + cosmetic frame hook.
   // champion_pack, NOT mega_bundle_gold: the mega bundles were never merged
   // into SHOP_PRODUCTS, so pointing here at one made the flagship winback
   // offer a dead end (wrong price shown, purchase always failed). Champion
-  // Pack is the same $14.99 price point with an exclusive frame.
+  // Pack is the same $14.99 price point with an exclusive frame; its badge
+  // derives from the catalog anchor ($14.99 vs $24.99 → 40%).
   return [
     {
       productId: 'champion_pack',
-      discountPercent: 30,
       badge: 'LAST CALL',
       expiresInHours: 72,
       priority: 0,
     },
     {
-      productId: 'starter_pack',
-      discountPercent: 60,
+      productId: 'starter_pack_sale_60',
       badge: 'RETURNING PLAYER',
       expiresInHours: 72,
       priority: 1,
@@ -208,8 +238,24 @@ function lapsedLadder(daysSinceActive: number, playerLevel: number): DynamicOffe
 }
 
 /**
+ * Truthful discount badge for a catalog product: the rounded ratio of its
+ * real charged price against its catalog anchor. 0 when there is no anchor.
+ */
+function catalogDiscountPercent(productId: string): number {
+  const pricing = resolveSalePricing(productId);
+  return pricing?.discountPercent ?? 0;
+}
+
+/**
  * Returns 1-3 dynamic offers personalized to the player's spending
  * and engagement segments.
+ *
+ * Every returned offer is normalized against the catalog: discountPercent
+ * is DERIVED from the product's anchor vs. its real charged price (deep
+ * discounts ride real sale-variant SKUs), and createdAt is anchored to the
+ * start of the current UTC day so expiry survives remounts. An offer whose
+ * product is missing from SHOP_PRODUCTS is dropped rather than rendered as
+ * a dead end.
  */
 export function getDynamicOffers(
   spending: SpendingSegment,
@@ -217,7 +263,23 @@ export function getDynamicOffers(
   playerLevel: number,
   daysSinceActive?: number,
 ): DynamicOffer[] {
-  const offers: DynamicOffer[] = [];
+  const createdAt = startOfUtcDayMs();
+  return buildDynamicOffers(spending, engagement, playerLevel, daysSinceActive)
+    .filter((seed) => getProductById(seed.productId) !== undefined)
+    .map((seed) => ({
+      ...seed,
+      discountPercent: catalogDiscountPercent(seed.productId),
+      createdAt,
+    }));
+}
+
+function buildDynamicOffers(
+  spending: SpendingSegment,
+  engagement: EngagementSegment,
+  playerLevel: number,
+  daysSinceActive?: number,
+): OfferSeed[] {
+  const offers: OfferSeed[] = [];
 
   // ── Tier 6 B6 — 4-tier comeback ladder ──
   // Wordscapes / Royal Match tier comeback offers by time-away so the
@@ -234,16 +296,14 @@ export function getDynamicOffers(
   // ── Legacy win-back (Day 7+ only — retained for callers pre-Tier-6) ──
   if (engagement === 'lapsed') {
     offers.push({
-      productId: 'starter_pack',
-      discountPercent: 70,
+      productId: 'starter_pack_sale_70',
       badge: 'WELCOME BACK',
       expiresInHours: 48,
       priority: 1,
     });
     if (playerLevel >= 10) {
       offers.push({
-        productId: 'gems_250',
-        discountPercent: 50,
+        productId: 'gems_250_sale_50',
         badge: 'COMEBACK DEAL',
         expiresInHours: 48,
         priority: 2,
@@ -252,19 +312,17 @@ export function getDynamicOffers(
     return offers;
   }
 
-  // ── At-risk / returned players: generous deals ──
+  // ── At-risk / returned players: generous deals (real 50%/40% variants) ──
   if (engagement === 'at_risk' || engagement === 'returned') {
     offers.push({
-      productId: spending === 'non_payer' ? 'starter_pack' : 'chapter_bundle',
-      discountPercent: 50,
+      productId: spending === 'non_payer' ? 'starter_pack_sale_50' : 'chapter_bundle_sale_50',
       badge: 'LIMITED TIME',
       expiresInHours: 24,
       priority: 1,
     });
     if (spending !== 'non_payer') {
       offers.push({
-        productId: 'gems_500',
-        discountPercent: 40,
+        productId: 'gems_500_sale_40',
         badge: 'SPECIAL OFFER',
         expiresInHours: 24,
         priority: 2,
@@ -279,7 +337,6 @@ export function getDynamicOffers(
     if (playerLevel >= 5 && playerLevel <= 15) {
       offers.push({
         productId: 'first_purchase_special',
-        discountPercent: 75,
         badge: 'WELCOME GIFT',
         expiresInHours: 168, // 7 days
         priority: 0,
@@ -287,7 +344,6 @@ export function getDynamicOffers(
     }
     offers.push({
       productId: 'starter_pack',
-      discountPercent: 30,
       badge: 'BEST VALUE',
       expiresInHours: 72,
       priority: 1,
@@ -295,7 +351,6 @@ export function getDynamicOffers(
     if (playerLevel >= 8) {
       offers.push({
         productId: 'hint_bundle_10',
-        discountPercent: 20,
         expiresInHours: 72,
         priority: 3,
       });
@@ -307,14 +362,12 @@ export function getDynamicOffers(
   if (spending === 'minnow') {
     offers.push({
       productId: 'chapter_bundle',
-      discountPercent: 25,
       badge: 'POPULAR',
       expiresInHours: 48,
       priority: 1,
     });
     offers.push({
       productId: 'gems_250',
-      discountPercent: 20,
       expiresInHours: 48,
       priority: 2,
     });
@@ -328,14 +381,12 @@ export function getDynamicOffers(
       // lapsedLadder(): the mega bundles are not in SHOP_PRODUCTS and can't
       // be purchased.
       productId: 'champion_pack',
-      discountPercent: 15,
       badge: 'EXCLUSIVE',
       expiresInHours: 24,
       priority: 1,
     });
     offers.push({
       productId: 'premium_pass',
-      discountPercent: 20,
       badge: 'PREMIUM DEAL',
       expiresInHours: 48,
       priority: 2,
@@ -347,14 +398,12 @@ export function getDynamicOffers(
   if (spending === 'whale') {
     offers.push({
       productId: 'ultimate_whale',
-      discountPercent: 10,
       badge: 'VIP EXCLUSIVE',
       expiresInHours: 24,
       priority: 1,
     });
     offers.push({
       productId: 'royal_collection',
-      discountPercent: 15,
       badge: 'VIP DEAL',
       expiresInHours: 24,
       priority: 2,
@@ -362,7 +411,6 @@ export function getDynamicOffers(
     if (playerLevel >= 20) {
       offers.push({
         productId: 'gems_500',
-        discountPercent: 10,
         expiresInHours: 48,
         priority: 3,
       });
@@ -373,7 +421,6 @@ export function getDynamicOffers(
   // Default fallback
   offers.push({
     productId: 'starter_pack',
-    discountPercent: 20,
     expiresInHours: 72,
     priority: 1,
   });
@@ -540,8 +587,15 @@ function parseRemoteDailyDeal(): RemoteDailyDeal | null {
  * anchor so the badge can never overstate the deal. Returns null for a
  * product that isn't in SHOP_PRODUCTS — an unpurchasable id must never be
  * advertised.
+ *
+ * Sale-variant SKUs (shopProducts.ts `saleVariantOf`) flow through here
+ * like any other product: their fallbackPriceAmount IS the genuinely
+ * discounted charged price and their anchor is the base SKU's everyday
+ * price, so mapping an offer to its variant keeps displayed == charged.
+ * Exported so shop surfaces (featured cards) derive pricing from the
+ * catalog through one choke point instead of hardcoding numbers.
  */
-function resolveSalePricing(
+export function resolveSalePricing(
   productId: string,
   preferredAnchor?: number,
   preferredAnchorLabel?: string,
@@ -677,14 +731,137 @@ export function getFlashSale(date: Date): FlashSale | null {
 }
 
 /**
- * Check if a dynamic offer has expired.
+ * Check if a dynamic offer has expired. The production filter for every
+ * offer surface (For You carousel, follow-up offer) — pass an offer's
+ * createdAt + expiresInHours. `now` is injectable for tests.
  */
 export function isOfferExpired(
   offerCreatedAt: number,
   expiresInHours: number,
+  now: number = Date.now(),
 ): boolean {
   const expiryMs = expiresInHours * 60 * 60 * 1000;
-  return Date.now() - offerCreatedAt > expiryMs;
+  return now - offerCreatedAt > expiryMs;
+}
+
+// ─── Second-purchase follow-up offer ────────────────────────────────────────
+//
+// Nothing used to fire after a first purchase completed — the highest-value
+// conversion moment in F2P (a payer's second purchase is the best LTV
+// predictor) had no surface. useCommerce records the FIRST successful
+// real-money purchase here; for the next 48h the shop's "For You" carousel
+// surfaces one "thanks — next one's better" follow-up at a real price
+// (second_purchase_special, strictly better value than starter_pack at the
+// same $1.99). Same persistence pattern as economyTuning's faucet ledger:
+// synchronous in-memory copy, hydrated once from AsyncStorage, written
+// through on mutation.
+
+export const SECOND_PURCHASE_OFFER_PRODUCT_ID = 'second_purchase_special';
+const FOLLOWUP_WINDOW_HOURS = 48;
+const FOLLOWUP_LEDGER_KEY = '@wordfall_purchase_followup';
+
+interface FollowupLedger {
+  /** Epoch ms of the player's first successful real-money purchase. */
+  firstPurchaseAt: number;
+  /** True once the follow-up SKU itself was bought (offer never resurfaces). */
+  converted: boolean;
+}
+
+let followupLedger: FollowupLedger | null = null;
+let followupHydration: Promise<void> | null = null;
+
+function persistFollowupLedger(): void {
+  AsyncStorage.setItem(FOLLOWUP_LEDGER_KEY, JSON.stringify(followupLedger)).catch(() => {
+    logger.warn('[DynamicPricing] failed to persist follow-up ledger');
+  });
+}
+
+/** Idempotent one-time hydration; kicked at module load, awaitable in UI/tests. */
+export function hydratePurchaseFollowup(): Promise<void> {
+  if (followupHydration) return followupHydration;
+  followupHydration = (async () => {
+    try {
+      const raw = await AsyncStorage.getItem(FOLLOWUP_LEDGER_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<FollowupLedger>;
+      if (typeof parsed.firstPurchaseAt !== 'number' || parsed.firstPurchaseAt <= 0) return;
+      if (followupLedger === null) {
+        followupLedger = {
+          firstPurchaseAt: parsed.firstPurchaseAt,
+          converted: parsed.converted === true,
+        };
+      } else {
+        // A purchase landed before hydration finished — keep the earliest
+        // window start and never un-convert.
+        followupLedger = {
+          firstPurchaseAt: Math.min(followupLedger.firstPurchaseAt, parsed.firstPurchaseAt),
+          converted: followupLedger.converted || parsed.converted === true,
+        };
+      }
+    } catch {
+      // Corrupt ledger — treat as fresh; worst case one repeat follow-up.
+    }
+  })();
+  return followupHydration;
+}
+void hydratePurchaseFollowup();
+
+/** Test-only: reset the in-memory ledger (and mark hydration as done). */
+export function __resetPurchaseFollowupForTests(next: FollowupLedger | null = null): void {
+  followupLedger = next;
+  followupHydration = Promise.resolve();
+}
+
+/**
+ * Record a successful REAL-MONEY purchase (useCommerce.purchaseProduct
+ * only — restores/migrations must not open the window). Returns what the
+ * purchase meant for the follow-up funnel so the caller can fire the
+ * matching analytics event:
+ *  - 'first_purchase'      → the 48h follow-up window just opened
+ *  - 'followup_converted'  → the follow-up SKU itself was bought
+ *  - null                  → neither (later ordinary purchase)
+ */
+export function recordPurchaseForFollowup(
+  productId: string,
+  now: number = Date.now(),
+): 'first_purchase' | 'followup_converted' | null {
+  if (productId === SECOND_PURCHASE_OFFER_PRODUCT_ID) {
+    followupLedger = {
+      firstPurchaseAt: followupLedger?.firstPurchaseAt ?? now,
+      converted: true,
+    };
+    persistFollowupLedger();
+    return 'followup_converted';
+  }
+  if (followupLedger === null) {
+    followupLedger = { firstPurchaseAt: now, converted: false };
+    persistFollowupLedger();
+    return 'first_purchase';
+  }
+  return null;
+}
+
+/**
+ * The live "thanks — next one's better" offer, or null when there is no
+ * open window (no first purchase yet, already converted, expired, or the
+ * SKU is missing from the catalog). Expiry runs through the same
+ * isOfferExpired path as every dynamic offer; createdAt is the actual
+ * first-purchase timestamp so the countdown is real.
+ */
+export function getSecondPurchaseFollowupOffer(now: number = Date.now()): DynamicOffer | null {
+  if (!followupLedger || followupLedger.converted) return null;
+  const product = getProductById(SECOND_PURCHASE_OFFER_PRODUCT_ID);
+  if (!product) return null;
+  const createdAt = followupLedger.firstPurchaseAt;
+  if (isOfferExpired(createdAt, FOLLOWUP_WINDOW_HOURS, now)) return null;
+  return {
+    productId: SECOND_PURCHASE_OFFER_PRODUCT_ID,
+    discountPercent: resolveSalePricing(SECOND_PURCHASE_OFFER_PRODUCT_ID)?.discountPercent ?? 0,
+    badge: 'THANK YOU',
+    expiresInHours: FOLLOWUP_WINDOW_HOURS,
+    priority: 0,
+    createdAt,
+  };
 }
 
 /**

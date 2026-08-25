@@ -32,13 +32,33 @@ import { getRemoteString } from './remoteConfig';
 //       "endTime": <epoch ms>,        // when the event disappears
 //       "multipliers": {              // all optional, default 1
 //         "coins": 2, "xp": 2, "rareTileChance": 1.5
-//       }
+//       },
+//       "progressUnit": "score" | "count",   // optional, default "score":
+//                                            //   how puzzle completions accrue
+//       "thresholds": [500, 1500, 3000],     // optional shorthand — per-tier
+//                                            //   thresholds when a rewards
+//                                            //   entry omits its own
+//       "rewards": [                         // optional tier ladder; without
+//         {                                  //   it the event shows progress
+//           "tier": "bronze",                //   but pays nothing (as before)
+//           "threshold": 500,
+//           "rewards": { "coins": 200, "gems": 5, "hintTokens": 3 }
+//         }
+//       ]
 //     }
 //   ]
 // }
-// If JSON is empty or malformed the built-in calendar is used untouched.
+// If JSON is empty or malformed the built-in calendar is used untouched;
+// a malformed rewards/thresholds/progressUnit field degrades that ONE field
+// to its safe default (no ladder / 'score') without dropping the event.
 
-interface RemoteEventEntry {
+export interface RemoteEventTier {
+  tier: string;
+  threshold: number;
+  rewards: { coins?: number; gems?: number; hintTokens?: number };
+}
+
+export interface RemoteEventEntry {
   id: string;
   type: 'main' | 'mini';
   name: string;
@@ -46,6 +66,76 @@ interface RemoteEventEntry {
   icon: string;
   endTime: number;
   multipliers?: Partial<EventMultipliers>;
+  /** Unit puzzle completions accrue in: raw score (default) or +1 each. */
+  progressUnit?: 'score' | 'count';
+  rewards?: RemoteEventTier[];
+}
+
+// Remote tiers are ops-authored JSON landing on every device with no build
+// to roll back — clamp each payout so a slipped digit cannot mint currency.
+const REMOTE_TIER_MAX_GEMS = 100;
+const REMOTE_TIER_MAX_COINS = 10_000;
+const REMOTE_TIER_MAX_HINTS = 50;
+const REMOTE_MAX_TIERS = 8;
+const DEFAULT_TIER_NAMES = ['bronze', 'silver', 'gold', 'diamond'];
+
+function clampRemoteAmount(value: unknown, max: number): number | undefined {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.min(Math.floor(n), max);
+}
+
+/**
+ * Validate one raw `rewards` array (with optional top-level `thresholds`
+ * shorthand) into a clean RemoteEventTier[]. Returns undefined when the
+ * ladder as a whole is unusable — the caller then falls back to the
+ * no-ladder template behavior instead of shipping a broken ladder.
+ */
+function parseRemoteRewards(
+  rawRewards: unknown,
+  rawThresholds: unknown,
+): RemoteEventTier[] | undefined {
+  if (!Array.isArray(rawRewards) || rawRewards.length === 0) return undefined;
+  const thresholds = Array.isArray(rawThresholds) ? rawThresholds : [];
+  const tiers: RemoteEventTier[] = [];
+  for (let i = 0; i < Math.min(rawRewards.length, REMOTE_MAX_TIERS); i++) {
+    const entry = rawRewards[i];
+    if (!entry || typeof entry !== 'object') return undefined;
+    const e = entry as {
+      tier?: unknown;
+      threshold?: unknown;
+      rewards?: unknown;
+    };
+    const threshold = Number(e.threshold ?? thresholds[i]);
+    if (!Number.isFinite(threshold) || threshold <= 0) return undefined;
+    const payload =
+      e.rewards && typeof e.rewards === 'object'
+        ? (e.rewards as { coins?: unknown; gems?: unknown; hintTokens?: unknown })
+        : {};
+    const coins = clampRemoteAmount(payload.coins, REMOTE_TIER_MAX_COINS);
+    const gems = clampRemoteAmount(payload.gems, REMOTE_TIER_MAX_GEMS);
+    const hintTokens = clampRemoteAmount(payload.hintTokens, REMOTE_TIER_MAX_HINTS);
+    tiers.push({
+      tier:
+        typeof e.tier === 'string' && e.tier.length > 0
+          ? e.tier
+          : DEFAULT_TIER_NAMES[i] ?? `tier_${i}`,
+      threshold,
+      rewards: {
+        ...(coins !== undefined ? { coins } : {}),
+        ...(gems !== undefined ? { gems } : {}),
+        ...(hintTokens !== undefined ? { hintTokens } : {}),
+      },
+    });
+  }
+  // Ascending thresholds and distinct tier names, or the claim ledger
+  // (keyed by tier name) and the reached flags stop making sense.
+  const names = new Set(tiers.map((t) => t.tier));
+  if (names.size !== tiers.length) return undefined;
+  for (let i = 1; i < tiers.length; i++) {
+    if (tiers[i].threshold <= tiers[i - 1].threshold) return undefined;
+  }
+  return tiers;
 }
 
 /**
@@ -60,13 +150,33 @@ export function parseRemoteEvents(): RemoteEventEntry[] {
     if (!parsed || typeof parsed !== 'object') return [];
     const events = (parsed as { events?: unknown }).events;
     if (!Array.isArray(events)) return [];
-    return events.filter((e): e is RemoteEventEntry =>
-      !!e &&
-      typeof e === 'object' &&
-      typeof (e as RemoteEventEntry).id === 'string' &&
-      typeof (e as RemoteEventEntry).endTime === 'number' &&
-      ((e as RemoteEventEntry).type === 'main' || (e as RemoteEventEntry).type === 'mini'),
-    );
+    return events
+      .filter((e): e is Record<string, unknown> =>
+        !!e &&
+        typeof e === 'object' &&
+        typeof (e as { id?: unknown }).id === 'string' &&
+        typeof (e as { endTime?: unknown }).endTime === 'number' &&
+        ((e as { type?: unknown }).type === 'main' ||
+          (e as { type?: unknown }).type === 'mini'),
+      )
+      .map((e) => {
+        const entry: RemoteEventEntry = {
+          id: e.id as string,
+          type: e.type as 'main' | 'mini',
+          name: typeof e.name === 'string' ? (e.name as string) : '',
+          description:
+            typeof e.description === 'string' ? (e.description as string) : '',
+          icon: typeof e.icon === 'string' ? (e.icon as string) : '',
+          endTime: e.endTime as number,
+          multipliers: e.multipliers as Partial<EventMultipliers> | undefined,
+        };
+        if (e.progressUnit === 'score' || e.progressUnit === 'count') {
+          entry.progressUnit = e.progressUnit;
+        }
+        const rewards = parseRemoteRewards(e.rewards, e.thresholds);
+        if (rewards) entry.rewards = rewards;
+        return entry;
+      });
   } catch {
     return [];
   }
@@ -302,15 +412,25 @@ class EventManager {
     // stacking a remote 2x coins with a built-in 1.5x blitz yields 2x.
     for (const remote of parseRemoteEvents()) {
       if (remote.endTime <= now) continue;
+      const remoteProgress = this.getProgress(remote.id);
       events.push({
         id: remote.id,
         type: remote.type,
         name: remote.name,
         description: remote.description,
         icon: remote.icon,
-        progress: this.getProgress(remote.id),
+        progress: remoteProgress,
         endTime: remote.endTime,
-        rewards: [],
+        // Validated remote tier ladder (clamped in parseRemoteRewards) —
+        // claimable through the same claimEventReward path as built-ins.
+        // Without an authored ladder the overlay stays multiplier-only.
+        rewards: (remote.rewards ?? []).map((t) => ({
+          tier: t.tier,
+          threshold: t.threshold,
+          rewards: t.rewards,
+          claimed: this.isTierClaimed(remote.id, t.tier),
+          reached: remoteProgress >= t.threshold,
+        })),
         multipliers: {
           coins: remote.multipliers?.coins ?? 1,
           xp: remote.multipliers?.xp ?? 1,
@@ -462,23 +582,67 @@ class EventManager {
    * (2/5/10). Feeding raw score to all of them made every star/puzzle/rare
    * tier claimable after a single ordinary puzzle (~1000 points) — a
    * recurring coin + gem faucet on a common path.
+   *
+   * MAIN events get the same routing by event TYPE: perfectClear authors
+   * its thresholds in PERFECT CLEARS (3/7/15/25) and mysteryWords in WORDS
+   * FOUND — feeding raw score cleared both ladders' every tier with one
+   * ordinary puzzle. Remote-Config overlay events route by their validated
+   * `progressUnit` ('score' default, 'count' = +1 per completion).
+   *
+   * `wordsFound` is the number of words on the completed board; callers that
+   * don't pass it simply don't advance a words-authored ladder (safe — the
+   * failure mode is under-, never over-crediting).
    */
-  onPuzzleComplete(score: number, stars: number, isPerfect: boolean): void {
+  onPuzzleComplete(
+    score: number,
+    stars: number,
+    isPerfect: boolean,
+    wordsFound: number = 0,
+  ): void {
     const events = this.getActiveEvents();
     const activeMini = getActiveMiniEvent(this.getToday());
     const builtinMiniId = activeMini
       ? `mini_${activeMini.event.id}_${activeMini.startDateStr}`
       : null;
+    const builtinMain = getCurrentEvent();
+    const remoteUnitById = new Map<string, 'score' | 'count'>();
+    for (const remote of parseRemoteEvents()) {
+      remoteUnitById.set(remote.id, remote.progressUnit ?? 'score');
+    }
+    const advanceRemote = (eventId: string) => {
+      if (remoteUnitById.get(eventId) === 'count') {
+        this.updateEventProgress(eventId, 'count', 1);
+      } else {
+        this.updateEventProgress(eventId, 'score', score);
+      }
+    };
     for (const event of events) {
       switch (event.type) {
         case 'main':
-          this.updateEventProgress(event.id, 'score', score);
+          if (!builtinMain || event.id !== builtinMain.id) {
+            // Remote-Config main overlay — validated progressUnit routing.
+            advanceRemote(event.id);
+            break;
+          }
+          switch (builtinMain.type) {
+            case 'perfectClear': // thresholds are perfect clears
+              if (isPerfect) {
+                this.updateEventProgress(event.id, 'perfect_clears', 1);
+              }
+              break;
+            case 'mysteryWords': // thresholds are words found
+              if (wordsFound > 0) {
+                this.updateEventProgress(event.id, 'words', wordsFound);
+              }
+              break;
+            default: // every other main ladder is authored in score
+              this.updateEventProgress(event.id, 'score', score);
+          }
           break;
         case 'mini':
           if (event.id !== builtinMiniId || !activeMini) {
-            // Remote-Config mini overlays have no tier ladder (rewards: []);
-            // keep their progress in raw score as before.
-            this.updateEventProgress(event.id, 'score', score);
+            // Remote-Config mini overlay — validated progressUnit routing.
+            advanceRemote(event.id);
             break;
           }
           switch (activeMini.event.bonusType) {

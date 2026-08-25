@@ -7,6 +7,7 @@ import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { analytics } from '../services/analytics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { getOfferPrice } from './monetizationModel';
 
 const AnimatedText = Animated.createAnimatedComponent(Text);
 
@@ -86,7 +87,14 @@ export function ContextualOffer({
   const ribbon = t(`offer.${visual.i18nKey}.ribbon`);
   const title = t(`offer.${visual.i18nKey}.title`);
   const buttonText = t(`offer.${visual.i18nKey}.button`);
-  const priceLabel = t(`offer.${visual.i18nKey}.price`);
+  // The displayed price and the amount GameScreen's accept handler charges
+  // come from the SAME getOfferPrice read (including the difficulty-scaled
+  // coin rescues), so the number cannot diverge from the charge. The locale
+  // string supplies only the localized currency wording around {{amount}} —
+  // monetizationModel's locale-pin test asserts each locale's wording names
+  // the currency getOfferPrice actually charges.
+  const price = getOfferPrice(type, context?.difficulty);
+  const priceLabel = t(`offer.${visual.i18nKey}.price`, { amount: price.amount });
   const description = t(`offer.${visual.i18nKey}.description`, {
     streak: context?.streakDays ?? '',
     difficulty: context?.difficulty ?? '',

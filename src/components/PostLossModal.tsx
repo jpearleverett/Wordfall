@@ -12,6 +12,7 @@ import { useCeremonyTransition } from '../hooks/useCeremonyTransition';
 import { analytics } from '../services/analytics';
 import { errorHaptic, wordFoundHaptic } from '../services/haptics';
 import GameIcon, { GameIconName } from './icons/GameIcon';
+import { POST_LOSS_HINT_PACK } from './monetizationModel';
 
 /**
  * Loss variants.
@@ -37,6 +38,13 @@ interface PostLossModalProps {
   onBuyHints: () => void;
   onDismiss: () => void;
   variant?: PostLossVariant;
+  /**
+   * Freezes the auto-dismiss countdown (and the countdown-triggered
+   * dismiss) while true — set by the caller when another surface (the
+   * MiniPackSheet after a broke buy-hints tap) is stacked on top, so the
+   * modal can't vanish out from under it mid-purchase.
+   */
+  paused?: boolean;
 }
 
 const AUTO_DISMISS_MS = 8000;
@@ -101,6 +109,7 @@ export function PostLossModal({
   onBuyHints,
   onDismiss,
   variant = 'stuck',
+  paused = false,
 }: PostLossModalProps) {
   const theme = VARIANTS[variant];
   // Shared ceremony policy: overlay fades, card scales, instant settle +
@@ -124,19 +133,25 @@ export function PostLossModal({
   }, []);
 
   // Pure countdown tick — side effects live in the timeLeft === 0 effect
-  // below, never inside the state updater.
+  // below, never inside the state updater. While `paused` (a purchase sheet
+  // is stacked on top) the interval is torn down entirely, so no seconds
+  // elapse behind the sheet.
   useEffect(() => {
+    if (paused) return;
     const interval = setInterval(() => {
       setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [paused]);
 
   useEffect(() => {
-    if (timeLeft === 0) {
+    // `paused` also gates the dismissal itself: if the countdown hit 0 on
+    // the exact tick the sheet opened, the modal must survive until the
+    // sheet closes.
+    if (timeLeft === 0 && !paused) {
       requestDismiss();
     }
-  }, [timeLeft, requestDismiss]);
+  }, [timeLeft, paused, requestDismiss]);
 
   const handleWatchAd = useCallback(() => {
     void analytics.logEvent('offer_accepted', {
@@ -215,14 +230,21 @@ export function PostLossModal({
             <Text style={styles.adButtonSubtext}>FREE</Text>
           </Pressable>
 
+          {/* Price comes from POST_LOSS_HINT_PACK — the SAME record the
+              accept handler charges. This label used to claim a 99-cent
+              dollar price while the handler silently spent 80 coins (a
+              policy-level trust defect); building both halves from one
+              constant is the fix. */}
           <Pressable
             style={({ pressed }) => [styles.buyButton, pressed && styles.buttonPressed]}
             onPress={handleBuyHints}
             accessibilityRole="button"
-            accessibilityLabel="Buy 5 hints for 99 cents"
+            accessibilityLabel={`Buy ${POST_LOSS_HINT_PACK.hintCount} hints for ${POST_LOSS_HINT_PACK.costCoins} coins`}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.buyButtonText}>Get 5 Hints — $0.99</Text>
+            <Text style={styles.buyButtonText}>
+              Get {POST_LOSS_HINT_PACK.hintCount} Hints — {POST_LOSS_HINT_PACK.costCoins} coins
+            </Text>
           </Pressable>
 
           <Pressable

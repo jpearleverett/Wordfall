@@ -23,25 +23,37 @@ const DEAL_POOL: DailyDeal[] = [
     availableHours: 24,
   },
   {
+    // Repriced August 2026: 15 gems for 300 coins was a 20:1 soft→hard
+    // conversion — cheap enough that coins WERE gems, collapsing the
+    // two-currency separation (why buy a gem pack when the coin grind
+    // converts at 20:1?). Kept as a deal rather than removed (a visible
+    // coins→gems bridge is a good coin sink), but at 100:1 — a real
+    // premium that costs multiple days of post-collapse coin income.
     id: 'deal_gem_pack',
     name: 'Gem Rush',
     description: '15 gems, today only!',
     icon: '\u{1F48E}',
-    originalPrice: 500,
-    salePrice: 300,
+    originalPrice: 2500,
+    salePrice: 1500,
     currency: 'coins',
     contents: { gems: 15 },
     availableHours: 24,
   },
   {
+    // Repriced August 2026: this deal paid 150 coins and handed back
+    // 200 coins + 3 hints — a net +50-coin money printer that also gave
+    // the hints away below every other hint price in the game. The coin
+    // content is gone: it is now a straight hints-at-a-discount deal
+    // (3 hints for 150 coins vs the coin shop's 250), so the buyer
+    // always spends more coins than the deal contains.
     id: 'deal_starter_boost',
     name: 'Power Start',
-    description: 'Coins + hints bundle',
+    description: '3 hints at a big discount!',
     icon: '\u{1F680}',
     originalPrice: 300,
     salePrice: 150,
     currency: 'coins',
-    contents: { coins: 200, hintTokens: 3 },
+    contents: { hintTokens: 3 },
     availableHours: 12,
   },
   {

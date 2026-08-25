@@ -476,3 +476,65 @@ describe('gameReducer - SPOTLIGHT_ACTIVATE', () => {
   });
 });
 
+
+describe('gameReducer - EXTEND_TIME (timeout continue)', () => {
+  function timedOutState() {
+    const board = makeSimpleBoard();
+    let state = createInitialState(board, 1, 'timePressure', 0, 60);
+    // Drain the clock to a real timeout the same way production does.
+    state = gameReducer(state, { type: 'TICK_TIMER', elapsedSeconds: 60 });
+    expect(state.status).toBe('timeout');
+    expect(state.timeRemaining).toBe(0);
+    return state;
+  }
+
+  it('restores playing with exactly the granted seconds from timeout', () => {
+    let state = timedOutState();
+    state = gameReducer(state, { type: 'EXTEND_TIME', seconds: 30 });
+    expect(state.status).toBe('playing');
+    expect(state.timeRemaining).toBe(30);
+  });
+
+  it('clears any lingering selection so the resumed attempt starts neutral', () => {
+    let state = timedOutState();
+    state = gameReducer(state, { type: 'EXTEND_TIME', seconds: 30 });
+    expect(state.selectedCells).toEqual([]);
+    expect(state.selectionDirection).toBeNull();
+  });
+
+  it('is a no-op from every non-timeout status', () => {
+    const board = makeSimpleBoard();
+    const playing = createInitialState(board, 1, 'timePressure', 0, 60);
+    expect(gameReducer(playing, { type: 'EXTEND_TIME', seconds: 30 })).toBe(playing);
+
+    const won = { ...playing, status: 'won' as const };
+    expect(gameReducer(won, { type: 'EXTEND_TIME', seconds: 30 })).toBe(won);
+
+    const failed = { ...playing, status: 'failed' as const };
+    expect(gameReducer(failed, { type: 'EXTEND_TIME', seconds: 30 })).toBe(failed);
+  });
+
+  it('rejects non-positive and non-finite grants', () => {
+    const state = timedOutState();
+    expect(gameReducer(state, { type: 'EXTEND_TIME', seconds: 0 })).toBe(state);
+    expect(gameReducer(state, { type: 'EXTEND_TIME', seconds: -10 })).toBe(state);
+    expect(gameReducer(state, { type: 'EXTEND_TIME', seconds: Number.NaN })).toBe(state);
+    expect(gameReducer(state, { type: 'EXTEND_TIME', seconds: Number.POSITIVE_INFINITY })).toBe(state);
+  });
+
+  it('floors fractional seconds', () => {
+    let state = timedOutState();
+    state = gameReducer(state, { type: 'EXTEND_TIME', seconds: 30.9 });
+    expect(state.timeRemaining).toBe(30);
+  });
+
+  it('resumed attempt can time out again on a later drain', () => {
+    let state = timedOutState();
+    state = gameReducer(state, { type: 'EXTEND_TIME', seconds: 2 });
+    state = gameReducer(state, { type: 'TICK_TIMER' });
+    expect(state.status).toBe('playing');
+    expect(state.timeRemaining).toBe(1);
+    state = gameReducer(state, { type: 'TICK_TIMER' });
+    expect(state.status).toBe('timeout');
+  });
+});

@@ -61,6 +61,11 @@ interface GameBannersProps {
   showIdleHint: boolean;
   hintsAvailable: number;
   canShowAdHint: boolean;
+  /**
+   * True for Remove-Ads / VIP owners: the ad-hint tap auto-grants without
+   * playing an ad, so the banner must not promise one.
+   */
+  adFree?: boolean;
   isStuck: boolean;
   undosLeft: number;
   /**
@@ -109,6 +114,7 @@ function GameBannersImpl({
   showIdleHint,
   hintsAvailable,
   canShowAdHint,
+  adFree = false,
   isStuck,
   undosLeft,
   strandedWords,
@@ -217,7 +223,7 @@ function GameBannersImpl({
           <View style={styles.bannerRow}>
             <GameIcon name="frame" size={14} accent={COLORS.green} />
             <Text style={styles.adHintBannerText}>
-              Out of hints — watch ad for +1 hint
+              {adFree ? 'Out of hints — claim +1 free hint' : 'Out of hints — watch ad for +1 hint'}
             </Text>
           </View>
         </Pressable>

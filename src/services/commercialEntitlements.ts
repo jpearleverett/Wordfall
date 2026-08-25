@@ -59,6 +59,16 @@ export interface CommercialStateShape {
     lastFillAt: number;
     capacity: number;
   };
+  /**
+   * Season-pass state slice. Optional — only the premium-lane flag is
+   * touched here (rewards.flags.seasonPassPremium), so products like
+   * season_pass_bundle unlock the lane through the same generic path as
+   * every other flag instead of relying on a hardcoded product-id check
+   * upstream. The full shape lives in EconomyState.
+   */
+  seasonPass?: {
+    isPremium: boolean;
+  };
 }
 
 export interface PlayerGrantSummary {
@@ -218,6 +228,16 @@ export function applyCatalogPurchase<TState extends CommercialStateShape>(
     nextState.isVipSubscriber = true;
     nextState.vipExpiresAt = options.expiresAt ?? now + 7 * MILLIS_PER_DAY;
     nextState.vipDailyLastClaim = '';
+  }
+  if (rewards.flags?.seasonPassPremium && prevState.seasonPass) {
+    // Generic flag path so every SKU that promises the premium lane
+    // (season_pass_premium AND season_pass_bundle) actually grants it.
+    // When the state slice is absent (older callers), EconomyContext's
+    // own season_pass_premium branch still applies the default state.
+    (nextState as CommercialStateShape).seasonPass = {
+      ...prevState.seasonPass,
+      isPremium: true,
+    };
   }
 
   if (rewards.dripDays) {

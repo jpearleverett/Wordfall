@@ -52,6 +52,8 @@
     "watchAdA11y": "Assista a um anúncio para ganhar uma vida",
     "fullRefillGems": "💎 {{count}} Gemas — Recarga Total",
     "youHaveGems": "Você tem {{count}} gemas",
+    "getMoreGems": "Você tem {{count}} — toque para conseguir mais gemas",
+    "getMoreGemsA11y": "Gemas insuficientes. Abre ofertas de gemas",
     "refillA11y": "Recarregar vidas por {{count}} gemas",
     "nextLifeIn": "Próxima vida em",
     "illWait": "Vou Esperar",
@@ -66,49 +68,49 @@
       "title": "Pacote Resgate de Dicas",
       "description": "Ganhe 5 dicas para vencer este nível. Você está mais perto do que imagina!",
       "button": "QUERO 5 DICAS",
-      "price": "5 gemas"
+      "price": "{{amount}} moedas"
     },
     "lifeRefill": {
       "ribbon": "SEM VIDAS",
       "title": "Recarga Instantânea",
       "description": "Não espere! Recupere as 5 vidas agora mesmo.",
       "button": "RECARREGAR AGORA",
-      "price": "10 gemas"
+      "price": "{{amount}} gemas"
     },
     "streakShield": {
       "ribbon": "SEQUÊNCIA EM RISCO",
       "title": "Proteja Sua Sequência",
       "description": "Sua sequência de {{streak}} dias expira hoje à noite. Ative o escudo!",
       "button": "ATIVAR ESCUDO",
-      "price": "30 gemas"
+      "price": "{{amount}} gemas"
     },
     "closeFinish": {
       "ribbon": "QUASE LÁ!",
       "title": "Falta Só 1 Palavra",
       "description": "Você está a uma palavra da vitória! Uma dica pode fechar com chave de ouro.",
       "button": "QUERO UMA DICA",
-      "price": "3 gemas"
+      "price": "{{amount}} moedas"
     },
     "closeFinishPremium": {
       "ribbon": "NÃO PERCA ESSA",
       "title": "Complete o Desafio",
       "description": "Falta uma palavra — a gente revela para você. Garanta sua vitória.",
       "button": "REVELAR ÚLTIMA PALAVRA",
-      "price": "9 gemas"
+      "price": "{{amount}} gemas"
     },
     "postPuzzle": {
       "ribbon": "POUCAS DICAS",
       "title": "Faça Estoque",
       "description": "Mandou bem! Garanta dicas para o próximo desafio.",
       "button": "QUERO 10 DICAS",
-      "price": "10 gemas"
+      "price": "{{amount}} moedas"
     },
     "boosterPack": {
       "ribbon": "NÍVEL DIFÍCIL À VISTA",
       "title": "Pacote de Boosters",
       "description": "Ganhe Holofote + Coringa + Embaralhar para este desafio {{difficulty}}!",
       "button": "QUERO 3 BOOSTERS",
-      "price": "15 gemas"
+      "price": "{{amount}} gemas"
     }
   },
   "home": {
@@ -280,6 +282,9 @@
     "usedAllMoves": "Você usou todas as {{count}} jogadas.",
     "wordsCounter": "{{found}}/{{total}} palavras",
     "watchAdFreeHint": "Ver Anúncio: Dica Grátis",
+    "claimFreeHint": "Resgatar Dica Grátis (sem anúncio)",
+    "timeoutContinue": "Ver Anúncio: continuar +{{seconds}} s",
+    "timeoutContinueFree": "Continuar +{{seconds}} s — Grátis",
     "undoLastMove": "DESFAZER ÚLTIMA JOGADA",
     "dayStreak": "Dias Seguidos",
     "keepItGoing": "Continue assim!",

@@ -272,6 +272,28 @@ const PUSH_TOKEN_STORAGE_KEY = '@wordfall_push_token';
 const DEVICE_TOKEN_STORAGE_KEY = '@wordfall_device_push_token';
 const SCHEDULED_IDS_STORAGE_KEY = '@wordfall_notif_scheduled_ids';
 
+// Mirror of SettingsContext's STORAGE_KEY. Read directly from AsyncStorage
+// (not via the context) so this service can honor the notifications toggle
+// without a module cycle — SettingsContext already imports this file.
+const SETTINGS_STORAGE_KEY = '@wordfall_settings';
+
+/**
+ * Whether the player's persisted Settings allow push registration.
+ * Default is TRUE (matches SettingsContext.DEFAULT_SETTINGS): a fresh
+ * install with no stored settings — or unreadable storage — registers.
+ * Only an explicit `notificationsEnabled: false` opts out.
+ */
+export async function isPushRegistrationEnabled(): Promise<boolean> {
+  try {
+    const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!stored) return true;
+    const parsed = JSON.parse(stored) as { notificationsEnabled?: unknown };
+    return parsed.notificationsEnabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 // ─── Android Notification Channel ─────────────────────────────────────────────
 
 const ANDROID_CHANNEL_ID = 'wordfall-default';
@@ -315,6 +337,9 @@ class NotificationManager {
   private lastRemotePayload: Record<string, unknown> | null = null;
   private categoryListeners: Map<NotificationCategory, Set<(data: Record<string, unknown>) => void>> = new Map();
   private responseListenerSubscription: { remove: () => void } | null = null;
+  /** One-shot guard: default-path remote registration runs once per process. */
+  private remoteRegistrationStarted = false;
+  private authStateUnsubscribe: (() => void) | null = null;
 
   /**
    * Rehydrate the category → OS-notification-id registry from AsyncStorage.
@@ -421,6 +446,16 @@ class NotificationManager {
           );
           this.expoPushToken = tokenData.data;
           logger.log('[Notifications] Push token:', this.expoPushToken);
+
+          // Persist the token for server-sent pushes on the DEFAULT path.
+          // registerForRemotePush used to have exactly one caller — the
+          // Settings toggle's false→true transition effect — and the default
+          // is true, so a default install NEVER wrote
+          // users/{uid}/pushToken/current and every server push (streak
+          // reminders, re-engagement, gifts) returned no_token.
+          // Fire-and-forget: a slow Firestore write must never block init()
+          // or the local-notification scheduling chained onto it in App.tsx.
+          void this.registerRemotePushWhenReady();
         } catch (tokenError) {
           // Push token failure is non-fatal -- local notifications still work
           logger.warn('[Notifications] Failed to get push token (local notifications still work):', tokenError);
@@ -674,6 +709,54 @@ class NotificationManager {
   // ─── Remote Push Notification Support ───────────────────────────────────
 
   /**
+   * Default-path remote-push registration, called from init() after
+   * permissions + token succeed. Honors the persisted Settings toggle (a
+   * user who turned notifications OFF is never registered), waits for
+   * Firebase auth when the anonymous sign-in hasn't finished yet, then
+   * persists the token via registerForRemotePush(uid). Runs once per
+   * process; the Settings toggle path handles subsequent on/off flips.
+   */
+  private async registerRemotePushWhenReady(): Promise<void> {
+    if (this.remoteRegistrationStarted) return;
+    this.remoteRegistrationStarted = true;
+
+    try {
+      if (!(await isPushRegistrationEnabled())) {
+        logger.log('[Notifications] notificationsEnabled=false in settings — skipping remote push registration');
+        return;
+      }
+
+      const { isFirebaseConfigured, auth } = await import('../config/firebase');
+      if (!isFirebaseConfigured || !auth) {
+        logger.log('[Notifications] Firebase not configured — skipping remote push registration');
+        return;
+      }
+
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        await this.registerForRemotePush(uid);
+        return;
+      }
+
+      // Anonymous sign-in may still be in flight when init() runs — register
+      // on the first auth state that carries a user, then detach.
+      const { onAuthStateChanged } = await import('firebase/auth');
+      this.authStateUnsubscribe?.();
+      this.authStateUnsubscribe = onAuthStateChanged(auth, (user) => {
+        if (!user) return;
+        this.authStateUnsubscribe?.();
+        this.authStateUnsubscribe = null;
+        // Re-check the toggle — it may have been flipped off while we waited.
+        void isPushRegistrationEnabled().then((enabled) => {
+          if (enabled) void this.registerForRemotePush(user.uid);
+        });
+      });
+    } catch (error) {
+      logger.warn('[Notifications] Default-path remote push registration failed:', error);
+    }
+  }
+
+  /**
    * Register for remote push notifications.
    * Gets both Expo push token and device push token, stores in AsyncStorage.
    * Optionally saves the token to Firestore at `users/{uid}/pushToken`.
@@ -759,6 +842,12 @@ class NotificationManager {
       const db = getFirestore(app);
 
       await setDoc(doc(db, 'users', userId, 'pushToken', 'current'), {
+        // `token` is the field the server reads (sendPushToUser in
+        // functions/src/social.ts); `expoToken` is kept alongside it for
+        // migration — the server falls back to it for docs written before
+        // Aug 2026, when this client only wrote `expoToken` and every
+        // server push returned no_token.
+        token: expoToken,
         expoToken,
         deviceToken: deviceToken ?? null,
         platform: Platform.OS,
