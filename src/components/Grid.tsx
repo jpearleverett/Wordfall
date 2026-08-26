@@ -35,6 +35,7 @@ import {
   buildFallEasing,
   cascadeTouchdownAt,
   bandDelayMs,
+  cascadeIsVertical,
   fallBandOf,
   fallDurationMs,
   fallRunDuration,
@@ -762,14 +763,15 @@ function GameGridImpl({
     // (FALL_MAX_STAGGERED_BANDS) so a word spanning the whole board does not
     // leave its outermost band sitting still for a third of a second before it
     // moves; that lead-in was most of what read as lag.
-    const verticalCascade =
-      falls.reduce((sum, f) => sum + Math.abs(f.dy) - Math.abs(f.dx), 0) >= 0;
+    const verticalCascade = cascadeIsVertical(falls);
     const bandOfGhost = (g: GhostSpec) => (verticalCascade ? g.col : g.row);
     const centroid =
       ghosts.length > 0
         ? ghosts.reduce((sum, g) => sum + bandOfGhost(g), 0) / ghosts.length
         : null;
-    const bands = Array.from(new Set(falls.map(fallBandOf))).sort((a, b) =>
+    const bands = Array.from(
+      new Set(falls.map(f => fallBandOf(f, verticalCascade))),
+    ).sort((a, b) =>
       centroid === null
         ? a - b
         : Math.abs(a - centroid) - Math.abs(b - centroid) || a - b,
@@ -793,9 +795,13 @@ function GameGridImpl({
       const run: FallRun = {
         from,
         startedAt,
-        delayMs: f.liveOffset
-          ? 0
-          : FALL_HOLD_MS + (bandDelay.get(fallBandOf(f)) ?? 0),
+        // A tile only skips the lead-in if it is genuinely in flight.
+        // entryProgress is zero during a hold and after touchdown, so a resize
+        // landing mid-hold no longer cancels the whole cascade's stagger.
+        delayMs:
+          f.entryProgress > 0
+            ? 0
+            : FALL_HOLD_MS + (bandDelay.get(fallBandOf(f, verticalCascade)) ?? 0),
         fallMs: fallDurationMs(slotsFallen),
         entryProgress: f.entryProgress,
         rebound: reboundVector(from, reboundMagnitude(dist)),

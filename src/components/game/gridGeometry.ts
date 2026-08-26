@@ -130,6 +130,23 @@ export function decideGridTransitionUpdate(
     // in-flight offset is meaningless — snap.
     return 'reset';
   }
+  // Wholesale board replacement must not run the clear transition: every
+  // on-screen tile would ghost (a full-board dissolve storm over the incoming
+  // board). Route it through 'reset', which snaps values and clears animation
+  // resources atomically.
+  //
+  // Checked BEFORE the pitch comparison, not after: a swap very often changes
+  // the pitch too (hydrating a snapshot on a screen whose word band has since
+  // re-measured, a level whose word count re-wraps the chip panel), and
+  // testing pitch first would short-circuit to 'resize' and let exactly the
+  // storm this guard exists to prevent through.
+  if (
+    previous.grid !== next.grid &&
+    next.grid !== null &&
+    gridsShareNoCellIds(previous.grid, next.grid)
+  ) {
+    return 'reset';
+  }
   if (previous.cellSize !== next.cellSize) {
     // A pure re-scale: same slots, different pixel pitch. This used to be
     // lumped in with 'reset', which SNAPPED every in-flight gravity tile to
@@ -141,13 +158,6 @@ export function decideGridTransitionUpdate(
     return 'resize';
   }
   if (previous.grid === next.grid) return 'none';
-  // Wholesale board replacement must not run the clear transition: every
-  // on-screen tile would ghost (a ~2.4s full-board green dissolve storm
-  // over the incoming board). Route it through 'reset', which snaps values
-  // and clears animation resources atomically.
-  if (next.grid !== null && gridsShareNoCellIds(previous.grid, next.grid)) {
-    return 'reset';
-  }
   return 'transition';
 }
 

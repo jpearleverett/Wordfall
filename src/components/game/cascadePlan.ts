@@ -149,25 +149,33 @@ export function planCascade(
 
   if (decision === 'none') return { decision, plan: { kind: 'none' } };
 
-  const animatable =
-    (decision === 'transition' || decision === 'resize') &&
-    previous !== null &&
-    !reduceMotion;
-
-  if (!animatable) {
-    // 'initialize' has nothing to animate from and nothing in the air, so it
-    // must NOT snap — snapping would clear animated values the very first
-    // render creates. Everything else does.
-    return {
-      decision,
-      plan:
-        decision === 'initialize'
-          ? { kind: 'animate', falls: [], ghosts: [], repositions: [] }
-          : { kind: 'snap' },
-    };
+  if (decision === 'initialize' || previous === null) {
+    // Nothing to animate from and nothing in the air. Must NOT snap: snapping
+    // would clear the animated values the very first render creates.
+    return { decision, plan: { kind: 'animate', falls: [], ghosts: [], repositions: [] } };
   }
+  if (decision === 'reset') return { decision, plan: { kind: 'snap' } };
 
   const prev = previous;
+
+  if (reduceMotion) {
+    // Place every tile that moved, instantly, and dissolve nothing.
+    //
+    // Deliberately NOT a snap. Snapping drops every animated value, and a
+    // tile's position IS its animated value, so the next render would build
+    // ~50 fresh ones and hand every LetterCell a new prop — a full-grid
+    // re-render on every single word clear, for the players least able to
+    // absorb one.
+    const repositions: Array<{ id: string; x: number; y: number }> = [];
+    for (const [id, bound] of next.bounds) {
+      const was = prev.bounds.get(id);
+      if (!was) continue;
+      if (was.x !== bound.x || was.y !== bound.y) {
+        repositions.push({ id, x: bound.x, y: bound.y });
+      }
+    }
+    return { decision, plan: { kind: 'animate', falls: [], ghosts: [], repositions } };
+  }
   // On a re-scale the previous frame's slots are rebuilt at the NEW pitch
   // (slot indices are pitch-independent) and any in-flight offset is scaled by
   // the same ratio, so the fall continues from where the tile visually is
@@ -184,10 +192,19 @@ export function planCascade(
   const liveOffsets = new Map<string, { x: number; y: number }>();
   const livePhase = new Map<string, number>();
   for (const [id, run] of state.runs) {
+    // A recorded freeze was already captured in this frame's pixel space, so
+    // it must pass through untouched; only a freshly sampled offset — still
+    // expressed at the OLD pitch — gets scaled. Scaling both meant a replayed
+    // render scaled the freeze a second time, which is precisely the drift
+    // the freeze exists to prevent.
     const frozen = state.frozenOffsets.get(id);
-    const offset = frozen ?? sampleFallOffset(run, now);
+    let offset = frozen;
+    if (!offset) {
+      const sampled = sampleFallOffset(run, now);
+      offset = { x: sampled.x * scale, y: sampled.y * scale };
+    }
     if (offset.x !== 0 || offset.y !== 0) {
-      liveOffsets.set(id, { x: offset.x * scale, y: offset.y * scale });
+      liveOffsets.set(id, offset);
       livePhase.set(id, state.frozenPhases.get(id) ?? fallPhaseProgress(run, now));
     }
   }

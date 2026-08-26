@@ -42,7 +42,7 @@ function shuffleArray<T>(arr: T[], rng: () => number): T[] {
  */
 const CELL_ID_SESSION = Math.random().toString(36).slice(2, 8);
 let cellIdCounter = 0;
-function newCellId(): string {
+export function newCellId(): string {
   return `cell_${CELL_ID_SESSION}_${++cellIdCounter}`;
 }
 

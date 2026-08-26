@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   buildFallEasing,
+  cascadeIsVertical,
   cascadeTouchdownAt,
   bandDelayMs,
   fallBandOf,
@@ -169,6 +170,14 @@ describe('choreography budget', () => {
     expect(typical).toBeLessThanOrEqual(520);
   });
 
+  test('the rebound never exceeds the distance the tile fell', () => {
+    // A tile re-targeted mid-air can have a couple of pixels left to travel.
+    // A flat floor let it swing back several times further than it fell.
+    for (const dist of [0.5, 2, 5, 12, STRIDE, STRIDE * 8]) {
+      expect(reboundMagnitude(dist)).toBeLessThanOrEqual(dist);
+    }
+  });
+
   test('the rebound is visible without being a hop', () => {
     // Has to clear ~2px/frame at 60fps to read as a bounce at all, and stay
     // well under a cell so it never looks like a second, smaller fall.
@@ -249,22 +258,79 @@ describe('mid-air pickup keeps its speed', () => {
     // Past touchdown the tile is rebounding, not falling.
     expect(fallPhaseProgress(run, run.delayMs + run.fallMs + 1)).toBe(0);
   });
+
+  test('fallPhaseProgress is a TIME coordinate, not a distance fraction', () => {
+    // easeInQuad consumes entryProgress as a position on the parabola's input
+    // axis. Distance is time squared, so handing it the distance fraction
+    // understated the tile's speed and a pickup still lost momentum.
+    const run = runFor(3, 0, 0);
+    const halfway = fallPhaseProgress(run, run.delayMs + run.fallMs * 0.5);
+    expect(halfway).toBeCloseTo(0.5, 6);
+    // At the halfway TIME the tile has covered a quarter of the DISTANCE.
+    const covered =
+      1 - sampleFallOffset(run, run.delayMs + run.fallMs * 0.5).y / run.from.y;
+    expect(covered).toBeCloseTo(0.25, 6);
+  });
+
+  test('a pickup resumes at the speed it was travelling', () => {
+    // Continuing a run at the reported phase must move at the same rate the
+    // original was moving at that instant.
+    const original = runFor(4, 0, 0);
+    const at = original.delayMs + original.fallMs * 0.5;
+    const phase = fallPhaseProgress(original, at);
+    const frame = 1000 / 60;
+    const originalStep = Math.abs(
+      sampleFallOffset(original, at + frame).y - sampleFallOffset(original, at).y,
+    );
+
+    const remaining = sampleFallOffset(original, at);
+    const successor: FallRun = {
+      from: remaining,
+      startedAt: 0,
+      delayMs: 0,
+      fallMs: original.fallMs * (1 - phase),
+      entryProgress: phase,
+      rebound: reboundVector(remaining, reboundMagnitude(Math.abs(remaining.y))),
+      reboundOutMs: FALL_REBOUND_OUT_MS,
+      reboundInMs: FALL_REBOUND_IN_MS,
+    };
+    const successorStep = Math.abs(sampleFallOffset(successor, frame).y - remaining.y);
+    expect(successorStep).toBeCloseTo(originalStep, 1);
+  });
 });
 
 describe('cascade banding', () => {
   test('vertical gravity bands by column', () => {
-    expect(fallBandOf({ dx: 0, dy: -108, row: 5, col: 3 })).toBe(3);
+    expect(cascadeIsVertical([{ dx: 0, dy: -108 }])).toBe(true);
+    expect(fallBandOf({ row: 5, col: 3 }, true)).toBe(3);
   });
 
   test('horizontal gravity bands by row', () => {
     // gravityFlip compacts along a row, so the tiles that must start together
     // are the ones sharing a row — banding those by column pulled neighbours
     // apart mid-slide.
-    expect(fallBandOf({ dx: -108, dy: 0, row: 5, col: 3 })).toBe(5);
+    expect(cascadeIsVertical([{ dx: -108, dy: 0 }])).toBe(false);
+    expect(fallBandOf({ row: 5, col: 3 }, false)).toBe(5);
   });
 
-  test('a tie falls back to the vertical reading', () => {
-    expect(fallBandOf({ dx: -50, dy: -50, row: 5, col: 3 })).toBe(3);
+  test('the axis is one decision for the whole cascade, not one per tile', () => {
+    // A mid-air pickup can carry a stray cross-axis offset. Deciding per tile
+    // let it contribute a ROW index to a map keyed by COLUMN indices, where it
+    // collides with a real column and inherits another band's delay.
+    const mostlyVertical = [
+      { dx: 0, dy: -108 },
+      { dx: 0, dy: -54 },
+      { dx: -4, dy: 0 },
+    ];
+    expect(cascadeIsVertical(mostlyVertical)).toBe(true);
+    const bands = mostlyVertical.map((f, i) =>
+      fallBandOf({ row: i, col: i + 10 }, cascadeIsVertical(mostlyVertical)),
+    );
+    expect(bands).toEqual([10, 11, 12]);
+  });
+
+  test('an empty cascade reads as vertical', () => {
+    expect(cascadeIsVertical([])).toBe(true);
   });
 });
 

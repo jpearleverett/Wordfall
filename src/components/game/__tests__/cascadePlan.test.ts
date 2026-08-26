@@ -334,6 +334,67 @@ describe('interrupting a cascade keeps every tile where it is', () => {
     if (b.plan.kind !== 'animate') throw new Error('expected an animate plan');
     expect(b.plan.falls).toEqual(a.plan.falls);
   });
+
+  it('is replayable on the re-scale path too', () => {
+    // A recorded freeze is already in the new frame's pixel space. Scaling it
+    // again on replay drifts the seed a little further every render.
+    const before = board(7, 5);
+    const after = clearAt(before, [[6, 2]]);
+    const prev = frameOf(before);
+    const next = frameOf(after);
+    const first = planCascade(prev, next, EMPTY_CASCADE_STATE, 0, false);
+    if (first.plan.kind !== 'animate') throw new Error('expected an animate plan');
+
+    const runs = new Map<string, FallRun>();
+    for (const fall of first.plan.falls) runs.set(fall.id, runFromFall(fall.dx, fall.dy));
+    const tracked = first.plan.falls[0];
+    const run = runs.get(tracked.id)!;
+    const at = run.delayMs + run.fallMs * 0.4;
+    const smaller = frameOf(after, CELL - 6);
+
+    const a = planCascade(next, smaller, stateWith({ runs }), at, false);
+    if (a.plan.kind !== 'animate') throw new Error('expected an animate plan');
+    const frozenOffsets = new Map<string, { x: number; y: number }>();
+    const frozenPhases = new Map<string, number>();
+    for (const fall of a.plan.falls) {
+      if (fall.liveOffset) {
+        frozenOffsets.set(fall.id, fall.liveOffset);
+        frozenPhases.set(fall.id, fall.entryProgress);
+      }
+    }
+    const b = planCascade(
+      next,
+      smaller,
+      stateWith({ runs, frozenOffsets, frozenPhases }),
+      at + 20,
+      false,
+    );
+    if (b.plan.kind !== 'animate') throw new Error('expected an animate plan');
+    expect(b.plan.falls).toEqual(a.plan.falls);
+  });
+
+  it('a tile still in its hold is not treated as airborne', () => {
+    // sampleFallOffset reports a held tile at its full start offset, which is
+    // non-zero — but it has not moved. Reading that as "in flight" cancelled
+    // the whole cascade's lead-in whenever a re-measure landed during the hold.
+    const before = board(7, 5);
+    const after = clearAt(before, [[6, 1], [6, 2]]);
+    const prev = frameOf(before);
+    const next = frameOf(after);
+    const first = planCascade(prev, next, EMPTY_CASCADE_STATE, 0, false);
+    if (first.plan.kind !== 'animate') throw new Error('expected an animate plan');
+
+    const runs = new Map<string, FallRun>();
+    for (const fall of first.plan.falls) runs.set(fall.id, runFromFall(fall.dx, fall.dy));
+
+    const smaller = frameOf(after, CELL - 6);
+    const duringHold = FALL_HOLD_MS / 2;
+    const held = planCascade(next, smaller, stateWith({ runs }), duringHold, false);
+    if (held.plan.kind !== 'animate') throw new Error('expected an animate plan');
+    for (const fall of held.plan.falls) {
+      expect(fall.entryProgress).toBe(0);
+    }
+  });
 });
 
 // ── (d) Horizontal gravity is a move, not a remount ─────────────────────────
@@ -401,11 +462,28 @@ describe('the settle report', () => {
 // ── Reduce motion, resets, and the shrink ring ──────────────────────────────
 
 describe('plans that must not animate', () => {
-  it('reduce motion snaps instead of falling', () => {
+  it('reduce motion places tiles instantly without discarding their values', () => {
+    // Deliberately not a snap. A tile's position IS its animated value, so
+    // snapping would drop ~50 values per clear and hand every LetterCell a new
+    // prop — a full-grid re-render on every word found, for the players least
+    // able to absorb one.
     const before = board(5, 5);
     const after = clearAt(before, [[4, 1], [4, 2]]);
-    const { plan } = planCascade(frameOf(before), frameOf(after), EMPTY_CASCADE_STATE, 0, true);
-    expect(plan.kind).toBe('snap');
+    const prev = frameOf(before);
+    const next = frameOf(after);
+    const { plan } = planCascade(prev, next, EMPTY_CASCADE_STATE, 0, true);
+    if (plan.kind !== 'animate') throw new Error('expected an animate plan');
+    expect(plan.falls).toEqual([]);
+    expect(plan.ghosts).toEqual([]);
+
+    const placed = new Map(plan.repositions.map(r => [r.id, r]));
+    for (const [id, bound] of next.bounds) {
+      const was = prev.bounds.get(id)!;
+      const moved = was.x !== bound.x || was.y !== bound.y;
+      expect(placed.has(id)).toBe(moved);
+      if (moved) expect(placed.get(id)).toEqual({ id, x: bound.x, y: bound.y });
+    }
+    expect(plan.repositions.length).toBeGreaterThan(0);
   });
 
   it('a wholesale board replacement snaps rather than ghosting every tile', () => {
@@ -414,6 +492,24 @@ describe('plans that must not animate', () => {
     const { decision, plan } = planCascade(
       frameOf(first),
       frameOf(second),
+      EMPTY_CASCADE_STATE,
+      0,
+      false,
+    );
+    expect(decision).toBe('reset');
+    expect(plan.kind).toBe('snap');
+  });
+
+  it('a board swap that also changes pitch still snaps', () => {
+    // Hydrating a snapshot on a screen whose word band has since re-measured,
+    // or a level whose word count re-wraps the chip panel. Testing pitch first
+    // short-circuits to 'resize' and lets the whole previous board ghost over
+    // the incoming one — the exact storm the replacement guard exists to stop.
+    const first = board(5, 5);
+    const second = board(5, 5, true);
+    const { decision, plan } = planCascade(
+      frameOf(first, CELL),
+      frameOf(second, CELL - 6),
       EMPTY_CASCADE_STATE,
       0,
       false,

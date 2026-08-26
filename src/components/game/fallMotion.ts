@@ -149,16 +149,24 @@ export function reboundVector(
  * at touchdown, dips back below 1 for the rebound, and returns to 1 at rest.
  */
 /**
- * How far through its fall phase a run is at `tMs`, in [0, 1] — the value to
- * carry into a successor run's `entryProgress` when an interrupting clear
- * picks the tile up. Zero before the fall starts, and zero once it is past
- * touchdown (a rebounding tile is not "falling fast" any more).
+ * Where a run has reached on its parabola at `now`, as a TIME coordinate in
+ * [0, 1) — the value to carry into a successor run's `entryProgress` when an
+ * interrupting clear picks the tile up.
+ *
+ * Time, not distance. `entryProgress` is consumed by easeInQuad as a position
+ * along the parabola's input axis, and distance is time SQUARED — handing it
+ * the distance fraction understated the tile's speed (0.25 of the way there is
+ * halfway through the fall, not a quarter), so a pickup still lost momentum.
+ *
+ * Zero before the fall starts and zero once past touchdown: a tile in its hold
+ * has not moved yet, and a rebounding tile is no longer falling.
  */
 export function fallPhaseProgress(run: FallRun, now: number): number {
   if (run.fallMs <= 0) return 0;
   const fallT = now - run.startedAt - run.delayMs;
   if (fallT <= 0 || fallT >= run.fallMs) return 0;
-  return easeInQuad(fallT / run.fallMs, run.entryProgress ?? 0);
+  const entry = Math.min(run.entryProgress ?? 0, 0.9);
+  return entry + (1 - entry) * (fallT / run.fallMs);
 }
 
 export function fallProgressAt(run: FallRun, tMs: number): number {
@@ -240,13 +248,28 @@ export const FALL_REBOUND_IN_MS = 75;
  * closed it again: the mode whose whole identity is gravity had the least
  * convincing gravity in the game.
  */
-export function fallBandOf(fall: {
-  dx: number;
-  dy: number;
-  row: number;
-  col: number;
-}): number {
-  return Math.abs(fall.dy) >= Math.abs(fall.dx) ? fall.col : fall.row;
+export function fallBandOf(
+  fall: { row: number; col: number },
+  vertical: boolean,
+): number {
+  return vertical ? fall.col : fall.row;
+}
+
+/**
+ * Which way THIS cascade is travelling, decided once for the whole set.
+ *
+ * It has to be one decision, not one per tile: the band delays live in a
+ * single map keyed by index, so a tile contributing a row index alongside
+ * another tile's column index would collide on the same key and inherit a
+ * delay meant for a different band. A mid-air pickup carrying a stray
+ * cross-axis offset is exactly how that happens.
+ */
+export function cascadeIsVertical(
+  falls: ReadonlyArray<{ dx: number; dy: number }>,
+): boolean {
+  let score = 0;
+  for (const fall of falls) score += Math.abs(fall.dy) - Math.abs(fall.dx);
+  return score >= 0;
 }
 
 /**
@@ -266,9 +289,14 @@ export function fallDurationMs(rowsFallen: number): number {
   return Math.min(400, Math.max(70, 230 * Math.pow(rows, 0.35)));
 }
 
-/** How far a tile kicks back up-travel on impact, scaled by drop distance. */
+/**
+ * How far a tile kicks back up-travel on impact, scaled by drop distance and
+ * capped by it: a tile with two pixels left to travel must not swing back
+ * further than it fell, which the flat 3px floor alone would let it do on a
+ * continuation fall.
+ */
 export function reboundMagnitude(distancePx: number): number {
-  return Math.min(9, 3 + distancePx * 0.06);
+  return Math.min(9, 3 + distancePx * 0.06, distancePx * 0.35);
 }
 
 /**

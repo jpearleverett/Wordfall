@@ -35,7 +35,9 @@ export function delayedTiming(
     easing?: EasingFn;
   },
 ): Animated.CompositeAnimation {
-  const { toValue, delay, duration, easing = Easing.linear } = config;
+  // RN's own Animated.timing default, so swapping a call over to this helper
+  // never silently changes its curve.
+  const { toValue, delay, duration, easing = Easing.inOut(Easing.ease) } = config;
   const total = delay + duration;
   const holdFraction = total > 0 ? delay / total : 0;
   return Animated.timing(value, {

@@ -198,8 +198,12 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
 // Shared empty Set so memoized consumers (PlayField's GameGrid) don't re-render when spotlight is inactive.
 const EMPTY_CELL_KEY_SET: Set<string> = new Set();
 const GRID_AREA_BOTTOM_PADDING = 36;
-/** Submit squash: dip and return, finished before the cascade is seeded. */
-const GRID_SQUASH_MS = 115;
+/**
+ * Submit squash: dip and return. Sized to finish before the cascade's first
+ * tile moves — 50ms of auto-submit window plus the fall's 45ms hold — so the
+ * tiles never drop through a parent that is still scaling.
+ */
+const GRID_SQUASH_MS = 90;
 
 // Unified booster-button body gradient — matches the tile material language
 // so the three boosters read as one shelf with different icons rather than
@@ -867,7 +871,6 @@ function GameScreenImpl({
     pendingTimeoutsRef.current.forEach(clearTimeout);
     pendingTimeoutsRef.current.clear();
   }, []);
-  const gridScaleAnim = useRef(new Animated.Value(1)).current;
   // Submit "pop" driver: 0 -> 1, interpolated into a dip-and-return so the
   // whole squash is a single native animation. Kept shorter than the 50ms
   // auto-submit window plus the cascade's hold, because it scales the tiles'
@@ -1387,7 +1390,7 @@ function GameScreenImpl({
     transform: [
       {
         scale: Animated.multiply(
-          Animated.multiply(gridScaleAnim, undoPulseAnim),
+          undoPulseAnim,
           gridSquashAnim.interpolate({
             inputRange: [0, 0.4, 1],
             outputRange: [1, 0.975, 1],
@@ -1395,7 +1398,7 @@ function GameScreenImpl({
         ),
       },
     ],
-  }), [gridScaleAnim, undoPulseAnim, gridSquashAnim]);
+  }), [undoPulseAnim, gridSquashAnim]);
 
   // Memoize the root shake container style so the Animated.View ref stays
   // stable across the thousands of re-renders a puzzle triggers (one per
