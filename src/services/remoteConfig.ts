@@ -77,6 +77,14 @@ export interface RemoteConfigValues {
   adaptiveDifficultyEnabled: boolean;
   /** Tier 6 B1 — surface a free-hint breather modal after 2 consecutive fails. */
   failBreatherEnabled: boolean;
+  /**
+   * Remove-Ads auto-grant scope: 'legacy' keeps consumable auto-grants at
+   * the watch-path caps; 'scoped' tightens them to 3/day (double_reward and
+   * time_continue unaffected). See services/ads.ts autoGrantScope().
+   */
+  removeAdsAutoGrantScope: string;
+  /** Allow the next-level interstitial on the zero-tap auto-advance path. */
+  interstitialOnAutoAdvance: boolean;
   /** Tier 6 B6 — render the dynamic "For You" offers row on Shop / Home. */
   dynamicOffersEnabled: boolean;
   /** Tier 6 B2 — queue the first-purchase-offer modal post-onboarding. */
@@ -343,6 +351,10 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Tier 6 B1 — breather modal after two fails; kill-switch to false if
   // cohort data shows it hurts whale grind retention.
   failBreatherEnabled: true,
+  // Paid-product behavior flips only by explicit experiment, never silently.
+  removeAdsAutoGrantScope: 'legacy',
+  // Zero-tap auto-advance never ambushes an interstitial by default.
+  interstitialOnAutoAdvance: false,
   // Tier 6 B6 — dynamic "For You" comeback-ladder row; kill-switch if the
   // segmentation logic misfires on any tier post-launch.
   dynamicOffersEnabled: true,

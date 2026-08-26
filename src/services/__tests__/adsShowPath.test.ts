@@ -160,7 +160,12 @@ jest.mock('react-native-google-mobile-ads', () => {
 
 jest.mock('../remoteConfig', () => ({
   getRemoteNumberClamped: (_key: string, fallback: number) => fallback,
+  getRemoteString: (key: string) => mockRemoteStrings.get(key) ?? '',
+  getRemoteBoolean: (key: string) => mockRemoteBooleans.get(key) ?? false,
 }));
+
+const mockRemoteStrings = new Map<string, string>();
+const mockRemoteBooleans = new Map<string, boolean>();
 
 jest.mock('../analytics', () => ({
   analytics: {
@@ -389,5 +394,51 @@ describe('ad-free auto-grant caps', () => {
   it('canClaimAdReward mirrors canShowAd for ad-supported players', async () => {
     const { adManager } = await freshAdManager();
     expect(adManager.canClaimAdReward('hint_reward')).toBe(adManager.canShowAd('hint_reward'));
+  });
+
+  it("scoped mode caps consumable auto-grants at 3/day; double_reward stays open", async () => {
+    mockRemoteStrings.set('removeAdsAutoGrantScope', 'scoped');
+    const realNow = Date.now;
+    let clock = realNow();
+    jest.spyOn(Date, 'now').mockImplementation(() => clock);
+    try {
+      const { adManager } = await freshAdManager();
+      adManager.setAdsRemoved(true);
+      // Three consumable grants, stepping past the 30s cooldown each time.
+      for (const type of ['hint_reward', 'undo_reward', 'spin_reward'] as const) {
+        const r = await adManager.showRewardedAd(type);
+        expect(r.rewarded).toBe(true);
+        clock += 31_000;
+      }
+      // 4th consumable is refused by the scoped cap, not the cooldown.
+      expect(adManager.canClaimAdReward('hint_reward')).toBe(false);
+      const fourth = await adManager.showRewardedAd('hint_reward');
+      expect(fourth.rewarded).toBe(false);
+      // The non-consumable auto-grants stay available.
+      expect(adManager.canClaimAdReward('double_reward')).toBe(true);
+      const doubler = await adManager.showRewardedAd('double_reward');
+      expect(doubler.rewarded).toBe(true);
+    } finally {
+      (Date.now as jest.Mock).mockRestore();
+      mockRemoteStrings.delete('removeAdsAutoGrantScope');
+    }
+  });
+
+  it('legacy (default) mode keeps the pre-scoping behavior byte for byte', async () => {
+    const realNow = Date.now;
+    let clock = realNow();
+    jest.spyOn(Date, 'now').mockImplementation(() => clock);
+    try {
+      const { adManager } = await freshAdManager();
+      adManager.setAdsRemoved(true);
+      // 4+ consumable grants sail through in legacy mode (shared pool only).
+      for (let i = 0; i < 4; i++) {
+        const r = await adManager.showRewardedAd('hint_reward');
+        expect(r.rewarded).toBe(true);
+        clock += 31_000;
+      }
+    } finally {
+      (Date.now as jest.Mock).mockRestore();
+    }
   });
 });
