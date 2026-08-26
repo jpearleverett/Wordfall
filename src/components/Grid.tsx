@@ -19,15 +19,17 @@ import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import SelectionTrailOverlay from './game/SelectionTrailOverlay';
 import {
-  type CellBound,
   computeGridGeometry,
   computeGridMetrics,
-  computeGridTransition,
-  decideGridTransitionUpdate,
   GRID_FRAME_ALLOWANCE,
   hitTestGridGeometry,
-  rescaleBounds,
 } from './game/gridGeometry';
+import {
+  type CascadeFall,
+  type CascadeFrame,
+  type CascadeGhost,
+  planCascade,
+} from './game/cascadePlan';
 import {
   type FallRun,
   buildFallEasing,
@@ -35,7 +37,6 @@ import {
   bandDelayMs,
   fallBandOf,
   fallDurationMs,
-  fallPhaseProgress,
   fallRunDuration,
   FALL_HOLD_MS,
   FALL_START_LATENCY_MS,
@@ -44,7 +45,6 @@ import {
   nowMs,
   reboundMagnitude,
   reboundVector,
-  sampleFallOffset,
 } from './game/fallMotion';
 import { delayedTiming } from '../utils/motionTiming';
 import { perfDragStart, perfDragDispatch, perfDragEnd } from '../utils/perfInstrument';
@@ -132,34 +132,7 @@ interface GridProps {
 // lifts, and dissolves, giving the clear a physical "burst" beat before the
 // gravity cascade lands in the vacated space. Everything is native-driven.
 
-/** One tile's move for the cascade about to start. */
-interface PendingFall {
-  id: string;
-  dx: number;
-  dy: number;
-  row: number;
-  col: number;
-  /** Already in the air; re-targeted rather than newly dropped. */
-  continued: boolean;
-  /** Where on its fall curve a continued tile was picked up (0 otherwise). */
-  entryProgress: number;
-}
-
-interface GhostSpec {
-  id: string;
-  letter: string;
-  x: number;
-  y: number;
-  row: number;
-  col: number;
-  /**
-   * Whether this tile was part of the word the player just traced. False for
-   * cells the board removed on its own — shrinkingBoard takes out a whole
-   * outer ring in the same commit as a word clear, and rendering 20+ of those
-   * in the found-word green claimed credit for a punishment.
-   */
-  fromWord: boolean;
-}
+type GhostSpec = CascadeGhost;
 
 interface GhostLayerHandle {
   spawn(specs: GhostSpec[]): void;
@@ -590,25 +563,17 @@ function GameGridImpl({
   /** Fall-phase progress at the same freeze, so the replay is complete. */
   const frozenPhasesRef = useRef(new Map<string, number>());
   const activeFallsRef = useRef(new Map<string, Animated.CompositeAnimation>());
-  const prevGridRef = useRef<GridType | null>(null);
-  const prevBoundsRef = useRef<Map<string, CellBound> | null>(null);
-  const prevCellSizeRef = useRef(cellSize);
-  const prevDimsRef = useRef({ rows, cols });
-  const pendingFallsRef = useRef<PendingFall[]>([]);
-  const pendingGhostsRef = useRef<GhostSpec[]>([]);
-  // Committed alongside the pending falls: advancing prevGridRef during
+  const prevFrameRef = useRef<CascadeFrame | null>(null);
+  const pendingFallsRef = useRef<CascadeFall[]>([]);
+  const pendingGhostsRef = useRef<CascadeGhost[]>([]);
+  // Committed alongside the pending falls: advancing the baseline during
   // render would let a render React DISCARDS (a concurrent interruption, an
   // error-boundary retry) swallow a fall forever — the next real render would
   // diff the new grid against itself, decide 'none', and the tiles would just
-  // be at their destination. The diff is recomputed idempotently on every
-  // render and only becomes the new baseline once the tree actually commits.
-  const pendingBaselineRef = useRef<{
-    grid: GridType;
-    bounds: Map<string, CellBound>;
-    cellSize: number;
-    rows: number;
-    cols: number;
-  } | null>(null);
+  // be at their destination. planCascade is replayable, so the diff is
+  // recomputed on every render and only becomes the new baseline once the tree
+  // actually commits.
+  const pendingBaselineRef = useRef<CascadeFrame | null>(null);
   const ghostLayerRef = useRef<GhostLayerHandle | null>(null);
   // Fires onGravitySettled at the cascade's TOUCHDOWN rather than at the end
   // of the run. The haptic describes the board hitting bottom, and the rebound
@@ -643,58 +608,47 @@ function GameGridImpl({
     pendingBaselineRef.current = null;
   }, []);
 
-  // Render-phase diff. Grid data changes transition stable cell IDs; a pure
-  // pixel-pitch change re-targets in place; a shape change or a wholesale
-  // board swap resets.
-  const transitionDecision = decideGridTransitionUpdate(
+  const frame: CascadeFrame = {
+    grid,
+    bounds: boundsById,
+    cellSize,
+    rows,
+    cols,
+    stride: geometry.stride,
+    padding: geometry.padding,
+  };
+
+  // Render-phase diff. All of the decision-making lives in planCascade, which
+  // is pure and replayable; the only thing done here is the one side effect
+  // that has to happen during render.
+  const { decision, plan } = planCascade(
+    prevFrameRef.current,
+    frame,
     {
-      grid: prevGridRef.current,
-      cellSize: prevCellSizeRef.current,
-      rows: prevDimsRef.current.rows,
-      cols: prevDimsRef.current.cols,
+      runs: fallRunsRef.current,
+      frozenOffsets: frozenOffsetsRef.current,
+      frozenPhases: frozenPhasesRef.current,
+      traceOrder: lastSelectionOrderRef.current,
     },
-    { grid, cellSize, rows, cols },
+    nowMs(),
+    reduceMotion,
   );
-  if (transitionDecision !== 'none') {
-    const falls: PendingFall[] = [];
-    const ghosts: GhostSpec[] = [];
-    const previousGrid = prevGridRef.current;
-    const animatable =
-      (transitionDecision === 'transition' || transitionDecision === 'resize') &&
-      previousGrid !== null &&
-      prevBoundsRef.current !== null &&
-      !reduceMotion;
 
-    if (animatable) {
-      const prevStride = prevCellSizeRef.current + CELL_GAP;
-      // On a re-scale the previous frame's slots are rebuilt at the NEW pitch
-      // (slot indices are pitch-independent) and any in-flight offset is
-      // scaled by the same ratio, so the fall continues from where the tile
-      // visually is rather than snapping.
-      const scale =
-        transitionDecision === 'resize' &&
-        prevCellSizeRef.current > 0 &&
-        prevStride > 0
-          ? geometry.stride / prevStride
-          : 1;
-      const prevBounds =
-        transitionDecision === 'resize'
-          ? rescaleBounds(prevBoundsRef.current!, geometry.stride, geometry.padding)
-          : prevBoundsRef.current!;
-      const now = nowMs();
-      const liveOffsets = new Map<string, { x: number; y: number }>();
-      const livePhase = new Map<string, number>();
-      for (const [id, run] of fallRunsRef.current) {
-        const frozen = frozenOffsetsRef.current.get(id);
-        const offset = frozen ?? sampleFallOffset(run, now);
-        if (offset.x !== 0 || offset.y !== 0) {
-          liveOffsets.set(id, { x: offset.x * scale, y: offset.y * scale });
-          livePhase.set(id, frozenPhasesRef.current.get(id) ?? fallPhaseProgress(run, now));
-        }
-      }
-
-      const transition = computeGridTransition(prevBounds, boundsById, liveOffsets);
-      for (const fall of transition.falls) {
+  if (decision !== 'none') {
+    if (plan.kind === 'snap') {
+      // Nothing lands, so nothing reports landing.
+      cancelTouchdown();
+      clearFrozenOffsets();
+      clearFallResources(
+        activeFallsRef.current,
+        fallRunsRef.current,
+        fallAnimMapRef.current,
+        value => value.setValue({ x: 0, y: 0 }),
+      );
+      pendingFallsRef.current = [];
+      pendingGhostsRef.current = [];
+    } else if (plan.kind === 'animate') {
+      for (const fall of plan.falls) {
         // Seeding the value here — during render, before the children render —
         // is what makes the FLIP airtight: Animated.Value.setValue updates the
         // JS-side value synchronously, so when LetterCell renders a moment
@@ -716,9 +670,15 @@ function GameGridImpl({
         const existing = fallAnimMapRef.current.get(fall.id);
         if (existing) {
           existing.setValue({ x: fall.dx, y: fall.dy });
-          if (fallRunsRef.current.has(fall.id)) {
-            frozenOffsetsRef.current.set(fall.id, liveOffsets.get(fall.id) ?? { x: 0, y: 0 });
-            frozenPhasesRef.current.set(fall.id, livePhase.get(fall.id) ?? 0);
+          // Record where the tile is now parked, so replaying this render
+          // reproduces the same seed rather than re-sampling a dead curve.
+          // The freeze is stored relative to the tile's PREVIOUS slot, the
+          // same space planCascade reads live offsets in, so a replayed render
+          // reproduces the identical seed instead of re-sampling a curve that
+          // is no longer playing.
+          if (fall.liveOffset) {
+            frozenOffsetsRef.current.set(fall.id, fall.liveOffset);
+            frozenPhasesRef.current.set(fall.id, fall.entryProgress);
           }
         } else {
           fallAnimMapRef.current.set(
@@ -726,71 +686,11 @@ function GameGridImpl({
             new Animated.ValueXY({ x: fall.dx, y: fall.dy }),
           );
         }
-        falls.push({
-          ...fall,
-          row: boundsById.get(fall.id)?.row ?? 0,
-          // A tile re-targeted mid-air is already moving. Making it sit
-          // through a fresh hold and stagger would stop it dead and start it
-          // again, which is worse than the snap this replaced — and entering
-          // the new fall curve part-way keeps its speed instead of decelerating
-          // to zero and re-accelerating.
-          continued: liveOffsets.has(fall.id),
-          entryProgress: livePhase.get(fall.id) ?? 0,
-        });
       }
-      // The last trace Grid saw is the word that just resolved — the reducer
-      // empties selectedCells in the same update that clears the tiles, so
-      // this is the only record of it, and it needs no extra plumbing. It
-      // answers two questions at once: which vacated cells belong to the
-      // player's word (rather than to a board-driven removal), and in what
-      // order the player drew them.
-      const traceOrder = lastSelectionOrderRef.current;
-      for (const ghost of transition.ghosts) {
-        const previousBound = prevBounds.get(ghost.id);
-        const previousCell = previousBound
-          ? previousGrid![previousBound.row]?.[previousBound.col]
-          : null;
-        if (previousCell) {
-          ghosts.push({
-            ...ghost,
-            letter: previousCell.letter,
-            fromWord: traceOrder.has(ghost.id),
-          });
-        }
-      }
-      // Dissolve along the stroke. Without this a right-to-left or
-      // bottom-to-top word bursts backwards against the gesture that made it.
-      // Board-removed cells sort after the word, so a shrink ring reads as a
-      // consequence of the clear rather than part of it.
-      if (ghosts.length > 1) {
-        ghosts.sort(
-          (a, b) =>
-            (traceOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-            (traceOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-        );
-      }
-    } else if (transitionDecision === 'reset' || transitionDecision === 'resize') {
-      // Shape change / board replacement (or motion is off): the pixel space
-      // changed meaning, so any in-flight offset is meaningless — snap
-      // everything to rest. Nothing lands, so nothing reports landing.
-      cancelTouchdown();
-      clearFrozenOffsets();
-      clearFallResources(
-        activeFallsRef.current,
-        fallRunsRef.current,
-        fallAnimMapRef.current,
-        value => value.setValue({ x: 0, y: 0 }),
-      );
+      pendingFallsRef.current = plan.falls;
+      pendingGhostsRef.current = plan.ghosts;
     }
-    pendingFallsRef.current = falls;
-    pendingGhostsRef.current = ghosts;
-    pendingBaselineRef.current = {
-      grid,
-      bounds: boundsById,
-      cellSize,
-      rows,
-      cols,
-    };
+    pendingBaselineRef.current = frame;
   }
 
   // Start the fall + ghost animations for the diff computed this render, and
@@ -808,10 +708,7 @@ function GameGridImpl({
     const baseline = pendingBaselineRef.current;
     if (baseline) {
       pendingBaselineRef.current = null;
-      prevGridRef.current = baseline.grid;
-      prevBoundsRef.current = baseline.bounds;
-      prevCellSizeRef.current = baseline.cellSize;
-      prevDimsRef.current = { rows: baseline.rows, cols: baseline.cols };
+      prevFrameRef.current = baseline;
     }
     const ghosts = pendingGhostsRef.current;
     if (ghosts.length > 0) {
@@ -876,7 +773,7 @@ function GameGridImpl({
       const run: FallRun = {
         from,
         startedAt,
-        delayMs: f.continued
+        delayMs: f.liveOffset
           ? 0
           : FALL_HOLD_MS + (bandDelay.get(fallBandOf(f)) ?? 0),
         fallMs: fallDurationMs(slotsFallen),
@@ -918,7 +815,7 @@ function GameGridImpl({
         // because clearing a second word mid-cascade leaves the first run's
         // tiles falling alongside the second's.
         if (activeFallsRef.current.size > 0) return;
-        const active = prevBoundsRef.current;
+        const active = prevFrameRef.current?.bounds;
         if (active) {
           for (const id of fallAnimMapRef.current.keys()) {
             if (!active.has(id)) fallAnimMapRef.current.delete(id);

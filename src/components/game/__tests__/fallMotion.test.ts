@@ -361,6 +361,23 @@ describe('wiring', () => {
     path.resolve(__dirname, '../../Grid.tsx'),
     'utf8',
   );
+  /** Source with comments stripped — these guards are about code, not prose. */
+  const GRID_CODE = GRID_SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(
+    /^\s*\/\/.*$/gm,
+    '',
+  );
+
+  /**
+   * The behavioural invariants live in cascadePlan.test.ts, which drives the
+   * real code. What is left here is a small set of constraints that are about
+   * the SHAPE of the implementation and have no observable output to assert
+   * on — each one a regression that cost real frames. Every guard anchors on a
+   * string it also asserts exists, so renaming the anchor fails the test
+   * rather than quietly passing it.
+   */
+  function requireAnchor(anchor: string): void {
+    expect(GRID_CODE).toContain(anchor);
+  }
 
   test('nowMs returns a finite, non-decreasing clock', () => {
     const a = nowMs();
@@ -375,78 +392,70 @@ describe('wiring', () => {
     // dispatched to every other listening node's subscriber — O(N^2) JS
     // callbacks per frame for an N-tile cascade. The fall is sampled from its
     // run descriptor instead; this must not come back.
-    const code = GRID_SOURCE
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
-    expect(code).not.toContain('addListener');
-    expect(code).not.toContain('removeListener');
-    expect(GRID_SOURCE).toContain('sampleFallOffset');
+    requireAnchor('fallRunsRef');
+    expect(GRID_CODE).not.toContain('addListener');
+    expect(GRID_CODE).not.toContain('removeListener');
   });
 
-  test('Grid drives the fall on the native driver', () => {
-    expect(GRID_SOURCE).toContain('useNativeDriver: true');
-  });
-
-  test('no part of the fall is scheduled on a JS-thread timer', () => {
+  test('the fall is one native animation with no JS-thread timer inside it', () => {
     // Animated.delay — and the `delay` field of a timing config — are both a
     // setTimeout on the JS thread; the native animation config has no delay of
-    // its own. Scheduling the hold and the column stagger there put the
-    // cascade's lead-in on the busiest thread at the busiest moment. The whole
-    // run is one native animation now; this must not regress.
-    const code = GRID_SOURCE
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
-    const fallBlock = code.slice(code.indexOf('for (const f of falls)'));
+    // its own. Scheduling the hold and the band stagger there put the
+    // cascade's lead-in on the busiest thread at the busiest moment, and each
+    // extra sequence segment cost a native -> JS -> native round trip.
+    requireAnchor('for (const f of falls)');
+    const fallBlock = GRID_CODE.slice(GRID_CODE.indexOf('for (const f of falls)'));
+    expect(fallBlock).toContain('buildFallEasing(run)');
+    expect(fallBlock).toContain('useNativeDriver: true');
     expect(fallBlock).not.toContain('Animated.delay');
     expect(fallBlock).not.toContain('Animated.sequence');
-    expect(fallBlock).toContain('buildFallEasing(run)');
   });
 
-  test('a mid-air pickup is replayable across a discarded render', () => {
-    // Seeding stops the animation, so the run descriptor stops describing
-    // reality the instant render touches it. Re-sampling the curve on a repeat
-    // render would seed a position the tile never reached.
-    expect(GRID_SOURCE).toContain('frozenOffsetsRef');
-    expect(GRID_SOURCE).toContain('const offset = frozen ?? sampleFallOffset(run, now);');
+  test('the fall baseline is promoted on commit, not during render', () => {
+    // Advancing the baseline during render lets a render React discards eat a
+    // fall outright: the next real render diffs the new grid against itself.
+    requireAnchor('const { decision, plan } = planCascade(');
+    requireAnchor('useLayoutEffect(() => {');
+    const renderPhase = GRID_CODE.slice(
+      GRID_CODE.indexOf('const { decision, plan } = planCascade('),
+      GRID_CODE.indexOf('useLayoutEffect(() => {'),
+    );
+    expect(renderPhase).not.toContain('prevFrameRef.current =');
+    expect(renderPhase).toContain('pendingBaselineRef.current = frame;');
   });
 
   test('a tile cleared mid-fall drops its animated value', () => {
     // Otherwise undo restores that cell id and the JSX hands it back the same
     // value, rendering the restored tile permanently displaced.
-    expect(GRID_SOURCE).toContain('fallAnimMapRef.current.delete(ghost.id);');
+    requireAnchor('fallAnimMapRef.current.delete(ghost.id);');
   });
 
-  test('board-removed cells do not ghost as found-word bursts', () => {
-    expect(GRID_SOURCE).toContain('GHOST_BODY_COLORS_BOARD');
-    expect(GRID_SOURCE).toContain('fromWord: traceOrder.has(ghost.id)');
-  });
-
-  test('a mid-air pickup carries its speed into the successor run', () => {
-    expect(GRID_SOURCE).toContain('entryProgress: f.entryProgress');
-    expect(GRID_SOURCE).toContain('fallPhaseProgress(run, now)');
-  });
-
-  test('the cascade stagger groups tiles by travel band, not always by column', () => {
-    expect(GRID_SOURCE).toContain('fallBandOf');
-    expect(GRID_SOURCE).not.toContain('colDelay.get(f.col)');
+  test('board-removed cells render in their own palette', () => {
+    // planCascade decides WHICH cells those are (covered in cascadePlan.test);
+    // this is the half that only exists in the rendered tile.
+    requireAnchor('GHOST_BODY_COLORS_BOARD');
+    expect(GRID_SOURCE).toContain(
+      'ghost.fromWord ? GHOST_BODY_COLORS : GHOST_BODY_COLORS_BOARD',
+    );
   });
 
   test('the landing report is scheduled at touchdown, not on run completion', () => {
-    expect(GRID_SOURCE).toContain('cascadeTouchdownAt(');
-    const settleSite = GRID_SOURCE.indexOf('onGravitySettledRef.current?.()');
-    const completionSite = GRID_SOURCE.indexOf('const owned = releaseOwnedFall(');
+    requireAnchor('cascadeTouchdownAt(');
+    const settleSite = GRID_CODE.indexOf('onGravitySettledRef.current?.()');
+    const completionSite = GRID_CODE.indexOf('const owned = releaseOwnedFall(');
+    expect(completionSite).toBeGreaterThan(-1);
     expect(settleSite).toBeGreaterThan(completionSite);
   });
 
-  test('the fall baseline is promoted on commit, not during render', () => {
-    // Advancing prevGridRef during render lets a render React discards eat a
-    // fall outright: the next real render diffs the new grid against itself.
-    const renderPhase = GRID_SOURCE.slice(
-      GRID_SOURCE.indexOf('const transitionDecision = decideGridTransitionUpdate('),
-      GRID_SOURCE.indexOf('useLayoutEffect(() => {'),
-    );
-    expect(renderPhase).not.toContain('prevGridRef.current =');
-    expect(renderPhase).not.toContain('prevBoundsRef.current =');
-    expect(GRID_SOURCE).toContain('pendingBaselineRef');
+  test('tiles are positioned, not flowed', () => {
+    // A per-column flex tree makes a tile that changes column a different
+    // parent's child, so React unmounts and remounts its whole subtree — the
+    // teleport gravityFlip used to show. It also matters for vertical falls:
+    // slotX/slotY changing is what forces the moved tile to re-render and
+    // re-commit its seeded transform.
+    expect(GRID_CODE).toContain('tiles.map');
+    expect(GRID_CODE).not.toContain('columns.map');
+    expect(GRID_CODE).toContain('slotX={bound.x}');
+    expect(GRID_CODE).toContain('slotY={bound.y}');
   });
 });

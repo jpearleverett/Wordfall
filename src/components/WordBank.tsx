@@ -7,6 +7,7 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { useColors } from '../hooks/useColors';
 import { useColorblindMode } from '../services/colorblindPreference';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { CHIP_BOX } from './wordChipBox';
 import { getWordBankMotionPolicy } from '../utils/gameMotion';
 
 interface WordChipProps {
@@ -623,12 +624,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   wordChip: {
+    borderWidth: CHIP_BOX.resting.borderWidth,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: CHIP_BOX.resting.paddingHorizontal,
+    paddingVertical: CHIP_BOX.resting.paddingVertical,
     borderRadius: 14,
-    borderWidth: 1,
     // Bumped from 0.22 to 0.55 — the earlier dim-backdrop shipped made
     // the previous ~22% border almost invisible against the darker
     // gradient, so the wrap panel rendered but the chips looked like
@@ -636,7 +637,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(200,77,255,0.55)',
     backgroundColor: 'rgba(26, 10, 46, 0.55)',
     overflow: 'visible',
-    gap: 4,
+    gap: CHIP_BOX.gap,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
@@ -675,12 +676,7 @@ const styles = StyleSheet.create({
   },
   wordChipValid: {
     borderColor: COLORS.green,
-    // borderWidth 1 -> 2 grows the chip by 2px on each axis, which can
-    // re-wrap the panel mid-trace. The padding is trimmed by the same 1px
-    // so the measured box is byte-identical to the resting chip.
-    borderWidth: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    ...CHIP_BOX.emphasis,
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
@@ -689,10 +685,7 @@ const styles = StyleSheet.create({
   },
   wordChipLastRemaining: {
     borderColor: COLORS.gold,
-    // Same size-neutral border bump as wordChipValid.
-    borderWidth: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    ...CHIP_BOX.emphasis,
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.6,
@@ -727,8 +720,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 16,
   },
   checkContainer: {
-    width: 16,
-    height: 16,
+    width: CHIP_BOX.badgeSize,
+    height: CHIP_BOX.badgeSize,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',

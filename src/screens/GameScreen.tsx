@@ -27,6 +27,7 @@ import { findWordInGrid, choiceAvoidedDeadEnd, isProvablyCompletable } from '../
 import { resolveUndoSource } from '../utils/undoGate';
 import { startAnimationWithCleanup } from '../utils/animationLifecycle';
 import { delayedTiming } from '../utils/motionTiming';
+import { SOLVER_QUIET_MS } from '../components/game/fallMotion';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
@@ -2332,7 +2333,7 @@ function GameScreenImpl({
   // dead end an alternative would have caused, a small teal chip says so —
   // once per puzzle at most, no points, no multiplier, no escalation (the
   // constraints that keep this out of the deleted combo-system territory).
-  // Detection runs deferred (350ms, post-gravity) with a hard 80ms solver
+  // Detection runs deferred (post-cascade) with a hard 80ms solver
   // budget, and only fires on a CONFIRMED dead-ending alternative —
   // inconclusive budget-exhausted checks stay silent (see solver.ts).
   const [keptOpenVisible, setKeptOpenVisible] = useState(false);
@@ -2376,7 +2377,10 @@ function GameScreenImpl({
         setKeptOpenVisible(true);
         void analytics.logEvent('kept_open_shown', { level, mode });
       }
-    }, 350);
+      // Deferred past the cascade (SOLVER_QUIET_MS): choiceAvoidedDeadEnd is
+      // budgeted but isProvablyCompletable above it is not, and at 350ms the
+      // pair ran squarely mid-fall.
+    }, SOLVER_QUIET_MS);
     return () => clearTimeout(timer);
   }, [foundWords, status, store, level, mode]);
   useEffect(() => {

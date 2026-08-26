@@ -288,6 +288,30 @@ export function cascadeTouchdownAt(runs: Iterable<FallRun>): number {
   return latest;
 }
 
+/**
+ * Worst case wall time for a cascade: the outermost band's lead-in plus the
+ * longest drop plus the rebound.
+ */
+export const CASCADE_MAX_MS =
+  FALL_HOLD_MS +
+  FALL_MAX_STAGGERED_BANDS * FALL_BAND_STAGGER_MS +
+  400 +
+  FALL_REBOUND_OUT_MS +
+  FALL_REBOUND_IN_MS;
+
+/**
+ * How long after a word clear the board is reliably still, and therefore the
+ * earliest a heavy synchronous solver may run without competing with the
+ * cascade.
+ *
+ * The fall itself is native and would survive a blocked JS thread, but three
+ * things that matter would not: the gesture handler dispatching the player's
+ * next trace, the ghost layer retiring its tiles, and the landing report,
+ * which is a JS timer. The dead-end detector and the "kept it open" check are
+ * both display-only affordances with no timing requirement, so they wait.
+ */
+export const SOLVER_QUIET_MS = CASCADE_MAX_MS + 200;
+
 /** Delay for the i-th band of the cascade (i ordered outward from centre). */
 export function bandDelayMs(index: number): number {
   return Math.min(index, FALL_MAX_STAGGERED_BANDS) * FALL_BAND_STAGGER_MS;

@@ -16,6 +16,7 @@ import {
   SolveStep,
 } from '../types';
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
+import { SOLVER_QUIET_MS } from '../components/game/fallMotion';
 import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard, getHintNoGravity, getHintGravityFlip } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 import { instrumentReducer } from '../utils/perfInstrument';
@@ -1234,7 +1235,12 @@ export function useGame(
       return;
     }
 
-    const DEBOUNCE_MS = 500;
+    // Wait for the gravity cascade to be over. isDeadEnd runs three
+    // unbudgeted heuristic solves before its 300ms-budgeted full solve, so
+    // this can block the JS thread for a while — and at 500ms it landed
+    // inside the cascade, where it delayed the player's next trace, the ghost
+    // layer's cleanup and the landing report (a JS timer). See SOLVER_QUIET_MS.
+    const DEBOUNCE_MS = SOLVER_QUIET_MS;
 
     if (mode === 'shrinkingBoard') {
       const timer = setTimeout(() => {
