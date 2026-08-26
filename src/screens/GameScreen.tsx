@@ -458,15 +458,16 @@ function StarSpark({ x, y, delay }: { x: number; y: number; delay: number }) {
   ).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.delay(delay),
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: STAR_SPARK_DURATION_MS,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Stagger baked into the easing, not scheduled on a JS-thread timer —
+    // see delayedTiming. Sparks fire alongside the motes and the ghost pop,
+    // all inside the frame the gravity cascade starts on.
+    const animation = delayedTiming(anim, {
+      toValue: 1,
+      delay,
+      duration: STAR_SPARK_DURATION_MS,
+      easing: Easing.out(Easing.quad),
+    });
+    return startAnimationWithCleanup(animation);
   }, []);
 
   return (

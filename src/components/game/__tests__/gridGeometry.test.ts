@@ -223,7 +223,7 @@ describe('grid transition diff', () => {
 
     const diff = computeGridTransition(previous, new Map(), live);
 
-    expect(diff.ghosts).toEqual([{ id: 'A', x: 7, y: 30, col: 0 }]);
+    expect(diff.ghosts).toEqual([{ id: 'A', x: 7, y: 30, row: 0, col: 0 }]);
   });
 
   test('horizontal movement uses the same ID-based inverse transform', () => {

@@ -2,10 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   buildFallEasing,
-  columnDelayMs,
-  FALL_COL_STAGGER_MS,
+  cascadeTouchdownAt,
+  bandDelayMs,
+  fallBandOf,
+  FALL_BAND_STAGGER_MS,
   FALL_HOLD_MS,
-  FALL_MAX_STAGGERED_COLS,
+  FALL_MAX_STAGGERED_BANDS,
   FALL_REBOUND_IN_MS,
   FALL_REBOUND_OUT_MS,
   fallDurationMs,
@@ -24,7 +26,7 @@ function runFor(rowsFallen: number, startedAt = 0, colIndex = 0): FallRun {
   return {
     from,
     startedAt,
-    delayMs: FALL_HOLD_MS + columnDelayMs(colIndex),
+    delayMs: FALL_HOLD_MS + bandDelayMs(colIndex),
     fallMs: fallDurationMs(rowsFallen),
     rebound: reboundVector(from, reboundMagnitude(Math.abs(from.y))),
     reboundOutMs: FALL_REBOUND_OUT_MS,
@@ -141,16 +143,16 @@ describe('choreography budget', () => {
 
   test('the cascade lead-in stays short even across a full-width word', () => {
     // Every moved column of a 10-column clear, worst case.
-    const lastColumnStart = FALL_HOLD_MS + columnDelayMs(9);
+    const lastColumnStart = FALL_HOLD_MS + bandDelayMs(9);
     expect(lastColumnStart).toBeLessThanOrEqual(140);
-    expect(columnDelayMs(9)).toBe(FALL_MAX_STAGGERED_COLS * FALL_COL_STAGGER_MS);
+    expect(bandDelayMs(9)).toBe(FALL_MAX_STAGGERED_BANDS * FALL_BAND_STAGGER_MS);
   });
 
   test('the whole board settles well inside the genre budget', () => {
     // Worst realistic case: widest cascade, longest drop.
     const worst =
       FALL_HOLD_MS +
-      columnDelayMs(9) +
+      bandDelayMs(9) +
       fallDurationMs(12) +
       FALL_REBOUND_OUT_MS +
       FALL_REBOUND_IN_MS;
@@ -159,7 +161,7 @@ describe('choreography budget', () => {
     // Typical: three moved columns, a two-row drop.
     const typical =
       FALL_HOLD_MS +
-      columnDelayMs(2) +
+      bandDelayMs(2) +
       fallDurationMs(2) +
       FALL_REBOUND_OUT_MS +
       FALL_REBOUND_IN_MS;
@@ -167,8 +169,60 @@ describe('choreography budget', () => {
   });
 
   test('the rebound is visible without being a hop', () => {
-    expect(reboundMagnitude(STRIDE)).toBeGreaterThan(2);
-    expect(reboundMagnitude(STRIDE * 8)).toBeLessThanOrEqual(7);
+    // Has to clear ~2px/frame at 60fps to read as a bounce at all, and stay
+    // well under a cell so it never looks like a second, smaller fall.
+    const shortHop = reboundMagnitude(STRIDE);
+    expect(shortHop / (FALL_REBOUND_OUT_MS / (1000 / 60))).toBeGreaterThan(2);
+    expect(reboundMagnitude(STRIDE * 8)).toBeLessThanOrEqual(9);
+    expect(reboundMagnitude(STRIDE * 8)).toBeLessThan(STRIDE / 4);
+  });
+
+  test('the rebound never costs more than a fifth of the run', () => {
+    const run = runFor(1);
+    const reboundShare =
+      (FALL_REBOUND_OUT_MS + FALL_REBOUND_IN_MS) / fallRunDuration(run);
+    expect(reboundShare).toBeLessThan(0.35);
+  });
+});
+
+describe('cascade banding', () => {
+  test('vertical gravity bands by column', () => {
+    expect(fallBandOf({ dx: 0, dy: -108, row: 5, col: 3 })).toBe(3);
+  });
+
+  test('horizontal gravity bands by row', () => {
+    // gravityFlip compacts along a row, so the tiles that must start together
+    // are the ones sharing a row — banding those by column pulled neighbours
+    // apart mid-slide.
+    expect(fallBandOf({ dx: -108, dy: 0, row: 5, col: 3 })).toBe(5);
+  });
+
+  test('a tie falls back to the vertical reading', () => {
+    expect(fallBandOf({ dx: -50, dy: -50, row: 5, col: 3 })).toBe(3);
+  });
+});
+
+describe('cascade touchdown', () => {
+  test('is the last tile hitting bottom, before any rebound', () => {
+    const run = runFor(3, 1000, 2);
+    expect(cascadeTouchdownAt([run])).toBe(1000 + run.delayMs + run.fallMs);
+  });
+
+  test('accounts for runs left in the air by an earlier cascade', () => {
+    // A second word cleared mid-fall must not report "landed" while the first
+    // cascade's long drop is still going.
+    const early = runFor(6, 0, 0);
+    const late = runFor(1, 200, 0);
+    const at = cascadeTouchdownAt([late, early]);
+    expect(at).toBe(Math.max(
+      early.startedAt + early.delayMs + early.fallMs,
+      late.startedAt + late.delayMs + late.fallMs,
+    ));
+  });
+
+  test('lands before the run finishes', () => {
+    const run = runFor(2, 0, 0);
+    expect(cascadeTouchdownAt([run])).toBeLessThan(fallRunDuration(run));
   });
 });
 
@@ -280,6 +334,26 @@ describe('wiring', () => {
     expect(fallBlock).not.toContain('Animated.delay');
     expect(fallBlock).not.toContain('Animated.sequence');
     expect(fallBlock).toContain('buildFallEasing(run)');
+  });
+
+  test('a mid-air pickup is replayable across a discarded render', () => {
+    // Seeding stops the animation, so the run descriptor stops describing
+    // reality the instant render touches it. Re-sampling the curve on a repeat
+    // render would seed a position the tile never reached.
+    expect(GRID_SOURCE).toContain('frozenOffsetsRef');
+    expect(GRID_SOURCE).toContain('const offset = frozen ?? sampleFallOffset(run, now);');
+  });
+
+  test('the cascade stagger groups tiles by travel band, not always by column', () => {
+    expect(GRID_SOURCE).toContain('fallBandOf');
+    expect(GRID_SOURCE).not.toContain('colDelay.get(f.col)');
+  });
+
+  test('the landing report is scheduled at touchdown, not on run completion', () => {
+    expect(GRID_SOURCE).toContain('cascadeTouchdownAt(');
+    const settleSite = GRID_SOURCE.indexOf('onGravitySettledRef.current?.()');
+    const completionSite = GRID_SOURCE.indexOf('const owned = releaseOwnedFall(');
+    expect(settleSite).toBeGreaterThan(completionSite);
   });
 
   test('the fall baseline is promoted on commit, not during render', () => {

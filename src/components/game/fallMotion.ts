@@ -181,30 +181,93 @@ export function buildFallEasing(run: FallRun): (t: number) => number {
 
 /** Beat between the word clearing and the first tile moving. */
 export const FALL_HOLD_MS = 45;
-/** Per-column offset of the cascade, ordered outward from the cleared word. */
-export const FALL_COL_STAGGER_MS = 18;
-/** Columns beyond this share the last slot's delay, capping total lead-in. */
-export const FALL_MAX_STAGGERED_COLS = 5;
-/** Rebound out / settle back. */
-export const FALL_REBOUND_OUT_MS = 60;
-export const FALL_REBOUND_IN_MS = 90;
+/**
+ * Offset between successive bands of the cascade, ordered outward from the
+ * cleared word. A "band" is a line of tiles that travels together — a column
+ * under vertical gravity, a row under horizontal gravity (see fallBandOf).
+ */
+export const FALL_BAND_STAGGER_MS = 18;
+/** Bands beyond this share the last slot's delay, capping total lead-in. */
+export const FALL_MAX_STAGGERED_BANDS = 4;
+/**
+ * Impact rebound. Short and punchy on purpose: the previous 60/90 pairing
+ * moved ~4px over 150ms, which is ~1px per frame — below the threshold where
+ * it reads as a bounce at all, while still spending a quarter of the run.
+ */
+export const FALL_REBOUND_OUT_MS = 45;
+export const FALL_REBOUND_IN_MS = 75;
 
 /**
- * Free-fall duration for a drop of `rowsFallen` slots. sqrt-scaled so a long
- * drop takes longer than a short one without the time growing linearly (real
- * free fall is t ~ sqrt(d)), floored so a one-row hop still reads as motion
- * and capped so a full-height drop never floats.
+ * Which band a tile belongs to, given the direction it is travelling.
+ *
+ * Tiles that move together must start together. Under downward gravity that
+ * is a column, which is what the cascade used to assume unconditionally — but
+ * gravityFlip rotates gravity, and under left/right gravity tiles compact
+ * along a ROW. Staggering those by column gave neighbours in the same row
+ * different start times, so they pulled apart into a half-cell gap and then
+ * closed it again: the mode whose whole identity is gravity had the least
+ * convincing gravity in the game.
+ */
+export function fallBandOf(fall: {
+  dx: number;
+  dy: number;
+  row: number;
+  col: number;
+}): number {
+  return Math.abs(fall.dy) >= Math.abs(fall.dx) ? fall.col : fall.row;
+}
+
+/**
+ * Free-fall duration for a drop of `rowsFallen` slots — which need not be a
+ * whole number: a tile re-targeted mid-air may have only a sliver of a cell
+ * left to travel.
+ *
+ * Scales as a power of distance so a long drop takes longer than a short one
+ * without the time growing linearly (real free fall is t ~ sqrt(d)), and
+ * anchored so a one-row hop lands at ~230ms. Capped so a full-height drop
+ * never floats, and floored only at the very short end — an earlier form
+ * carried a flat 135ms base, which meant a tile with five pixels left to fall
+ * still took the better part of a one-row drop to get there.
  */
 export function fallDurationMs(rowsFallen: number): number {
-  return Math.min(400, 135 + 95 * Math.sqrt(Math.max(1, rowsFallen)));
+  const rows = Math.max(0, rowsFallen);
+  return Math.min(400, Math.max(70, 230 * Math.pow(rows, 0.35)));
 }
 
 /** How far a tile kicks back up-travel on impact, scaled by drop distance. */
 export function reboundMagnitude(distancePx: number): number {
-  return Math.min(7, 2 + distancePx * 0.045);
+  return Math.min(9, 3 + distancePx * 0.06);
 }
 
-/** Delay for the i-th column of the cascade (i ordered outward from centre). */
-export function columnDelayMs(index: number): number {
-  return Math.min(index, FALL_MAX_STAGGERED_COLS) * FALL_COL_STAGGER_MS;
+/**
+ * The instant the cascade lands — the last tile's touchdown, before any
+ * rebound. That, not the end of the run, is when the board reads as having
+ * hit bottom, so it is when the landing haptic belongs; waiting for the
+ * rebound to finish put the buzz ~120ms after the thud it was describing.
+ */
+export function cascadeTouchdownAt(runs: Iterable<FallRun>): number {
+  let latest = 0;
+  for (const run of runs) {
+    // Absolute, not relative: an interrupting clear leaves runs from the
+    // previous cascade in the air with an earlier startedAt, and they are
+    // just as much part of "the board has landed" as the new ones.
+    latest = Math.max(latest, run.startedAt + run.delayMs + run.fallMs);
+  }
+  return latest;
 }
+
+/** Delay for the i-th band of the cascade (i ordered outward from centre). */
+export function bandDelayMs(index: number): number {
+  return Math.min(index, FALL_MAX_STAGGERED_BANDS) * FALL_BAND_STAGGER_MS;
+}
+
+/**
+ * Roughly how long after `start()` the native driver actually takes its first
+ * step: the animated op batch is flushed on a setImmediate and the driver then
+ * moves on the next frame. `startedAt` is stamped on the JS side before that,
+ * so sampling a run would otherwise credit it with motion it has not made yet.
+ * One frame is the right order of magnitude and keeps the error centred — and
+ * the whole point of sampling is that it is far more accurate than reading the
+ * value back off the UI thread, which lagged reality by several frames.
+ */
+export const FALL_START_LATENCY_MS = 1000 / 60;

@@ -47,6 +47,7 @@ export interface GridTransitionGhost {
   id: string;
   x: number;
   y: number;
+  row: number;
   col: number;
 }
 
@@ -200,6 +201,7 @@ export function computeGridTransition(
         id,
         x: bound.x + (live?.x ?? 0),
         y: bound.y + (live?.y ?? 0),
+        row: bound.row,
         col: bound.col,
       });
     }

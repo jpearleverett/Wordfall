@@ -2318,12 +2318,21 @@
       {
         "type": "pattern-present",
         "file": "src/components/Grid.tsx",
-        "pattern": "const superseded = activeFallsRef\\.current\\.get\\(fall\\.id\\);"
+        "pattern": "existing\\.setValue\\(\\{ x: fall\\.dx, y: fall\\.dy \\}\\);"
       },
       {
         "type": "pattern-present",
         "file": "src/components/Grid.tsx",
-        "pattern": "superseded\\.stop\\(\\);"
+        "pattern": "releaseOwnedFall\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/animationLifecycle.ts",
+        "pattern": "if \\(activeAnimations\\.get\\(id\\) !== sequence\\) return false;"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/gameAnimationLifecycle.test.ts"
       }
     ]
   },
