@@ -276,17 +276,26 @@ function getProceduralBoardConfig(proceduralIndex: number, difficulty: Difficult
         maxWordLength: 6,
         difficulty: 'hard',
       };
-    case 'expert':
+    case 'expert': {
       // Seeds at 9x7/8 — exactly the curated L600 config — then ramps to the
       // documented caps (10x8, 10 words). Never regresses below the seed.
+      // decoyRichness ramps visual-search difficulty through the tail: the
+      // only difficulty axis still open once the structural caps are hit,
+      // and orthogonal to clear-order luck (see fillEmptyCells). Richer
+      // filler multiplies solver branching, so the cap tightens on the
+      // heaviest (9-10 word) boards to stay inside boardGen.perf's 900ms
+      // p95 guard.
+      const wordCount = Math.min(8 + Math.floor(scaleFactor / 5), 10);
       return {
         rows: Math.min(9 + Math.floor(scaleFactor / 6), 10),
         cols: Math.min(7 + Math.floor(scaleFactor / 10), 8),
-        wordCount: Math.min(8 + Math.floor(scaleFactor / 5), 10),
+        wordCount,
         minWordLength: 4,
         maxWordLength: 6,
         difficulty: 'expert',
+        decoyRichness: Math.min(wordCount >= 9 ? 0.25 : 0.5, scaleFactor * 0.025),
       };
+    }
     default:
       // Reached only via the adaptive-difficulty breather path
       // (getBreatherConfigExtended easing a breather chapter's 'hard') —

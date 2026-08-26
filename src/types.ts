@@ -30,6 +30,15 @@ export interface BoardConfig {
   minWordLength: number;
   maxWordLength: number;
   difficulty: Difficulty;
+  /**
+   * 0..1 — shifts the filler-letter distribution from uncommon consonants
+   * toward vowels/common consonants, making list words slower to SPOT
+   * (visual-search difficulty) with zero effect on clear-order luck. The
+   * late procedural tail ramps this; absent means the shipped 25/30/45
+   * split. Generation pairs any value > 0 with a duplicate-occurrence
+   * rejection pass in attemptGenerate.
+   */
+  decoyRichness?: number;
 }
 
 export interface Board {

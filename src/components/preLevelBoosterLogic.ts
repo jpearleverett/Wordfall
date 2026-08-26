@@ -3,7 +3,7 @@
  * Native imports so plain ts-jest tests can import it (same convention as
  * monetizationModel.ts).
  */
-import { isSpikeLevel } from '../constants';
+import { isPinchLevel, isSpikeLevel } from '../constants';
 import type { GameMode } from '../types';
 
 export interface BoosterCounts {
@@ -29,5 +29,5 @@ export function shouldShowPreLevelBoosterSheet(args: {
   const { enabled, level, mode, isDaily, alreadyShownThisLevel, tutorialActive } = args;
   if (!enabled || alreadyShownThisLevel || tutorialActive) return false;
   if (isDaily || mode === 'weekly' || mode === 'relax') return false;
-  return isSpikeLevel(level);
+  return isSpikeLevel(level) || isPinchLevel(level);
 }

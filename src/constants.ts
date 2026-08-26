@@ -315,6 +315,30 @@ export function isSpikeLevel(level: number): boolean {
  */
 export const BOSS_WORD_MIN_LEVEL = 300;
 
+/**
+ * Authored pinch slots: the penultimate level of each chapter past L150
+ * (level % 15 === 14 — never a breather, since 14 mod 5 = 4; spikes win
+ * the rare collisions at 299/494/689/…). On these levels the generator
+ * shops for a LOW-forgiveness board inside a fairness window instead of a
+ * forgiving one — the designed "hard level" beat that creates hint/undo/
+ * booster demand on a schedule. RC kill switch: `pinchLevelsEnabled`.
+ * These slots must be exempt from the adaptive easer, which otherwise
+ * defuses them on retry (its 'easier' trigger fires at >2 attempts —
+ * exactly the state a pinch induces).
+ */
+export const PINCH_MIN_LEVEL = 151;
+export function isPinchLevel(level: number): boolean {
+  if (level < PINCH_MIN_LEVEL) return false;
+  if (level % 15 !== 14) return false;
+  if (isBreatherLevel(level) || isSpikeLevel(level)) return false;
+  // Lazy require to avoid a constants -> services cycle (same as isSpikeLevel).
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getRemoteBoolean } = require('./services/remoteConfig') as {
+    getRemoteBoolean: (key: string) => boolean;
+  };
+  return getRemoteBoolean('pinchLevelsEnabled');
+}
+
 /** Apply spike-level transformation: one more word + one longer word. */
 function applySpike(base: BoardConfig, level: number): BoardConfig {
   const lengthCap = level >= BOSS_WORD_MIN_LEVEL ? 7 : 6;

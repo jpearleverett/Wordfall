@@ -86,6 +86,8 @@ export interface RemoteConfigValues {
   interstitialOnAutoAdvance: boolean;
   /** Pre-level booster-commit sheet on spike levels (once per level entry). */
   preLevelBoosterSheetEnabled: boolean;
+  /** Authored low-forgiveness pinch slots past L150 (see isPinchLevel). */
+  pinchLevelsEnabled: boolean;
   /** Tier 6 B6 — render the dynamic "For You" offers row on Shop / Home. */
   dynamicOffersEnabled: boolean;
   /** Tier 6 B2 — queue the first-purchase-offer modal post-onboarding. */
@@ -361,6 +363,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Spike-level booster-commit sheet; kill-switch if entry-flow friction
   // shows up in funnel data.
   preLevelBoosterSheetEnabled: true,
+  // Authored pinch slots; kill-switch if churn data shows the window is
+  // tuned too tight.
+  pinchLevelsEnabled: true,
   // Tier 6 B6 — dynamic "For You" comeback-ladder row; kill-switch if the
   // segmentation logic misfires on any tier post-launch.
   dynamicOffersEnabled: true,

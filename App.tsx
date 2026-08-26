@@ -53,14 +53,14 @@ import MasteryScreen from './src/screens/MasteryScreen';
 import SeasonPassScreen from './src/screens/SeasonPassScreen';
 import { ConsentGate } from './src/components/ConsentGate';
 import { hasAcceptedTos } from './src/services/consent';
-import { generateBoard, generateDailyBoard, generateWeeklyBoard } from './src/engine/boardGenerator';
+import { generateBoard, generateDailyBoard, generateLevelBoard, generateWeeklyBoard } from './src/engine/boardGenerator';
 import { getWeekId } from './src/utils/weekId';
 import { getChapterForLevel } from './src/data/chapters';
 import { getCurrentEvent, getEventPlayConfig } from './src/data/events';
 import { DAILY_REWARD_TIMERS, canClaimTimer, rollBonusChestReward } from './src/data/dailyRewardTimers';
 import { claimMeteredGems } from './src/data/economyTuning';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
+import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS, isPinchLevel } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { useAuth } from './src/contexts/AuthContext';
 import { useEconomy } from './src/contexts/EconomyContext';
@@ -687,13 +687,16 @@ function ModesScreenWrapper({ navigation, route }: any) {
 
       let config = getLevelConfigExtended(modeLevel);
 
-      // Apply adaptive difficulty adjustment
-      const adjusted = getAdjustedConfig(config, player.performanceMetrics);
-      config = adjusted.config;
+      // Apply adaptive difficulty adjustment (pinch slots exempt — the
+      // easer would defuse the authored low-forgiveness board on retry)
+      if (!(mode === 'classic' && isPinchLevel(modeLevel))) {
+        const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+        config = adjusted.config;
+      }
 
       const seed = Date.now() + modeLevel * 1337;
       const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
-      board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
+      board = generateLevelBoard(modeLevel, config, seed, mode, chapter?.profile, chapter?.themeWords);
 
       const modeConfig = MODE_CONFIGS[mode];
       navigation.navigate('Game', {
@@ -905,9 +908,13 @@ function GameScreenWrapper({ route, navigation }: any) {
     const modeLevel = mode === 'classic'
       ? (params.level || 0) + 1
       : player.getModeLevel(mode);
-    const useBreather = player.needsBreather();
+    // Pinch slots are exempt from the breather and the adaptive easer —
+    // both would defuse the authored low-forgiveness board on retry, which
+    // is exactly the state a pinch induces.
+    const pinch = mode === 'classic' && isPinchLevel(modeLevel);
+    const useBreather = !pinch && player.needsBreather();
     let config = useBreather ? getBreatherConfigExtended(modeLevel) : getLevelConfigExtended(modeLevel);
-    if (!useBreather) {
+    if (!useBreather && !pinch) {
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
     }
@@ -944,7 +951,8 @@ function GameScreenWrapper({ route, navigation }: any) {
         try {
           const target = computeNextTarget();
           if (prefetchedNext.current?.key === target.key) return;
-          const board = generateBoard(
+          const board = generateLevelBoard(
+            target.modeLevel,
             target.config,
             target.modeLevel * 1337 + Date.now(),
             target.mode,
@@ -974,7 +982,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       prefetchedNext.current = null;
       const board = cached && cached.key === target.key
         ? cached.board
-        : generateBoard(config, modeLevel * 1337 + Date.now(), mode, chapter?.profile, chapter?.themeWords);
+        : generateLevelBoard(modeLevel, config, modeLevel * 1337 + Date.now(), mode, chapter?.profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -1048,7 +1056,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       const config = getLevelConfigExtended(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
       const chapter = mode === 'classic' ? getChapterForLevel(nextModeLevel) : undefined;
-      let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
+      let board = generateLevelBoard(nextModeLevel, config, seed, mode, chapter?.profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -1735,17 +1743,21 @@ function HomeMainScreen({ route, navigation }: any) {
           let config;
           if (difficulty) {
             config = DIFFICULTY_CONFIGS[difficulty];
-          } else if (player.needsBreather()) {
+          } else if (!isPinchLevel(player.currentLevel) && player.needsBreather()) {
             config = getBreatherConfigExtended(player.currentLevel);
           } else {
             config = getLevelConfigExtended(player.currentLevel);
-            // Apply adaptive difficulty adjustment (invisible to player)
-            const adjusted = getAdjustedConfig(config, player.performanceMetrics);
-            config = adjusted.config;
+            // Apply adaptive difficulty adjustment (invisible to player;
+            // pinch slots exempt so the easer can't defuse them on retry)
+            if (!isPinchLevel(player.currentLevel)) {
+              const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+              config = adjusted.config;
+            }
           }
           const level = difficulty ? 0 : player.currentLevel;
           const chapter = !difficulty ? getChapterForLevel(player.currentLevel) : undefined;
-          const board = generateBoard(
+          const board = generateLevelBoard(
+            level,
             config,
             level * 1337 + Date.now(),
             'classic',

@@ -30,7 +30,7 @@ import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, isPinchLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { wordFoundHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
@@ -723,7 +723,9 @@ function GameScreenImpl({
   // Challenge-spike marker — computed once per level so a Remote Config
   // flip or level change rolls through. Suppressed for daily/weekly which
   // don't use the ramp-based level config at all.
-  const isSpike = useMemo(() => isSpikeLevel(level), [level]);
+  // Pinch levels share the spike's CHALLENGE framing (banner + pre-level
+  // booster sheet): both are designed hard beats the boosters honestly help.
+  const isSpike = useMemo(() => isSpikeLevel(level) || isPinchLevel(level), [level]);
 
   const modeConfig = MODE_CONFIGS[mode];
   const effectiveTimeLimit = modeConfig.rules.hasTimer
