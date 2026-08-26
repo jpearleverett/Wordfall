@@ -285,6 +285,7 @@
     "claimFreeHint": "Resgatar Dica Grátis (sem anúncio)",
     "timeoutContinue": "Ver Anúncio: continuar +{{seconds}} s",
     "timeoutContinueFree": "Continuar +{{seconds}} s — Grátis",
+    "timeoutContinueGems": "💎 {{gems}} gemas — +{{seconds}} s",
     "undoLastMove": "DESFAZER ÚLTIMA JOGADA",
     "dayStreak": "Dias Seguidos",
     "keepItGoing": "Continue assim!",

@@ -63,7 +63,12 @@ interface PuzzleCompleteProps {
   shareText?: string;
   friendComparison?: { beaten: number; total: number } | null;
   eventMultiplierLabel?: string | null;
-  onNextLevel: () => void;
+  /**
+   * `auto: true` marks the zero-tap auto-advance timer as the caller —
+   * GameScreen uses it to skip the next-level interstitial unless the
+   * interstitialOnAutoAdvance RC explicitly allows ads on that path.
+   */
+  onNextLevel: (opts?: { auto?: boolean }) => void;
   onHome: () => void;
   onRetry: () => void;
   onShare?: () => void;
@@ -1202,7 +1207,7 @@ export function PuzzleComplete({
         setAutoAdvanceCancelled(true);
         return;
       }
-      onNextLevel();
+      onNextLevel({ auto: true });
     }, autoAdvanceRemainingMs);
     return () => clearTimeout(id);
   }, [autoAdvanceRemainingMs, onNextLevel]);
@@ -1747,7 +1752,7 @@ export function PuzzleComplete({
                 <CtaPulse reduceMotion={suppressMotion} glowColor={COLORS.accent}>
                   <Pressable
                     style={({ pressed }) => [pressed && styles.buttonPressed]}
-                    onPress={onNextLevel}
+                    onPress={() => onNextLevel()}
                     accessibilityRole="button"
                     accessibilityLabel={isDaily ? 'Play another mode' : 'Next level'}
                   >

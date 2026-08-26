@@ -84,9 +84,10 @@ import {
   MiniPackNeed,
   OFFER_HINT_GRANTS,
   POST_LOSS_HINT_PACK,
+  TIMEOUT_CONTINUE_GEM_COST,
   TIMEOUT_CONTINUE_SECONDS,
 } from '../components/monetizationModel';
-import { adManager, AdRewardType } from '../services/ads';
+import { adManager, AdRewardType, isInterstitialOnAutoAdvanceEnabled } from '../services/ads';
 import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
 import { MockAdModal } from '../components/MockAdModal';
 import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
@@ -2072,6 +2073,39 @@ function GameScreenImpl({
     }
   }, [isStuck, status, level, playerActions]);
 
+  // Churn valve for the modes whose dead-end never flips status to 'failed'
+  // (classic, noGravity, gravityFlip, expert): the fail-breather modal was
+  // built to catch the L15-25 stuck loop, but it gated on
+  // status==='failed'||'timeout' — unreachable in exactly the mode and band
+  // it targets. The SECOND recorded struggle on the same level (dead-end →
+  // retry → dead-end, via recordFailure above + the handleRetry reset)
+  // surfaces the same relief here, under the same RC flag and cooldown.
+  useEffect(() => {
+    if (!isStuck || status !== 'playing') return;
+    if (mode === 'relax') return;
+    const persistentFails = failCountByLevel?.[level] ?? 0;
+    const totalFails = Math.max(sessionFailCount.current, persistentFails);
+    if (totalFails < 2) return;
+    const breatherEligible =
+      getRemoteBoolean('failBreatherEnabled') &&
+      (!lastBreatherOfferedAt ||
+        Date.now() - lastBreatherOfferedAt > BREATHER_COOLDOWN_MS) &&
+      !failBreatherShownRef.current;
+    if (!breatherEligible) return;
+    failBreatherShownRef.current = true;
+    const timer = setTimeout(() => {
+      setShowFailBreather(true);
+      void analytics.logEvent('fail_breather_shown', {
+        consecutive_failures: consecutiveFailures,
+        last_level_stars: lastLevelStars,
+        level,
+        mode,
+        trigger: 'stuck_loop',
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [isStuck, status, mode, level, failCountByLevel, lastBreatherOfferedAt, consecutiveFailures, lastLevelStars]);
+
   // Free rescue on a genuinely dead board.
   //
   // Getting stuck is a real, intended fail state — the order you clear words
@@ -2406,7 +2440,14 @@ function GameScreenImpl({
     // labeled gift whose tap did nothing. resolveUndoSource consumes the
     // granted pool first (it expires with the puzzle; tokens persist).
     const source = resolveUndoSource(mode, undosLeft, undoTokens);
-    if (source === 'blocked') return;
+    if (source === 'blocked') {
+      // Undo demand peaks at exactly this moment (usually a bad clear the
+      // player wants back). This was the one consumable whose empty tap
+      // silently no-oped — every other zero-inventory surface opens its
+      // store bridge.
+      openMiniPack('undo', 'undo_button_empty');
+      return;
+    }
     if (source === 'token') {
       spendUndoToken();
       grantUndo();
@@ -2441,7 +2482,7 @@ function GameScreenImpl({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length, openMiniPack]);
 
   // Timeout continue (Time Pressure): watch a rewarded ad to resume the
   // timed-out attempt with +30s. Once per attempt (timeExtendUsedRef); the
@@ -2462,6 +2503,28 @@ function GameScreenImpl({
     });
   }, [extendTime, level, mode]);
 
+  // Gem fallback for the timeout continue: available once the per-attempt ad
+  // continue is spent (or ads are capped/unavailable). Unlike the ad path it
+  // is repeatable — each timeout can be bought back for the same flat gem
+  // price, the genre's classic continue moment. Broke players route to the
+  // gem mini-pack instead of a silent no-op.
+  const handleTimeoutContinueGems = useCallback(() => {
+    if (!spendGems(TIMEOUT_CONTINUE_GEM_COST)) {
+      openMiniPack('gems', 'timeout_continue_broke');
+      return;
+    }
+    extendTime(TIMEOUT_CONTINUE_SECONDS);
+    setShowFailed(false);
+    setShowPostLoss(false);
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('timeout_continue_gems_used', {
+      level,
+      mode,
+      seconds: TIMEOUT_CONTINUE_SECONDS,
+      gems: TIMEOUT_CONTINUE_GEM_COST,
+    });
+  }, [spendGems, extendTime, level, mode, openMiniPack]);
+
   const handleRetry = useCallback(() => {
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
@@ -2479,6 +2542,12 @@ function GameScreenImpl({
     // throws away all board progress, which costs far more than one undo.
     freeRescueUsedRef.current = false;
     setFreeUndoGranted(false);
+    // Same reasoning for the adaptive-difficulty struggle signal: newGame
+    // reuses the SAME board object, so the [board] reset effect never fires
+    // on retry and dead-end→retry→dead-end recorded ONE failure — hiding the
+    // exact struggling player the easer's >2-attempts trigger and the
+    // breather's consecutiveFailures>=2 predicate were built to catch.
+    stuckFailRecordedRef.current = false;
 
     setShowFailed(false);
   }, [board, level, mode, effectiveMaxMoves, effectiveTimeLimit, newGame]);
@@ -2531,7 +2600,7 @@ function GameScreenImpl({
     return shown;
   }, [isDaily, mode, showModeTutorial, tensionActive, activeOffer, miniPack, level]);
 
-  const handleNextLevel = useCallback(() => {
+  const handleNextLevel = useCallback((opts?: { auto?: boolean }) => {
     setShowComplete(false);
     completionHandled.current = false;
     // Leaving this completion: re-arm the per-completion guards.
@@ -2546,6 +2615,10 @@ function GameScreenImpl({
       // appear. The offer owns this transition moment — no interstitial
       // stacked underneath it.
       trackTimeout(() => onNextLevel(), 100);
+    } else if (opts?.auto && !isInterstitialOnAutoAdvanceEnabled()) {
+      // The zero-tap auto-advance walked the player here — an interstitial
+      // they never tapped into is an ambush (RC-gated; default skips it).
+      onNextLevel();
     } else {
       void (async () => {
         await maybeShowNextLevelInterstitial();
@@ -3081,7 +3154,12 @@ function GameScreenImpl({
             });
             setShowFailBreather(false);
             // Skip PostLossModal this time — the breather is the relief.
-            setShowFailed(true);
+            // On the stuck-loop trigger the board is still live (status
+            // 'playing'): the player takes the free hint straight back into
+            // the attempt, so no failed overlay.
+            if (status !== 'playing') {
+              setShowFailed(true);
+            }
           }}
           onDismiss={() => {
             if (typeof (playerActionsAny as Record<string, unknown>).updateProgress === 'function') {
@@ -3094,6 +3172,9 @@ function GameScreenImpl({
               mode,
             });
             setShowFailBreather(false);
+            // Stuck-loop trigger: the board is still live — dismissing just
+            // returns to it. Only a real loss falls through to post-loss.
+            if (status === 'playing') return;
             // Fall through to the standard post-loss flow on next frame.
             if (!postLossShownRef.current && foundWords > 0) {
               postLossShownRef.current = true;
@@ -3244,6 +3325,26 @@ function GameScreenImpl({
                       {isAdFree
                         ? t('result.timeoutContinueFree', { seconds: TIMEOUT_CONTINUE_SECONDS })
                         : t('result.timeoutContinue', { seconds: TIMEOUT_CONTINUE_SECONDS })}
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
+              {/* Gem continue — the fallback once the once-per-attempt ad
+                  continue is spent or ads are capped out. Same RC gate. */}
+              {status === 'timeout' &&
+                getRemoteBoolean('timeoutContinueEnabled') &&
+                (timeExtendUsedRef.current || !adManager.canClaimAdReward('time_continue')) && (
+                <Pressable
+                  style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
+                  onPress={handleTimeoutContinueGems}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <GameIcon name="hourglass" size={16} accent={COLORS.green} />
+                    <Text style={styles.adHintButtonText}>
+                      {t('result.timeoutContinueGems', {
+                        seconds: TIMEOUT_CONTINUE_SECONDS,
+                        gems: TIMEOUT_CONTINUE_GEM_COST,
+                      })}
                     </Text>
                   </View>
                 </Pressable>

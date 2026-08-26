@@ -285,6 +285,7 @@
     "claimFreeHint": "Réclamer un indice gratuit (sans pub)",
     "timeoutContinue": "Regarder une pub : +{{seconds}} s",
     "timeoutContinueFree": "Continuer +{{seconds}} s — gratuit",
+    "timeoutContinueGems": "💎 {{gems}} gemmes — +{{seconds}} s",
     "undoLastMove": "ANNULER LE DERNIER COUP",
     "dayStreak": "Jours d'affilée",
     "keepItGoing": "Continue comme ça !",

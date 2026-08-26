@@ -285,6 +285,7 @@
     "claimFreeHint": "Reclamar pista gratis (sin anuncio)",
     "timeoutContinue": "Ver anuncio: continuar +{{seconds}} s",
     "timeoutContinueFree": "Continuar +{{seconds}} s — gratis",
+    "timeoutContinueGems": "💎 {{gems}} gemas — +{{seconds}} s",
     "undoLastMove": "DESHACER ÚLTIMO MOVIMIENTO",
     "dayStreak": "Racha de días",
     "keepItGoing": "¡No la pierdas!",

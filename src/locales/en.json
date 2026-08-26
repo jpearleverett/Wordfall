@@ -285,6 +285,7 @@
     "claimFreeHint": "Claim Free Hint (no ad)",
     "timeoutContinue": "Watch Ad — Continue +{{seconds}}s",
     "timeoutContinueFree": "Continue +{{seconds}}s — Free",
+    "timeoutContinueGems": "💎 {{gems}} Gems — +{{seconds}}s",
     "undoLastMove": "UNDO LAST MOVE",
     "dayStreak": "Day Streak",
     "keepItGoing": "Keep it going!",

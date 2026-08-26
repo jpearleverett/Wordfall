@@ -285,6 +285,7 @@
     "claimFreeHint": "無料ヒントを受け取る（広告なし）",
     "timeoutContinue": "広告を見て+{{seconds}}秒続行",
     "timeoutContinueFree": "+{{seconds}}秒続行 — 無料",
+    "timeoutContinueGems": "💎 ジェム{{gems}}個 — +{{seconds}}秒",
     "undoLastMove": "1手戻す",
     "dayStreak": "日連続記録",
     "keepItGoing": "この調子で続けよう！",

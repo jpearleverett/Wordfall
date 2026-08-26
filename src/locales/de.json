@@ -285,6 +285,7 @@
     "claimFreeHint": "Gratis-Tipp einlösen (ohne Werbung)",
     "timeoutContinue": "Werbung ansehen: +{{seconds}} Sek. weiterspielen",
     "timeoutContinueFree": "Weiterspielen: +{{seconds}} Sek. — gratis",
+    "timeoutContinueGems": "💎 {{gems}} Juwelen — +{{seconds}} s",
     "undoLastMove": "LETZTEN ZUG ZURÜCK",
     "dayStreak": "Tage-Serie",
     "keepItGoing": "Bleib dran!",
