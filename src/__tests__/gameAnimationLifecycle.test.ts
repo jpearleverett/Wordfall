@@ -45,13 +45,10 @@ describe('animation resource lifecycle', () => {
       ['A', {}],
       ['B', {}],
     ]);
-    const reset = jest.fn();
-
-    clearFallResources(active, runs, animatedValues, reset);
+    clearFallResources(active, runs, animatedValues);
 
     expect(firstAnimation.stop).toHaveBeenCalledTimes(1);
     expect(secondAnimation.stop).toHaveBeenCalledTimes(1);
-    expect(reset).toHaveBeenCalledTimes(2);
     expect(active.size).toBe(0);
     expect(runs.size).toBe(0);
     expect(animatedValues.size).toBe(0);

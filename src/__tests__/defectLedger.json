@@ -2318,7 +2318,7 @@
       {
         "type": "pattern-present",
         "file": "src/components/Grid.tsx",
-        "pattern": "existing\\.setValue\\(\\{ x: fall\\.dx, y: fall\\.dy \\}\\);"
+        "pattern": "existing\\.setValue\\(fall\\.current\\);"
       },
       {
         "type": "pattern-present",

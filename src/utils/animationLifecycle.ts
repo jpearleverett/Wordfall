@@ -23,8 +23,12 @@ export function clearTimeoutHandles(
 
 /**
  * Tear down a whole fall run set: stop every in-flight sequence, forget every
- * run descriptor, and (optionally) snap the animated values back to rest
- * before dropping them.
+ * run descriptor, and drop the animated values.
+ *
+ * The values are dropped, never reset. A tile's position IS its animated
+ * value, so resetting one would stack the tile at the grid's origin for the
+ * frame before the replacement value is committed. Stopping the animation
+ * leaves each tile exactly where it is, which is what a snap wants.
  *
  * `runs` replaces what used to be a pair of maps holding native-value
  * listeners and the offsets they streamed back. The fall is now sampled
@@ -38,14 +42,10 @@ export function clearFallResources<
   activeAnimations: Map<string, TAnimation>,
   runs: Map<string, TRun>,
   animatedValues: Map<string, TValue>,
-  resetValue?: (value: TValue) => void,
 ): void {
   activeAnimations.forEach(animation => animation.stop());
   activeAnimations.clear();
   runs.clear();
-  if (resetValue) {
-    animatedValues.forEach(resetValue);
-  }
   animatedValues.clear();
 }
 

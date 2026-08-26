@@ -100,8 +100,9 @@ test('tiles render from the canonical bounds rather than flowing in columns', ()
   // is precisely the teleport gravityFlip's horizontal gravity used to show.
   expect(GRID_SOURCE).toContain('tiles.map');
   expect(GRID_SOURCE).not.toContain('columns.map');
-  expect(GRID_SOURCE).toContain('slotX={bound.x}');
-  expect(GRID_SOURCE).toContain('slotY={bound.y}');
+  // A tile's position is its animated value, seeded from the canonical bound —
+  // see fallMotion.test's "a tile's position lives ONLY in its animated value".
+  expect(GRID_SOURCE).toContain('new Animated.ValueXY({ x: bound.x, y: bound.y })');
 });
 
 test('hit boundaries split rendered row and column gaps at slot midlines', () => {

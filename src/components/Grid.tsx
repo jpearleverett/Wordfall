@@ -653,33 +653,40 @@ function GameGridImpl({
         activeFallsRef.current,
         fallRunsRef.current,
         fallAnimMapRef.current,
-        value => value.setValue({ x: 0, y: 0 }),
       );
       pendingFallsRef.current = [];
       pendingGhostsRef.current = [];
     } else if (plan.kind === 'animate') {
+      for (const reposition of plan.repositions) {
+        fallAnimMapRef.current
+          .get(reposition.id)
+          ?.setValue({ x: reposition.x, y: reposition.y });
+      }
       for (const fall of plan.falls) {
-        // Seeding the value here — during render, before the children render —
-        // is what makes the FLIP airtight: Animated.Value.setValue updates the
-        // JS-side value synchronously, so when LetterCell renders a moment
-        // later its animated props resolve to the OLD-position offset and that
-        // offset is part of the committed style. The native op that mirrors it
-        // is batched onto a setImmediate and can land a beat later, so relying
-        // on the native node alone would leave a frame where the tile paints at
-        // its destination.
+        // Seed the value to where the tile ALREADY IS, then animate it to the
+        // new slot. Because a tile's position lives entirely in this value —
+        // its layout box never moves (see LetterCell) — the seed is a visual
+        // no-op no matter when it takes effect, and the FLIP is airtight by
+        // construction rather than by timing.
         //
-        // (Under the old flex layout a moved tile's props did not change at
-        // all — only its index among its siblings — so React.memo bailed out,
-        // the seeded value was never re-committed, and that frame is exactly
-        // what happened. Positioning tiles from slotX/slotY closes it: a moved
-        // tile always re-renders.)
+        // That matters more than it looks. setValue on a value that is not yet
+        // native flushes synchronously through AnimatedProps.update() ->
+        // instance.setNativeProps() (createAnimatedPropsHook.js, guarded by
+        // shouldUseSetNativePropsInFabric, which defaults to true), writing the
+        // new transform into the shadow tree from inside this render. When the
+        // value carried an OFFSET and layout carried the position, that write
+        // landed on a view still at its old slot and displaced the tile by a
+        // whole fall distance, the wrong way, until React committed — a real
+        // one-frame flash on each tile's first fall, i.e. on the opening
+        // clears of every board. Holding the absolute position makes the same
+        // write a no-op.
         //
         // setValue also stops whatever animation is running on the value, so a
         // superseded fall does not need stopping separately; its completion
         // callback fires with finished:false and releaseOwnedFall cleans up.
         const existing = fallAnimMapRef.current.get(fall.id);
         if (existing) {
-          existing.setValue({ x: fall.dx, y: fall.dy });
+          existing.setValue(fall.current);
           // Record where the tile is now parked, so replaying this render
           // reproduces the same seed rather than re-sampling a dead curve.
           // The freeze is stored relative to the tile's PREVIOUS slot, the
@@ -693,7 +700,7 @@ function GameGridImpl({
         } else {
           fallAnimMapRef.current.set(
             fall.id,
-            new Animated.ValueXY({ x: fall.dx, y: fall.dy }),
+            new Animated.ValueXY(fall.current),
           );
         }
       }
@@ -800,7 +807,7 @@ function GameGridImpl({
       // curve, so nothing about this tile's motion touches the JS thread once
       // it has started — see buildFallEasing for why that matters.
       const sequence = Animated.timing(av, {
-        toValue: { x: 0, y: 0 },
+        toValue: f.target,
         duration: fallRunDuration(run),
         easing: buildFallEasing(run),
         useNativeDriver: true,
@@ -1120,14 +1127,14 @@ function GameGridImpl({
                 const selIndex = selectedSet.get(key) ?? -1;
                 const isSelected = selIndex >= 0;
                 const isHinted = hintedSet.has(key);
-                // The fall value is created lazily so the translate transform
-                // is attached from a tile's very first frame. The render-phase
-                // diff above already seeded moved tiles' values with their
-                // old-position offsets, so the first painted frame of the new
-                // tree can never show a tile at its destination.
+                // A tile's position IS this value — its layout box sits at
+                // the origin and never moves. Created lazily at the tile's
+                // slot so its very first painted frame is already correct;
+                // the render-phase diff above has already re-seeded any tile
+                // that is mid-move.
                 let cellFallAnim = fallAnimMapRef.current.get(cell.id);
                 if (!cellFallAnim) {
-                  cellFallAnim = new Animated.ValueXY({ x: 0, y: 0 });
+                  cellFallAnim = new Animated.ValueXY({ x: bound.x, y: bound.y });
                   fallAnimMapRef.current.set(cell.id, cellFallAnim);
                 }
 
@@ -1137,8 +1144,6 @@ function GameGridImpl({
                     letter={cell.letter}
                     cellId={cell.id}
                     size={cellSize}
-                    slotX={bound.x}
-                    slotY={bound.y}
                     slotSize={geometry.stride}
                     reduceMotion={reduceMotion}
                     isSelected={isSelected}

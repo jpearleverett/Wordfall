@@ -106,13 +106,26 @@ starts one native animation per tile.
 
 **The invariants. Breaking any of these puts the bugs back:**
 
-- **Seed during render, promote on commit.** The seed must happen in the render
-  body, before the children render, because that is what puts the offset into
-  the *committed* props (`setValue` updates the JS-side value synchronously).
-  Everything else — advancing `prevGridRef`, stopping animations, starting new
-  ones — happens in the layout effect, so a render React discards cannot
-  swallow a fall or freeze a tile mid-air. The render phase must stay
-  replayable: repeat it and it lands on the same offsets.
+- **A tile's position lives ONLY in its animated value.** Its layout box is
+  pinned at the grid's origin and never moves; `fallAnim` holds the tile's
+  absolute position. Never put position back into `left`/`top`. Splitting it
+  across layout and transform means every gravity step writes both through
+  different pipelines, and RN can flush a render-phase `setValue` straight into
+  the shadow tree (`createAnimatedPropsHook` → `instance.setNativeProps`,
+  guarded by `shouldUseSetNativePropsInFabric`, default **true**) — so the new
+  transform lands on a view still at its old slot and displaces the tile by a
+  whole fall distance, the wrong way, until React commits. That was a real
+  one-frame flash on each tile's first fall, i.e. on the opening clears of
+  every board. With position in one place the same early write is a no-op.
+- **Seed during render, promote on commit.** The seed is the one side effect
+  that belongs in the render body. Everything else — advancing the baseline,
+  stopping animations, starting new ones — happens in the layout effect, so a
+  render React discards cannot swallow a fall or freeze a tile mid-air. The
+  render phase must stay replayable: repeat it and it lands on the same seeds.
+- **A geometry change has to place stationary tiles explicitly.** They used to
+  come along for free with `left`/`top`; now `planCascade` emits `repositions`
+  for them. Snapping is the exception — it drops the values entirely and the
+  next render re-creates each tile's at its slot.
 - **Tiles are absolutely positioned, keyed by cell id.** Never put them back in
   a per-column flex tree: a tile that changes column (every clear under
   gravityFlip's horizontal gravity) would be a different parent's child, so
@@ -140,12 +153,22 @@ starts one native animation per tile.
 **Budget.** ~500ms typical from clear to settled, ~700ms worst case, first
 movement at 45ms. Pinned by `components/game/__tests__/fallMotion.test.ts`.
 
-**Known limitation.** RN compiles a timing easing into a frames array the
-native driver indexes at a fixed 60Hz with no interpolation, so the fall plays
-at 60fps on a 120Hz display. Reanimated would not have this cap, but it also
-cannot put the seeded offset into the React commit the way `Animated`'s
-JS-side value does — and that commit is what makes the first frame flicker-free.
-The cap is the deliberate trade.
+**Known limitation, and the obvious next step.** RN compiles a timing easing
+into a frames array the native driver indexes at a fixed 60Hz with **no
+interpolation** (`FrameBasedAnimationDriver.kt`), so the fall plays at 60fps on
+a 120Hz display while the Reanimated scale-pop beside it runs at 120. Also,
+`Animated.timing` on a `ValueXY` expands to a parallel pair — two native
+animations per tile, one per axis.
+
+Moving the fall to Reanimated fixes both, and the reason not to has now
+changed: the old argument was that a render-phase `setValue` is synchronous and
+therefore part of the committed props, whereas a Reanimated write is async and
+would reopen the first-frame flicker. **That argument depended on layout moving
+the tile to its destination.** Now that `left`/`top` never move, the destination
+has no route to the screen except the animated value itself, so there is no
+window to reopen. What is left is ordinary migration risk — the interruption
+sampler would move to the UI thread, and it wants an on-device pass — not a
+correctness blocker.
 
 ## Gotchas
 

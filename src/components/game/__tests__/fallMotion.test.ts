@@ -450,12 +450,35 @@ describe('wiring', () => {
   test('tiles are positioned, not flowed', () => {
     // A per-column flex tree makes a tile that changes column a different
     // parent's child, so React unmounts and remounts its whole subtree — the
-    // teleport gravityFlip used to show. It also matters for vertical falls:
-    // slotX/slotY changing is what forces the moved tile to re-render and
-    // re-commit its seeded transform.
+    // teleport gravityFlip used to show.
     expect(GRID_CODE).toContain('tiles.map');
     expect(GRID_CODE).not.toContain('columns.map');
-    expect(GRID_CODE).toContain('slotX={bound.x}');
-    expect(GRID_CODE).toContain('slotY={bound.y}');
+  });
+
+  test('a tile\'s position lives ONLY in its animated value', () => {
+    // Splitting position across layout (left/top) and transform means every
+    // gravity step writes both, through different pipelines. RN can flush a
+    // render-phase setValue into the shadow tree synchronously
+    // (createAnimatedPropsHook -> instance.setNativeProps, guarded by
+    // shouldUseSetNativePropsInFabric, default true), so with the split the
+    // new transform landed on a view still at its old slot and displaced the
+    // tile by a whole fall distance until React committed.
+    const cellSource = fs.readFileSync(
+      path.resolve(__dirname, '../../LetterCell.tsx'),
+      'utf8',
+    );
+    const outer = cellSource.slice(
+      cellSource.indexOf('const outerStyle = useMemo('),
+      cellSource.indexOf('return (', cellSource.indexOf('const outerStyle = useMemo(')),
+    );
+    expect(outer.length).toBeGreaterThan(0);
+    expect(outer).toContain('s.left = 0;');
+    expect(outer).toContain('s.top = 0;');
+    expect(outer).toContain('fallAnim.getTranslateTransform()');
+    // The grid must therefore never hand a tile a layout position.
+    expect(GRID_CODE).not.toContain('slotX=');
+    expect(GRID_CODE).not.toContain('slotY=');
+    // And a tile's value is born at its slot, not at the origin.
+    expect(GRID_CODE).toContain('new Animated.ValueXY({ x: bound.x, y: bound.y })');
   });
 });

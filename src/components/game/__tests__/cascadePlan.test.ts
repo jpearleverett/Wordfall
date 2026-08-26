@@ -115,6 +115,12 @@ describe('every tile that moved gets a fall', () => {
   });
 
   it('seeds every fall to exactly where the tile already is', () => {
+    // The seed is applied during render, and RN may flush it into the shadow
+    // tree synchronously from there. It is only safe to do that because the
+    // seeded value IS the tile's current position — writing it early moves
+    // nothing. (When position lived in layout and the value held an offset,
+    // that early write displaced the tile by a whole fall distance, the wrong
+    // way, until React committed.)
     const before = board(6, 5);
     const after = clearAt(before, [[3, 0], [3, 1], [3, 2]]);
     const prev = frameOf(before);
@@ -123,8 +129,11 @@ describe('every tile that moved gets a fall', () => {
     if (plan.kind !== 'animate') throw new Error('expected an animate plan');
 
     for (const fall of plan.falls) {
-      const seeded = screenPos(next, fall.id, { x: fall.dx, y: fall.dy });
-      expect(seeded).toEqual(screenPos(prev, fall.id));
+      expect(fall.current).toEqual(screenPos(prev, fall.id));
+      expect(fall.target).toEqual(screenPos(next, fall.id));
+      // dx/dy stay the offset the fall curve animates away.
+      expect(fall.dx).toBe(fall.current.x - fall.target.x);
+      expect(fall.dy).toBe(fall.current.y - fall.target.y);
     }
   });
 
@@ -158,11 +167,12 @@ describe('no tile is left stranded', () => {
       const stationary = was.x === bound.x && was.y === bound.y;
       expect(seeded.has(id)).toBe(!stationary);
     }
-    // Nothing is seeded to a non-zero resting place: the animation always ends
-    // at the slot, so the run's target is rest by construction.
+    // Every fall ends at the tile's slot: the curve's offset resolves to zero
+    // and the animation's target is the slot itself.
     for (const fall of plan.falls) {
       const run = runFromFall(fall.dx, fall.dy);
       expect(sampleFallOffset(run, Number.MAX_SAFE_INTEGER)).toEqual({ x: 0, y: 0 });
+      expect(fall.target).toEqual(screenPos(next, fall.id));
     }
   });
 
@@ -174,19 +184,33 @@ describe('no tile is left stranded', () => {
     expect(plan.kind).toBe('none');
   });
 
-  it('a pure re-scale on a settled board moves nothing', () => {
+  it('a pure re-scale on a settled board animates nothing but replaces every tile', () => {
     const grid = board(5, 5);
-    const { decision, plan } = planCascade(
-      frameOf(grid, CELL),
-      frameOf(grid, CELL - 6),
-      EMPTY_CASCADE_STATE,
-      0,
-      false,
-    );
+    const before = frameOf(grid, CELL);
+    const after = frameOf(grid, CELL - 6);
+    const { decision, plan } = planCascade(before, after, EMPTY_CASCADE_STATE, 0, false);
     expect(decision).toBe('resize');
     if (plan.kind !== 'animate') throw new Error('expected an animate plan');
     expect(plan.falls).toEqual([]);
     expect(plan.ghosts).toEqual([]);
+    // Position lives in the animated value, not in layout, so a stationary
+    // tile at a new pitch has to be placed explicitly — nothing else moves it.
+    const placed = new Map(plan.repositions.map(r => [r.id, r]));
+    for (const [id, bound] of after.bounds) {
+      if (before.bounds.get(id)!.x === bound.x && before.bounds.get(id)!.y === bound.y) {
+        continue;
+      }
+      expect(placed.get(id)).toEqual({ id, x: bound.x, y: bound.y });
+    }
+    expect(plan.repositions.length).toBeGreaterThan(0);
+  });
+
+  it('a plain word clear repositions nothing — every mover animates', () => {
+    const before = board(6, 5);
+    const after = clearAt(before, [[4, 1], [4, 2]]);
+    const { plan } = planCascade(frameOf(before), frameOf(after), EMPTY_CASCADE_STATE, 0, false);
+    if (plan.kind !== 'animate') throw new Error('expected an animate plan');
+    expect(plan.repositions).toEqual([]);
   });
 });
 
@@ -237,8 +261,7 @@ describe('interrupting a cascade keeps every tile where it is', () => {
     const reseeded = second.plan.falls.find(f => f.id === airborne.id);
     expect(reseeded).toBeDefined();
     // The tile does not move a pixel at the moment of the hand-off.
-    expect(screenPos(nextFrame, airborne.id, { x: reseeded!.dx, y: reseeded!.dy }))
-      .toEqual(screenPos(midFrame, airborne.id, inAir));
+    expect(reseeded!.current).toEqual(screenPos(midFrame, airborne.id, inAir));
     // And it carries on instead of restarting from rest.
     expect(reseeded!.liveOffset).not.toBeNull();
     expect(reseeded!.entryProgress).toBeGreaterThan(0);

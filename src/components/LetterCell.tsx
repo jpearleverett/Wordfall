@@ -138,16 +138,18 @@ interface LetterCellProps {
    */
   fallAnim?: Animated.ValueXY;
   /**
-   * Absolute slot origin inside the grid container, straight from the
-   * canonical geometry (already carries the half-gap inset on x; y starts at
-   * row 0 = 0). Tiles are positioned rather than flowed so that a tile which
-   * changes COLUMN — every clear under horizontal gravity in gravityFlip —
-   * keeps its identity and its running fall animation instead of being
-   * unmounted from one column's children and remounted in another's.
+   * Slot pitch (cellSize + gap). The tile's box is this size, pinned at the
+   * grid container's origin; `fallAnim` translates it to wherever it actually
+   * belongs. Position deliberately does NOT live in layout:
+   *
+   *  - a tile that changes COLUMN (every clear under gravityFlip's horizontal
+   *    gravity) would be a different parent's child in a flex tree, so React
+   *    would unmount and remount its whole subtree mid-fall;
+   *  - and splitting position across layout (left/top) and transform means a
+   *    gravity step writes both through different pipelines, which is a
+   *    one-frame flash waiting for the two to land out of order. They cannot
+   *    land out of order if only one of them ever moves.
    */
-  slotX?: number;
-  slotY?: number;
-  /** Slot pitch (cellSize + gap). The inner tile insets itself by the gap. */
   slotSize?: number;
   /** Grid row index (0-based). Used to build screen-reader position hints. */
   row?: number;
@@ -170,8 +172,6 @@ export const LetterCell = React.memo(function LetterCell({
   isSpotlightDimmed = false,
   isBonusTile = false,
   fallAnim,
-  slotX,
-  slotY,
   slotSize,
   row,
   col,
@@ -305,19 +305,17 @@ export const LetterCell = React.memo(function LetterCell({
   // Animated.View is trivial compared to the remount storm.
   const outerStyle = useMemo(() => {
     const s: any = {};
-    if (slotX !== undefined && slotY !== undefined) {
+    if (slotSize !== undefined) {
       s.position = 'absolute';
-      s.left = slotX;
-      s.top = slotY;
-      if (slotSize !== undefined) {
-        s.width = slotSize;
-        s.height = slotSize;
-      }
+      s.left = 0;
+      s.top = 0;
+      s.width = slotSize;
+      s.height = slotSize;
     }
     if (isSpotlightDimmed) s.opacity = 0.3;
     if (fallAnim) s.transform = fallAnim.getTranslateTransform();
     return s;
-  }, [isSpotlightDimmed, fallAnim, slotX, slotY, slotSize]);
+  }, [isSpotlightDimmed, fallAnim, slotSize]);
 
   return (
     <Animated.View

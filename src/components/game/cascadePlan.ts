@@ -25,7 +25,11 @@ import { type FallRun, fallPhaseProgress, sampleFallOffset } from './fallMotion'
 /** One tile's move for the cascade about to start. */
 export interface CascadeFall {
   id: string;
-  /** Offset from the tile's NEW slot back to where it currently appears. */
+  /** Where the tile appears right now, in grid-local pixels. */
+  current: { x: number; y: number };
+  /** Where it is going. */
+  target: { x: number; y: number };
+  /** current - target: the offset the fall curve animates away. */
   dx: number;
   dy: number;
   row: number;
@@ -88,8 +92,18 @@ export type CascadePlan =
    * replacement) or motion is off: everything snaps to rest.
    */
   | { kind: 'snap' }
-  /** Tiles to move and tiles to dissolve. */
-  | { kind: 'animate'; falls: CascadeFall[]; ghosts: CascadeGhost[] };
+  /** Tiles to move, tiles to dissolve, and tiles to place without moving. */
+  | {
+      kind: 'animate';
+      falls: CascadeFall[];
+      ghosts: CascadeGhost[];
+      /**
+       * Tiles whose pixel position changed but which are not animating —
+       * every stationary tile on a re-scale. Position lives in the animated
+       * value rather than in layout, so nothing else would move them.
+       */
+      repositions: Array<{ id: string; x: number; y: number }>;
+    };
 
 export interface CascadeDecision {
   decision: GridTransitionUpdateDecision;
@@ -146,11 +160,14 @@ export function planCascade(
     // render creates. Everything else does.
     return {
       decision,
-      plan: decision === 'initialize' ? { kind: 'animate', falls: [], ghosts: [] } : { kind: 'snap' },
+      plan:
+        decision === 'initialize'
+          ? { kind: 'animate', falls: [], ghosts: [], repositions: [] }
+          : { kind: 'snap' },
     };
   }
 
-  const prev = previous!;
+  const prev = previous;
   // On a re-scale the previous frame's slots are rebuilt at the NEW pitch
   // (slot indices are pitch-independent) and any in-flight offset is scaled by
   // the same ratio, so the fall continues from where the tile visually is
@@ -177,16 +194,40 @@ export function planCascade(
 
   const transition = computeGridTransition(prevBounds, next.bounds, liveOffsets);
 
-  const falls: CascadeFall[] = transition.falls.map(fall => ({
+  const falls: CascadeFall[] = transition.falls.map(fall => {
+    const target = next.bounds.get(fall.id)!;
+    return {
     ...fall,
-    row: next.bounds.get(fall.id)?.row ?? 0,
+    // Absolute, because a tile's position lives in its animated value, not in
+    // its layout. `current` is by construction exactly where the tile already
+    // appears, which is what makes seeding it a visual no-op — see the note on
+    // repositions below.
+    current: { x: target.x + fall.dx, y: target.y + fall.dy },
+    target: { x: target.x, y: target.y },
+    row: target.row,
     // A tile re-targeted mid-air is already moving. Making it sit through a
     // fresh hold and stagger would stop it dead and start it again, which is
     // worse than the snap this replaced — and entering the new fall curve
     // part-way keeps its speed instead of decelerating to zero.
     liveOffset: liveOffsets.get(fall.id) ?? null,
     entryProgress: livePhase.get(fall.id) ?? 0,
-  }));
+    };
+  });
+
+  // Tiles that did not move between slots but whose PIXELS moved — i.e. every
+  // stationary tile when the cell pitch changes. Under a layout-driven tile
+  // these came along for free with left/top; carrying position in the animated
+  // value means they have to be placed explicitly.
+  const moving = new Set(falls.map(f => f.id));
+  const repositions: Array<{ id: string; x: number; y: number }> = [];
+  for (const [id, bound] of next.bounds) {
+    if (moving.has(id)) continue;
+    const was = prev.bounds.get(id);
+    if (!was) continue;
+    if (was.x !== bound.x || was.y !== bound.y) {
+      repositions.push({ id, x: bound.x, y: bound.y });
+    }
+  }
 
   // The last trace the caller saw is the word that just resolved — the reducer
   // empties the selection in the same update that clears the tiles, so this is
@@ -218,5 +259,5 @@ export function planCascade(
     );
   }
 
-  return { decision, plan: { kind: 'animate', falls, ghosts } };
+  return { decision, plan: { kind: 'animate', falls, ghosts, repositions } };
 }
