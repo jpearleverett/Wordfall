@@ -2576,7 +2576,7 @@ function GameScreenImpl({
   // placement and the largest untapped revenue wire in the game. Eligibility
   // is deliberately conservative: never on the daily/weekly celebration,
   // never during a tutorial, never before `interstitialMinLevel` (RC, default
-  // 13 — clamped so a console slip can't put an ad on a new player's first
+  // 10 — clamped so a console slip can't put an ad on a new player's first
   // puzzle), and never stacked under another offer/sheet. adManager
   // additionally self-enforces the daily cap, minimum interval, and ad-free
   // purchase; `canShowInterstitial()` is the fast no-ad path so the
@@ -2588,7 +2588,7 @@ function GameScreenImpl({
     // Never under a queued ceremony — the celebration owns that moment, and
     // an interstitial popping over a milestone screen reads as punishment.
     if (isCeremonyVisible()) return false;
-    if (level < getRemoteNumberClamped('interstitialMinLevel', 13, 1, 200)) return false;
+    if (level < getRemoteNumberClamped('interstitialMinLevel', 10, 1, 200)) return false;
     if (!adManager.canShowInterstitial()) return false;
     crashReporter.addBreadcrumb(`interstitial requested at next-level (L${level} ${mode})`, 'ads');
     const shown = await adManager.showInterstitialAd();

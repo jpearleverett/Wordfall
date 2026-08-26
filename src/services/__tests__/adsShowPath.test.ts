@@ -340,7 +340,7 @@ describe('interstitial show path', () => {
     const shown = await adManager.showInterstitialAd();
     await flush();
     expect(shown).toBe(true);
-    expect(adManager.interstitialsRemaining()).toBe(4);
+    expect(adManager.interstitialsRemaining()).toBe(5);
     // Consume-only path: the instance init preloaded was shown (one load,
     // one show) and a warmed replacement was loaded behind it.
     const interstitials = fake.instances.filter((i: any) => i.kind === 'interstitial');
@@ -363,7 +363,7 @@ describe('interstitial show path', () => {
       const { adManager } = await freshAdManager({ load: 'error' });
       const shown = await adManager.showInterstitialAd();
       expect(shown).toBe(false);
-      expect(adManager.interstitialsRemaining()).toBe(5);
+      expect(adManager.interstitialsRemaining()).toBe(6);
       await flush();
       await flush();
       expect(unhandled).toEqual([]);

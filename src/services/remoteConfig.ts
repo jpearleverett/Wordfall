@@ -54,9 +54,8 @@ export interface RemoteConfigValues {
   interstitialIntervalMs: number;
   /**
    * First level at which interstitial ads may show. Callers must read this
-   * through getRemoteNumberClamped(key, 13, 1, 200) — an accidental 0 would
+   * through getRemoteNumberClamped(key, 10, 1, 200) — an accidental 0 would
    * put an interstitial on a brand-new player's very first puzzle.
-   * (Declared August 2026; the interstitial call site wires it in wave 2.)
    */
   interstitialMinLevel: number;
   // Events
@@ -321,7 +320,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // No interstitials before level 13 (clamped [1,200] at the call site —
   // wired in wave 2). Matches ECONOMY_TUNING.firstPurchasePressureLevel:
   // players see zero forced ads until they've hit real difficulty.
-  interstitialMinLevel: 13,
+  // Lowered 13→10 (Aug 2026): genre norm starts interstitials ~L10 and
+  // the ad-free honeymoon plus auto-advance guard keep early feel safe.
+  interstitialMinLevel: 10,
   // Events — both ON by default. The features have been live (via the
   // authored event rotation and getFlashSale hash) for a while; these
   // flags are now real ops kill-switches wired in getCurrentEvent
@@ -433,8 +434,11 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   invalidShakeEnabled: true,
   freeStuckRescueEnabled: true,
   offerMinLevel: 6,
-  offerMaxPerSession: 3,
-  offerCooldownMinutes: 8,
+  // Raised 3→4 / 8→6 (Aug 2026): in the L31-120 band the naive stuck rate
+  // is 57%, so most high-intent rescue moments fell outside the old pacing
+  // window and showed no offer at all.
+  offerMaxPerSession: 4,
+  offerCooldownMinutes: 6,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
 

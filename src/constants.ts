@@ -822,10 +822,14 @@ export const STREAK = {
     10: { coins: 600, gems: 15 },
     14: { coins: 1000, gems: 25 },
     21: { coins: 1500, gems: 35 },
-    30: { coins: 2500, gems: 50, cosmetic: 'streak_30_frame' },
-    45: { coins: 3500, gems: 75 },
-    60: { coins: 5000, gems: 100, cosmetic: 'streak_60_title' },
-    100: { coins: 10000, gems: 200, cosmetic: 'streak_100_badge' },
+    // Late tiers halved (Aug 2026): amortized over the run they added
+    // ~100c/day to an economy already 2-3x oversupplied, and a 10,000c dump
+    // wiped out weeks of intended scarcity in one ceremony. The cosmetics —
+    // the part players actually chase at these depths — are untouched.
+    30: { coins: 1600, gems: 40, cosmetic: 'streak_30_frame' },
+    45: { coins: 2000, gems: 45 },
+    60: { coins: 3000, gems: 60, cosmetic: 'streak_60_title' },
+    100: { coins: 5000, gems: 100, cosmetic: 'streak_100_badge' },
   },
 };
 
@@ -1116,9 +1120,9 @@ export const AD_CONFIG = {
   /** Minimum cooldown between rewarded ads (ms) */
   REWARDED_COOLDOWN_MS: 30_000, // 30 seconds
   /** Maximum interstitial ads per day */
-  MAX_INTERSTITIALS_PER_DAY: 5,
+  MAX_INTERSTITIALS_PER_DAY: 6,
   /** Minimum interval between interstitial ads (ms) */
-  INTERSTITIAL_INTERVAL_MS: 90_000, // 90 seconds
+  INTERSTITIAL_INTERVAL_MS: 75_000, // 75 seconds
 };
 
 // Economy Tuning — central knobs for balancing the free-to-play economy.
