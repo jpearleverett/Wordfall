@@ -365,10 +365,12 @@ function applyProceduralTexture(config: BoardConfig, proceduralIndex: number): B
  * wordCount cap (procedural expert configs already reach the 10-word bound).
  */
 function applyProceduralSpike(config: BoardConfig): BoardConfig {
+  // Procedural levels are all past BOSS_WORD_MIN_LEVEL (300), so the spike's
+  // +1-length step may reach the 7-letter boss-word window.
   return {
     ...config,
     wordCount: Math.min(10, config.wordCount + 1),
-    maxWordLength: Math.min(6, config.maxWordLength + 1),
+    maxWordLength: Math.min(7, config.maxWordLength + 1),
   };
 }
 

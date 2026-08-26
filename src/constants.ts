@@ -305,12 +305,23 @@ export function isSpikeLevel(level: number): boolean {
   return getRemoteBoolean('spikeLevelsEnabled');
 }
 
+/**
+ * First level whose spike boards may carry a 7-letter "boss word". Below
+ * this the dictionary's 3-6 window holds everywhere; from here the spike's
+ * +1-length step can reach 7, making the long-dormant 7-letter celebration
+ * (GameScreen's "{N} LETTERS!" ceremony) reachable — spectacle, not
+ * difficulty: every word is on the visible find-list, so length is not a
+ * difficulty signal in this genre.
+ */
+export const BOSS_WORD_MIN_LEVEL = 300;
+
 /** Apply spike-level transformation: one more word + one longer word. */
-function applySpike(base: BoardConfig): BoardConfig {
+function applySpike(base: BoardConfig, level: number): BoardConfig {
+  const lengthCap = level >= BOSS_WORD_MIN_LEVEL ? 7 : 6;
   return {
     ...base,
     wordCount: base.wordCount + 1,
-    maxWordLength: Math.min(6, base.maxWordLength + 1),
+    maxWordLength: Math.min(lengthCap, base.maxWordLength + 1),
   };
 }
 
@@ -414,7 +425,7 @@ export function getLevelConfig(level: number): BoardConfig {
   const effectiveLevel = isBreather ? Math.max(1, level - 4) : level;
   const base = getPhaseConfig(effectiveLevel);
   const applySpikeThisLevel = !isBreather && isSpikeLevel(level);
-  return applySpikeThisLevel ? applySpike(base) : base;
+  return applySpikeThisLevel ? applySpike(base, level) : base;
 }
 
 // Legacy helper: get the broad difficulty tier for a level (used for rewards, UI labels)

@@ -40,7 +40,7 @@ import {
 } from '../engine/puzzleGenerator';
 import { getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
 import { generateBoard } from '../engine/boardGenerator';
-import { getLevelConfig, getBreatherConfig } from '../constants';
+import { getLevelConfig, getBreatherConfig, isSpikeLevel } from '../constants';
 import { parseRemoteChapters } from '../utils/chapterSchema';
 import overridePayload from '../../remote-config/chapter-overrides-41-48.json';
 
@@ -71,7 +71,9 @@ describe('getLevelConfigExtended — post-600 bounds hold forever', () => {
       expect(c.wordCount).toBeLessThanOrEqual(10);
       expect(c.minWordLength).toBeGreaterThanOrEqual(3);
       expect(c.maxWordLength).toBeGreaterThanOrEqual(c.minWordLength);
-      expect(c.maxWordLength).toBeLessThanOrEqual(6);
+      // Spike levels past BOSS_WORD_MIN_LEVEL may reach the 7-letter
+      // boss-word window; everything else holds the 3-6 dictionary core.
+      expect(c.maxWordLength).toBeLessThanOrEqual(isSpikeLevel(level) ? 7 : 6);
     }
   });
 

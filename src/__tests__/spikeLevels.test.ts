@@ -99,10 +99,22 @@ describe('getLevelConfig — spike transformation', () => {
     expect(onConfig.cols).toBe(offConfig.cols);
   });
 
-  it('maxWordLength caps at 6 even when base is already at cap', () => {
+  it('maxWordLength caps at 6 below BOSS_WORD_MIN_LEVEL even when base is at cap', () => {
     // Level 39 is a spike; base config at level 39 already has maxWordLength 6.
     const spike = getLevelConfig(39);
     expect(spike.maxWordLength).toBeLessThanOrEqual(6);
+  });
+
+  it('spikes at BOSS_WORD_MIN_LEVEL+ may carry a 7-letter boss word; plain levels never do', () => {
+    // 312 = 13 × 24, not a multiple of 5 — a spike past the L300 boss-word
+    // gate. Its base config sits at the 6 cap, so the spike's +1 reaches 7.
+    const bossSpike = getLevelConfig(312);
+    expect(isSpikeLevel(312)).toBe(true);
+    expect(bossSpike.maxWordLength).toBe(7);
+    // A plain neighbor stays inside the 3-6 window.
+    expect(getLevelConfig(311).maxWordLength).toBeLessThanOrEqual(6);
+    // A pre-300 spike with base at cap still clamps to 6.
+    expect(getLevelConfig(299).maxWordLength).toBeLessThanOrEqual(6);
   });
 
   it('breather wins over spike at level 65 (LCM of 5 and 13)', () => {
