@@ -17,6 +17,11 @@ import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
 import { generateShareText } from '../utils/shareGenerator';
 import { getMasteryTierForXP, MASTERY_REWARDS } from '../data/masteryRewards';
 import { eventManager } from '../services/eventManager';
+import {
+  getWeekendWindow,
+  tournamentEventId,
+  weekendTournamentEnabled,
+} from '../data/weekendTournament';
 import { DailyQuestEvent, getQuestTemplate } from '../data/dailyQuests';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
@@ -1182,6 +1187,20 @@ export function useRewardWiring({
       for (const activeEvent of eventManager.getActiveEvents()) {
         void firestoreService.submitEventScore(
           activeEvent.id,
+          userId,
+          score,
+          displayName,
+          level,
+          mode,
+        );
+      }
+      // Weekend tournament: every in-window solve also ranks the player in
+      // their ~100-player bracket (deterministic per uid+weekend), riding
+      // the same per-event leaderboard rails.
+      const weekend = getWeekendWindow();
+      if (weekend.active && weekendTournamentEnabled()) {
+        void firestoreService.submitEventScore(
+          tournamentEventId(userId, weekend.weekendId),
           userId,
           score,
           displayName,

@@ -88,6 +88,16 @@ export interface RemoteConfigValues {
   preLevelBoosterSheetEnabled: boolean;
   /** Authored low-forgiveness pinch slots past L150 (see isPinchLevel). */
   pinchLevelsEnabled: boolean;
+  /** Gem buyout of an event ladder's last stretch (EventScreen "FINISH IT"). */
+  eventBuyoutEnabled: boolean;
+  /** Fri-Sun weekend tournament in hashed brackets (data/weekendTournament). */
+  weekendTournamentEnabled: boolean;
+  /**
+   * Bracket BUCKET count for the weekend tournament — expected bracket size
+   * ≈ weekend actives / count; tune to hold ~100/bracket as DAU moves.
+   * Clamped [1, 4096] at the read.
+   */
+  tournamentBracketCount: number;
   /** Tier 6 B6 — render the dynamic "For You" offers row on Shop / Home. */
   dynamicOffersEnabled: boolean;
   /** Tier 6 B2 — queue the first-purchase-offer modal post-onboarding. */
@@ -366,6 +376,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Authored pinch slots; kill-switch if churn data shows the window is
   // tuned too tight.
   pinchLevelsEnabled: true,
+  // Event-ladder gem buyout; the recurring gem sink the tightened faucets
+  // route demand toward.
+  eventBuyoutEnabled: true,
+  // Weekend tournament (Fri 17:00 → Sun 22:00 UTC), hashed brackets.
+  weekendTournamentEnabled: true,
+  tournamentBracketCount: 32,
   // Tier 6 B6 — dynamic "For You" comeback-ladder row; kill-switch if the
   // segmentation logic misfires on any tier post-launch.
   dynamicOffersEnabled: true,
