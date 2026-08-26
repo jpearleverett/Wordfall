@@ -40,6 +40,17 @@ const SeasonPassHomeCard: React.FC<SeasonPassHomeCardProps> = ({ onPress }) => {
   if (!getRemoteBoolean('seasonPassEnabled')) return null;
 
   const atMax = tier >= MAX_SEASON_TIER;
+  // Season-end finish-your-track nudge: the gem tier skip was shipped and
+  // buried at the bottom of SeasonPassScreen — the one moment it converts
+  // (close to the end, close to the top of the ladder) had no surface. This
+  // is also the only scalable recurring gem sink, the intended consumer of
+  // the tightened gem economy.
+  const tiersRemaining = MAX_SEASON_TIER - tier;
+  const daysLeft = Math.max(
+    0,
+    Math.ceil((new Date(season.endDate + 'T23:59:59Z').getTime() - Date.now()) / 86_400_000),
+  );
+  const finishTrackNudge = !atMax && tiersRemaining <= 10 && daysLeft <= 7;
 
   return (
     <Pressable
@@ -84,8 +95,19 @@ const SeasonPassHomeCard: React.FC<SeasonPassHomeCardProps> = ({ onPress }) => {
         </Text>
       </View>
 
+      {finishTrackNudge && (
+        <Text style={styles.finishNudge}>
+          {'\u23F3'} {daysLeft === 0 ? 'Last day' : `${daysLeft}d left`} \u2014 only{' '}
+          {tiersRemaining} {tiersRemaining === 1 ? 'tier' : 'tiers'} to finish the track
+        </Text>
+      )}
+
       <Text style={styles.cta}>
-        {unclaimed > 0 ? 'Claim rewards \u203A' : 'View Pass \u203A'}
+        {finishTrackNudge
+          ? 'Finish your track \u203A'
+          : unclaimed > 0
+            ? 'Claim rewards \u203A'
+            : 'View Pass \u203A'}
       </Text>
     </Pressable>
   );
@@ -161,6 +183,12 @@ const styles = StyleSheet.create({
     color: COLORS.purple,
     fontSize: 13,
     fontWeight: '700',
+  },
+  finishNudge: {
+    color: COLORS.gold,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
   },
 });
 

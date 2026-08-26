@@ -82,6 +82,7 @@ import { useSettings } from './src/contexts/SettingsContext';
 import { usePlayer } from './src/contexts/PlayerContext';
 import { useHardEnergy } from './src/hooks/useHardEnergy';
 import { NoLivesModal } from './src/components/NoLivesModal';
+import { OutOfEnergyModal } from './src/components/OutOfEnergyModal';
 import { MiniPackSheet } from './src/components/MiniPackSheet';
 import PostStreakBreakOffer, {
   RESTORE_GEM_COST,
@@ -244,6 +245,7 @@ function useStableContextFacades() {
 // Event screen wrapper — wires navigation callbacks for Play and Shop buttons
 function EventScreenWrapperNav({ navigation }: any) {
   const { player, economy } = useStableContextFacades();
+  const [energyWallMinutes, setEnergyWallMinutes] = useState<number | null>(null);
 
   const handlePlayEventPuzzle = useCallback(() => {
     // Events run in the mode their rules describe (speedSolve → timer,
@@ -253,38 +255,14 @@ function EventScreenWrapperNav({ navigation }: any) {
     const eventPlay = getEventPlayConfig(getCurrentEvent());
     const mode: GameMode = eventPlay.mode;
 
-    // Energy check (same pattern as ModesScreenWrapper)
+    // Energy check (same pattern as ModesScreenWrapper) — designed modal,
+    // not a bare OS Alert: this is the game's only true hard block and it
+    // needed branding, analytics, and A/B-ability.
     const isFreeMode = ENERGY.FREE_MODES.includes(mode);
     if (!isFreeMode) {
       const energyInfo = player.getEnergyDisplay();
       if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
-        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
-        Alert.alert(
-          'Take a Break!',
-          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
-          [
-            { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
-            {
-              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
-              onPress: () => {
-                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
-                  player.refillEnergy('gems');
-                } else {
-                  // Dead-end fix: "visit the shop" now comes with the door.
-                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
-                    { text: 'Not Now', style: 'cancel' },
-                    {
-                      text: 'Go to Shop',
-                      onPress: () =>
-                        navigation.navigate('Home' as never, { screen: 'Shop' } as never),
-                    },
-                  ]);
-                }
-              },
-            },
-          ]
-        );
+        setEnergyWallMinutes(Math.ceil(player.getTimeUntilNextEnergy() / 60000));
         return;
       }
     }
@@ -354,10 +332,32 @@ function EventScreenWrapperNav({ navigation }: any) {
   }, [navigation]);
 
   return (
-    <EventScreen
-      onPlayEventPuzzle={handlePlayEventPuzzle}
-      onOpenEventShop={() => navigation.navigate('Home', { screen: 'Shop' })}
-    />
+    <>
+      <EventScreen
+        onPlayEventPuzzle={handlePlayEventPuzzle}
+        onOpenEventShop={() => navigation.navigate('Home', { screen: 'Shop' })}
+      />
+      <OutOfEnergyModal
+        visible={energyWallMinutes !== null}
+        minutesUntilNext={energyWallMinutes ?? 0}
+        gemCost={ENERGY.GEM_REFILL_COST}
+        playerGems={economy.gems}
+        source="event"
+        onWatchAd={() => {
+          setEnergyWallMinutes(null);
+          void watchAdForEnergyRefill(player);
+        }}
+        onGemRefill={() => {
+          setEnergyWallMinutes(null);
+          if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+            player.refillEnergy('gems');
+          } else {
+            navigation.navigate('Home', { screen: 'Shop' });
+          }
+        }}
+        onClose={() => setEnergyWallMinutes(null)}
+      />
+    </>
   );
 }
 
@@ -615,6 +615,7 @@ function MainTabs() {
 // Modes screen wrapper - wires navigation to start game in selected mode
 function ModesScreenWrapper({ navigation, route }: any) {
   const { player, economy } = useStableContextFacades();
+  const [energyWallMinutes, setEnergyWallMinutes] = useState<number | null>(null);
 
   // Warm the shared-board caches while the player is reading the mode list.
   //
@@ -638,38 +639,13 @@ function ModesScreenWrapper({ navigation, route }: any) {
   const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
 
-    // Energy check — free modes (daily, endless, relax) cost 0 energy
+    // Energy check — free modes (daily, endless, relax) cost 0 energy.
+    // Designed modal, not a bare OS Alert (see OutOfEnergyModal).
     const isFreeMode = ENERGY.FREE_MODES.includes(mode);
     if (!isFreeMode) {
       const energyInfo = player.getEnergyDisplay();
       if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
-        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
-        Alert.alert(
-          'Take a Break!',
-          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
-          [
-            { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
-            {
-              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
-              onPress: () => {
-                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
-                  player.refillEnergy('gems');
-                } else {
-                  // Dead-end fix: "visit the shop" now comes with the door.
-                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
-                    { text: 'Not Now', style: 'cancel' },
-                    {
-                      text: 'Go to Shop',
-                      onPress: () =>
-                        navigation.navigate('Home' as never, { screen: 'Shop' } as never),
-                    },
-                  ]);
-                }
-              },
-            },
-          ]
-        );
+        setEnergyWallMinutes(Math.ceil(player.getTimeUntilNextEnergy() / 60000));
         return;
       }
     }
@@ -775,7 +751,31 @@ function ModesScreenWrapper({ navigation, route }: any) {
     handleSelectMode(autoStartMode);
   }, [route?.params?.autoStartMode, handleSelectMode, navigation]);
 
-  return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />;
+  return (
+    <>
+      <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />
+      <OutOfEnergyModal
+        visible={energyWallMinutes !== null}
+        minutesUntilNext={energyWallMinutes ?? 0}
+        gemCost={ENERGY.GEM_REFILL_COST}
+        playerGems={economy.gems}
+        source="modes"
+        onWatchAd={() => {
+          setEnergyWallMinutes(null);
+          void watchAdForEnergyRefill(player);
+        }}
+        onGemRefill={() => {
+          setEnergyWallMinutes(null);
+          if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+            player.refillEnergy('gems');
+          } else {
+            navigation.navigate('Home' as never, { screen: 'Shop' } as never);
+          }
+        }}
+        onClose={() => setEnergyWallMinutes(null)}
+      />
+    </>
+  );
 }
 
 // Wrapper to pass navigation params to GameScreen with full context wiring
@@ -1264,6 +1264,7 @@ function HomeMainScreen({ route, navigation }: any) {
   const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
+  const [energyWallMinutes, setEnergyWallMinutes] = useState<number | null>(null);
   // Sweep the server-side reward inbox (weekly-leaderboard payouts,
   // personal club-goal completions) once per app run — these types had no
   // client reader, so the grants were invisible and unclaimable.
@@ -1717,35 +1718,11 @@ function HomeMainScreen({ route, navigation }: any) {
 
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
-      // Energy check — classic mode costs 1 energy
+      // Energy check — classic mode costs 1 energy. Designed modal, not a
+      // bare OS Alert (see OutOfEnergyModal).
       const energyInfo = player.getEnergyDisplay();
       if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
-        // Truly out of energy + bonus plays — show friendly "take a break" prompt
-        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
-        Alert.alert(
-          'Take a Break!',
-          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
-          [
-            { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
-            {
-              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
-              onPress: () => {
-                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
-                  player.refillEnergy('gems');
-                } else {
-                  // Dead-end fix: "visit the shop" now comes with the door.
-                  // HomeMainScreen lives in the Home stack, so Shop is a
-                  // sibling screen — no cross-tab hop needed.
-                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
-                    { text: 'Not Now', style: 'cancel' },
-                    { text: 'Go to Shop', onPress: () => navigation.navigate('Shop' as never) },
-                  ]);
-                }
-              },
-            },
-          ]
-        );
+        setEnergyWallMinutes(Math.ceil(player.getTimeUntilNextEnergy() / 60000));
         return;
       }
 
@@ -2145,6 +2122,27 @@ function HomeMainScreen({ route, navigation }: any) {
           />
         );
       })()}
+      <OutOfEnergyModal
+        visible={energyWallMinutes !== null}
+        minutesUntilNext={energyWallMinutes ?? 0}
+        gemCost={ENERGY.GEM_REFILL_COST}
+        playerGems={economy.gems}
+        source="home"
+        onWatchAd={() => {
+          setEnergyWallMinutes(null);
+          void watchAdForEnergyRefill(player);
+        }}
+        onGemRefill={() => {
+          setEnergyWallMinutes(null);
+          if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+            player.refillEnergy('gems');
+          } else {
+            // HomeMainScreen lives in the Home stack, so Shop is a sibling.
+            navigation.navigate('Shop' as never);
+          }
+        }}
+        onClose={() => setEnergyWallMinutes(null)}
+      />
     </View>
   );
 }
