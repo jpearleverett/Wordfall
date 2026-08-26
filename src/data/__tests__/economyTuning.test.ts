@@ -21,6 +21,8 @@
 import {
   __resetFaucetLedgerForTests,
   claimFlawlessGems,
+  claimMeteredGems,
+  meteredGemsRemainingToday,
   claimWeeklyBoardPayout,
   economyDifficultyForLevel,
   flawlessGemDailyCap,
@@ -179,5 +181,37 @@ describe('claimWeeklyBoardPayout — one payout per week id', () => {
   it('defaults to the current week id', () => {
     expect(claimWeeklyBoardPayout()).toBe(true);
     expect(claimWeeklyBoardPayout()).toBe(false);
+  });
+});
+
+describe('claimMeteredGems — aggregate daily cap across recurring meta faucets', () => {
+  beforeEach(() => __resetFaucetLedgerForTests());
+
+  it('grants up to the 10-gem default aggregate cap, then clamps to 0', () => {
+    expect(claimMeteredGems(4, 'daily_quest')).toBe(4);
+    expect(claimMeteredGems(4, 'mystery_wheel')).toBe(4);
+    // 8 spent — only 2 left in today's shared budget.
+    expect(claimMeteredGems(5, 'bonus_chest')).toBe(2);
+    expect(claimMeteredGems(1, 'weekly_goal')).toBe(0);
+    expect(meteredGemsRemainingToday()).toBe(0);
+  });
+
+  it('the cap is shared ACROSS sources, not per source', () => {
+    expect(claimMeteredGems(10, 'daily_quest')).toBe(10);
+    expect(claimMeteredGems(1, 'mystery_wheel')).toBe(0);
+  });
+
+  it('is independent of the flawless-gem cap (double-capping never widens either)', () => {
+    for (let i = 0; i < 5; i++) expect(claimFlawlessGems(1)).toBe(1);
+    expect(claimFlawlessGems(1)).toBe(0);
+    // Flawless spend does not consume the metered budget.
+    expect(claimMeteredGems(10, 'daily_quest')).toBe(10);
+  });
+
+  it('rejects non-finite and non-positive requests', () => {
+    expect(claimMeteredGems(0, 'daily_quest')).toBe(0);
+    expect(claimMeteredGems(-3, 'daily_quest')).toBe(0);
+    expect(claimMeteredGems(Number.NaN, 'daily_quest')).toBe(0);
+    expect(meteredGemsRemainingToday()).toBe(10);
   });
 });

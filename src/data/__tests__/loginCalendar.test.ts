@@ -9,6 +9,7 @@ import {
   getNextLoginRewardPreview,
 } from '../loginCalendar';
 import * as remoteConfig from '../../services/remoteConfig';
+import { ECONOMY } from '../../constants';
 
 describe('LOGIN_CALENDAR_REWARDS_30 data', () => {
   it('contains exactly 30 rewards', () => {
@@ -41,8 +42,8 @@ describe('LOGIN_CALENDAR_REWARDS_30 data', () => {
   it('day 14 is a mid-cycle milestone', () => {
     const day14 = LOGIN_CALENDAR_REWARDS_30.find((r) => r.day === 14);
     expect(day14).toBeDefined();
-    expect(day14!.rewards.coins).toBe(400);
-    expect(day14!.rewards.gems).toBe(25);
+    expect(day14!.rewards.coins).toBe(250);
+    expect(day14!.rewards.gems).toBe(10);
   });
 
   it('day 21 unlocks a cosmetic frame', () => {
@@ -54,8 +55,8 @@ describe('LOGIN_CALENDAR_REWARDS_30 data', () => {
   it('day 30 is the grand prize with exclusive cosmetic + rare tile', () => {
     const day30 = LOGIN_CALENDAR_REWARDS_30.find((r) => r.day === 30);
     expect(day30).toBeDefined();
-    expect(day30!.rewards.coins).toBe(1000);
-    expect(day30!.rewards.gems).toBe(100);
+    expect(day30!.rewards.coins).toBe(700);
+    expect(day30!.rewards.gems).toBe(25);
     expect(day30!.rewards.rareTile).toBe(true);
     expect(day30!.rewards.cosmetic).toBeTruthy();
     expect(day30!.label).toMatch(/GRAND PRIZE/i);
@@ -65,6 +66,33 @@ describe('LOGIN_CALENDAR_REWARDS_30 data', () => {
     const day1 = LOGIN_CALENDAR_REWARDS_30[0];
     const day30 = LOGIN_CALENDAR_REWARDS_30[29];
     expect(day30.rewards.coins!).toBeGreaterThan(day1.rewards.coins!);
+  });
+
+  it('caps cycle totals so the calendar cannot re-flood the gem economy', () => {
+    // The pre-cut table paid 299 gems + 8,475 coins per cycle — the calendar
+    // alone tripled the 3 gems/day design target and erased the hint pinch
+    // for every engaged player. Week 1 keeps its honeymoon weight; the cap
+    // holds the cuts in weeks 2-4.
+    const gems = LOGIN_CALENDAR_REWARDS_30.reduce((sum, r) => sum + (r.rewards.gems ?? 0), 0);
+    const coins = LOGIN_CALENDAR_REWARDS_30.reduce((sum, r) => sum + (r.rewards.coins ?? 0), 0);
+    expect(gems).toBeLessThanOrEqual(105);
+    expect(coins).toBeLessThanOrEqual(6000);
+    // Week 1 (honeymoon) is untouched by the cuts.
+    const week1Coins = LOGIN_CALENDAR_REWARDS_30.slice(0, 7).reduce((s, r) => s + (r.rewards.coins ?? 0), 0);
+    const week1Gems = LOGIN_CALENDAR_REWARDS_30.slice(0, 7).reduce((s, r) => s + (r.rewards.gems ?? 0), 0);
+    expect(week1Coins).toBe(875);
+    expect(week1Gems).toBe(15);
+  });
+
+  it('stays in lockstep with the ECONOMY.loginRewards mirror in constants.ts', () => {
+    for (const row of LOGIN_CALENDAR_REWARDS_30) {
+      const mirror = ECONOMY.loginRewards.find((r) => r.day === row.day)!;
+      expect(mirror).toBeDefined();
+      expect(mirror.coins).toBe(row.rewards.coins ?? 0);
+      expect(mirror.gems ?? undefined).toBe(row.rewards.gems);
+      expect(mirror.hints ?? undefined).toBe(row.rewards.hints);
+      expect(mirror.cosmetic ?? undefined).toBe(row.rewards.cosmetic);
+    }
   });
 });
 

@@ -39,6 +39,12 @@ export interface RemoteConfigValues {
    * unaffected.
    */
   dailyFlawlessGemCap: number;
+  /**
+   * Aggregate per-UTC-day gem ceiling shared by the recurring meta faucets
+   * (daily quests, mystery wheel, bonus chest, weekly goals). Clamped
+   * [0,200] at the read in data/economyTuning.ts.
+   */
+  dailyTotalGemCap: number;
   // Energy
   maxEnergy: number;
   energyRegenMinutes: number;
@@ -295,6 +301,8 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Per-UTC-day gem ceiling for flawless clears (clamped [0,100] at the
   // read in data/economyTuning.ts).
   dailyFlawlessGemCap: 5,
+  // Aggregate per-UTC-day cap across the recurring meta gem faucets.
+  dailyTotalGemCap: 10,
   // Energy
   maxEnergy: 30,
   energyRegenMinutes: 15,
