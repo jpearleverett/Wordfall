@@ -253,17 +253,31 @@ const WordChip = React.memo(function WordChip({
         {wordPlacement.word}
       </Text>
 
-      {wordPlacement.found && (
-        <Animated.View style={[styles.checkContainer, { opacity: foundAnim }]}>
-          <LinearGradient
-            colors={[palette.green, COLORS.teal] as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}
-          />
-          <Text style={styles.checkMark}>✓</Text>
-        </Animated.View>
-      )}
+      {/* The found badge is ALWAYS mounted and only fades in. Mounting it on
+          the found transition grew the chip by 16px + the 4px row gap, which
+          re-wrapped the flex-wrap panel, changed the word band's height, and
+          shrank the grid area — and a grid-area height change recomputes
+          cellSize, which Grid.tsx treats as a 'reset' and uses to SNAP every
+          in-flight gravity tile to its slot. Keeping the chip's measured box
+          constant for the whole puzzle is what lets the fall actually play. */}
+      <Animated.View
+        style={[styles.checkContainer, { opacity: foundAnim }]}
+        pointerEvents="none"
+        importantForAccessibility="no-hide-descendants"
+        accessibilityElementsHidden
+      >
+        {wordPlacement.found && (
+          <>
+            <LinearGradient
+              colors={[palette.green, COLORS.teal] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}
+            />
+            <Text style={styles.checkMark}>✓</Text>
+          </>
+        )}
+      </Animated.View>
 
     </Animated.View>
   );
@@ -661,7 +675,12 @@ const styles = StyleSheet.create({
   },
   wordChipValid: {
     borderColor: COLORS.green,
+    // borderWidth 1 -> 2 grows the chip by 2px on each axis, which can
+    // re-wrap the panel mid-trace. The padding is trimmed by the same 1px
+    // so the measured box is byte-identical to the resting chip.
     borderWidth: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
@@ -670,7 +689,10 @@ const styles = StyleSheet.create({
   },
   wordChipLastRemaining: {
     borderColor: COLORS.gold,
+    // Same size-neutral border bump as wordChipValid.
     borderWidth: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.6,
@@ -697,7 +719,10 @@ const styles = StyleSheet.create({
   },
   wordTextValid: {
     color: COLORS.green,
-    fontFamily: 'SpaceGrotesk_700Bold',
+    // Deliberately NOT swapping fontFamily here. Inter -> SpaceGrotesk has
+    // different glyph advances, so the chip re-measured on the valid flash
+    // 50ms before submit — right into the gravity fall's setup frame. Color
+    // plus the stronger glow carries the state on their own.
     textShadowColor: COLORS.greenGlow,
     textShadowRadius: 16,
   },

@@ -9,6 +9,7 @@ import {
   computeGridMetrics,
   decideGridTransitionUpdate,
   hitTestGridGeometry,
+  rescaleBounds,
 } from '../gridGeometry';
 
 const cell = (id: string) => ({ id, letter: id });
@@ -73,17 +74,34 @@ test('canonical centers exactly match the rendered Grid coordinate space', () =>
   const frameInset = /width:\s*gridWidth \+ 2,\s*height:\s*gridHeight \+ 2/.test(GRID_SOURCE)
     ? 1
     : 0;
-  const padsBothAxes = /padding:\s*CELL_GAP \/ 2/.test(GRID_SOURCE);
-  const hasHorizontalPadding = /paddingHorizontal:\s*CELL_GAP \/ 2/.test(GRID_SOURCE);
-  const renderedPaddingX = padsBothAxes || hasHorizontalPadding ? 2 : 0;
-  const renderedPaddingY = padsBothAxes ? 2 : 0;
+  // Tiles are absolutely positioned at bound.x / bound.y, and bound.x already
+  // carries the half-gap inset (geometry.padding). Re-introducing container
+  // padding would double-count it, silently shifting every tile off the
+  // coordinate space that hit-testing, ghosts, trails, glints and the fall
+  // diff all share.
+  expect(/padding:\s*CELL_GAP \/ 2/.test(GRID_SOURCE)).toBe(false);
+  expect(/paddingHorizontal:\s*CELL_GAP \/ 2/.test(GRID_SOURCE)).toBe(false);
+  // The half-gap inset on x is supplied ONCE, by geometry.padding, and the
+  // tile is then placed at exactly that x. There is deliberately no vertical
+  // counterpart: canonical row zero begins at y = 0.
+  const canonicalPaddingX = 4 / 2;
   const renderedCenter = {
-    x: frameInset + renderedPaddingX + 22,
-    y: frameInset + renderedPaddingY + 22,
+    x: frameInset + canonicalPaddingX + 22,
+    y: frameInset + 22,
   };
 
   expect({ x: bound.x + bound.w / 2, y: bound.y + bound.h / 2 })
     .toEqual(renderedCenter);
+});
+
+test('tiles render from the canonical bounds rather than flowing in columns', () => {
+  // A flex column layout makes a tile that changes COLUMN a different
+  // parent's child, so React unmounts and remounts its whole subtree — which
+  // is precisely the teleport gravityFlip's horizontal gravity used to show.
+  expect(GRID_SOURCE).toContain('tiles.map');
+  expect(GRID_SOURCE).not.toContain('columns.map');
+  expect(GRID_SOURCE).toContain('slotX={bound.x}');
+  expect(GRID_SOURCE).toContain('slotY={bound.y}');
 });
 
 test('hit boundaries split rendered row and column gaps at slot midlines', () => {
@@ -231,11 +249,21 @@ describe('grid transition update decision', () => {
     cols: 1,
   };
 
-  test('resets when geometry changes without a new grid object', () => {
+  test('a pure pitch change re-targets instead of resetting', () => {
+    // The word band re-measures whenever a chip changes state, and the
+    // resulting grid-area height change lands one to three frames after the
+    // word-clear commit — i.e. while the fall is still in its hold. Treating
+    // that as a 'reset' snapped every in-flight tile to its slot, so the
+    // gravity the player was waiting for simply never played.
     expect(decideGridTransitionUpdate(state, {
       ...state,
       cellSize: 41,
-    })).toBe('reset');
+    })).toBe('resize');
+  });
+
+  test('a shape change still resets', () => {
+    expect(decideGridTransitionUpdate(state, { ...state, rows: 2 })).toBe('reset');
+    expect(decideGridTransitionUpdate(state, { ...state, cols: 2 })).toBe('reset');
   });
 
   test('transitions a new grid object in unchanged geometry', () => {
@@ -276,5 +304,55 @@ describe('grid transition update decision', () => {
       ...state,
       grid: [[null]],
     })).toBe('transition');
+  });
+});
+
+describe('rescaleBounds', () => {
+  test('rebuilds the previous frame exactly at a new pitch', () => {
+    const previous = computeGridGeometry(
+      [
+        [cell('A'), cell('B')],
+        [cell('C'), cell('D')],
+      ],
+      40,
+      4,
+    );
+    const next = computeGridGeometry(
+      [
+        [cell('A'), cell('B')],
+        [cell('C'), cell('D')],
+      ],
+      36,
+      4,
+    );
+
+    const rebuilt = rescaleBounds(previous.byCellId, next.stride, next.padding);
+
+    // Nothing moved between slots, so a re-scale must produce zero falls —
+    // a resize on a settled board is instant, not a cascade.
+    expect(computeGridTransition(rebuilt, next.byCellId, new Map()).falls).toEqual([]);
+    for (const [id, bound] of next.byCellId) {
+      expect(rebuilt.get(id)).toEqual(bound);
+    }
+  });
+
+  test('a tile that also moved keeps a fall across the re-scale', () => {
+    const previous = computeGridGeometry(
+      [[cell('A')], [null], [null]] as never,
+      40,
+      4,
+    );
+    const next = computeGridGeometry(
+      [[null], [null], [cell('A')]] as never,
+      36,
+      4,
+    );
+
+    const rebuilt = rescaleBounds(previous.byCellId, next.stride, next.padding);
+    const falls = computeGridTransition(rebuilt, next.byCellId, new Map()).falls;
+
+    expect(falls).toHaveLength(1);
+    // Two slots up at the NEW pitch (2 * 40), not the old one.
+    expect(falls[0]).toEqual({ id: 'A', dx: 0, dy: -80, col: 0 });
   });
 });

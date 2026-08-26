@@ -7,10 +7,6 @@ export interface StoppableAnimation {
   stop(): void;
 }
 
-export interface RemovableResource {
-  remove(): void;
-}
-
 export function startAnimationWithCleanup(
   animation: StartableAnimation,
 ): () => void {
@@ -25,37 +21,47 @@ export function clearTimeoutHandles(
   handles.clear();
 }
 
-export function clearAnimationResources<
+/**
+ * Tear down a whole fall run set: stop every in-flight sequence, forget every
+ * run descriptor, and (optionally) snap the animated values back to rest
+ * before dropping them.
+ *
+ * `runs` replaces what used to be a pair of maps holding native-value
+ * listeners and the offsets they streamed back. The fall is now sampled
+ * analytically from its run descriptor, so there is nothing to unsubscribe.
+ */
+export function clearFallResources<
   TAnimation extends StoppableAnimation,
-  TListener extends RemovableResource,
-  TOffset,
+  TRun,
   TValue,
 >(
   activeAnimations: Map<string, TAnimation>,
-  listeners: Map<string, TListener>,
-  liveOffsets: Map<string, TOffset>,
+  runs: Map<string, TRun>,
   animatedValues: Map<string, TValue>,
   resetValue?: (value: TValue) => void,
 ): void {
   activeAnimations.forEach(animation => animation.stop());
   activeAnimations.clear();
-  listeners.forEach(listener => listener.remove());
-  listeners.clear();
-  liveOffsets.clear();
+  runs.clear();
   if (resetValue) {
     animatedValues.forEach(resetValue);
   }
   animatedValues.clear();
 }
 
-export function releaseOwnedAnimation<
-  TSequence,
-  TListener extends RemovableResource,
-  TOffset,
->(
+/**
+ * Decide whether a finished sequence still owns its cell's shared resources.
+ *
+ * Returns false when the sequence has been superseded (an interrupting clear
+ * re-seeded the value and registered a new sequence) — the successor owns
+ * every cleanup decision from then on, including a late `finished: true`
+ * callback from the predecessor. Returns false for an interrupted run too, so
+ * only a run that both owns the cell AND completed counts toward the settle
+ * accounting.
+ */
+export function releaseOwnedFall<TSequence, TRun>(
   activeAnimations: Map<string, TSequence>,
-  listeners: Map<string, TListener>,
-  liveOffsets: Map<string, TOffset>,
+  runs: Map<string, TRun>,
   id: string,
   sequence: TSequence,
   finished: boolean,
@@ -65,8 +71,6 @@ export function releaseOwnedAnimation<
   activeAnimations.delete(id);
   if (!finished) return false;
 
-  listeners.get(id)?.remove();
-  listeners.delete(id);
-  liveOffsets.delete(id);
+  runs.delete(id);
   return true;
 }

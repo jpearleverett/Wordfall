@@ -25,6 +25,8 @@ import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import { crashReporter } from '../services/crashReporting';
 import { findWordInGrid, choiceAvoidedDeadEnd, isProvablyCompletable } from '../engine/solver';
 import { resolveUndoSource } from '../utils/undoGate';
+import { startAnimationWithCleanup } from '../utils/animationLifecycle';
+import { delayedTiming } from '../utils/motionTiming';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
@@ -345,10 +347,16 @@ function WordClearParticle({ delay, startX, startY }: { delay: number; startX: n
   const color = useRef(PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.delay(delay),
-      Animated.timing(anim, { toValue: 1, duration: CLEAR_PARTICLE_FLIGHT_MS, useNativeDriver: true }),
-    ]).start();
+    // Queue stagger baked into the easing instead of Animated.delay, which is
+    // a JS-thread setTimeout: a full burst is up to MAX_BLOOM_PARTICLES of
+    // them, all scheduled on the word-clear frame and all firing while the
+    // gravity cascade is in the air.
+    const animation = delayedTiming(anim, {
+      toValue: 1,
+      delay,
+      duration: CLEAR_PARTICLE_FLIGHT_MS,
+    });
+    return startAnimationWithCleanup(animation);
   }, []);
 
   return (
@@ -1980,11 +1988,17 @@ function GameScreenImpl({
           duration: 40,
           useNativeDriver: true,
         }).start();
-        // Grid scale pop runs in parallel with the flash so submit can fire faster
+        // Grid scale pop runs in parallel with the flash so submit can fire
+        // faster. Kept SHORTER than the 50ms auto-submit window plus the
+        // cascade's hold: this scales the tiles' shared parent, so any part of
+        // it still running once the fall has been seeded is a moving frame of
+        // reference under the falling tiles — the board breathing and the
+        // tiles dropping at the same time is exactly the kind of compounded
+        // motion that reads as jank.
         gridScaleAnim.setValue(1);
         Animated.sequence([
-          Animated.timing(gridScaleAnim, { toValue: 0.97, duration: 60, useNativeDriver: true }),
-          Animated.timing(gridScaleAnim, { toValue: 1.0, duration: 100, useNativeDriver: true }),
+          Animated.timing(gridScaleAnim, { toValue: 0.975, duration: 45, useNativeDriver: true }),
+          Animated.timing(gridScaleAnim, { toValue: 1.0, duration: 70, useNativeDriver: true }),
         ]).start();
       }
 
@@ -2055,12 +2069,18 @@ function GameScreenImpl({
     }
   }, [status, stars, score, perfectRun]);
 
-  // Reset grid height when board changes (new puzzle/level) — prompts a
-  // fresh onLayout measurement for the new grid's dimensions.
+  // Per-puzzle resets on board change.
+  //
+  // This used to blank gridAreaSize as well, "to prompt a fresh onLayout".
+  // It does not need prompting: the grid area is flex:1, so its box is decided
+  // by its siblings, and onLayout fires by itself whenever that box actually
+  // changes. Blanking it guaranteed one painted frame at the width-derived
+  // cell size followed by a jump to the height-constrained one on every single
+  // level load — and, now that a pitch change re-targets in-flight falls
+  // instead of snapping them, an avoidable re-target on top.
   useEffect(() => {
-    setGridAreaSize({ width: 0, height: 0 });
-    // Also reset the adjuster's per-puzzle stuck-fail guard so the
-    // next puzzle can record its own struggle signal independently.
+    // Reset the adjuster's per-puzzle stuck-fail guard so the next puzzle can
+    // record its own struggle signal independently.
     stuckFailRecordedRef.current = false;
     // New board = new completion: re-arm the doubler and timeout-continue.
     doubleGrantedRef.current = false;

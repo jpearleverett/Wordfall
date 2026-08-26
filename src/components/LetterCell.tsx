@@ -137,6 +137,18 @@ interface LetterCellProps {
    * exactly like vertical falls.
    */
   fallAnim?: Animated.ValueXY;
+  /**
+   * Absolute slot origin inside the grid container, straight from the
+   * canonical geometry (already carries the half-gap inset on x; y starts at
+   * row 0 = 0). Tiles are positioned rather than flowed so that a tile which
+   * changes COLUMN — every clear under horizontal gravity in gravityFlip —
+   * keeps its identity and its running fall animation instead of being
+   * unmounted from one column's children and remounted in another's.
+   */
+  slotX?: number;
+  slotY?: number;
+  /** Slot pitch (cellSize + gap). The inner tile insets itself by the gap. */
+  slotSize?: number;
   /** Grid row index (0-based). Used to build screen-reader position hints. */
   row?: number;
   /** Grid column index (0-based). Used to build screen-reader position hints. */
@@ -158,6 +170,9 @@ export const LetterCell = React.memo(function LetterCell({
   isSpotlightDimmed = false,
   isBonusTile = false,
   fallAnim,
+  slotX,
+  slotY,
+  slotSize,
   row,
   col,
   currentWord,
@@ -290,10 +305,19 @@ export const LetterCell = React.memo(function LetterCell({
   // Animated.View is trivial compared to the remount storm.
   const outerStyle = useMemo(() => {
     const s: any = {};
+    if (slotX !== undefined && slotY !== undefined) {
+      s.position = 'absolute';
+      s.left = slotX;
+      s.top = slotY;
+      if (slotSize !== undefined) {
+        s.width = slotSize;
+        s.height = slotSize;
+      }
+    }
     if (isSpotlightDimmed) s.opacity = 0.3;
     if (fallAnim) s.transform = fallAnim.getTranslateTransform();
     return s;
-  }, [isSpotlightDimmed, fallAnim]);
+  }, [isSpotlightDimmed, fallAnim, slotX, slotY, slotSize]);
 
   return (
     <Animated.View

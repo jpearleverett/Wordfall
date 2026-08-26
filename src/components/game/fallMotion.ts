@@ -1,0 +1,210 @@
+/**
+ * Gravity-fall motion model.
+ *
+ * Grid.tsx animates a word-clear FLIP-style: the reducer hands it the
+ * post-gravity board in one commit, and the grid reconstructs the motion by
+ * seeding every moved tile with its OLD-position offset and animating that
+ * offset back to zero on the native driver.
+ *
+ * Everything about a single tile's fall is captured by `FallRun`, and
+ * `sampleFallOffset` evaluates it at an arbitrary instant. That matters for
+ * two reasons:
+ *
+ *  1. **Interruption.** Clearing a second word while the first cascade is
+ *     still in the air has to pick each tile up from where it VISUALLY is.
+ *     The previous implementation read that position back from the UI thread
+ *     with `Animated.Value.addListener`, which (a) forces a per-frame
+ *     UI -> JS event for every listening node, dispatched to every other
+ *     listening node's subscriber — O(N^2) callbacks per frame — and (b)
+ *     lags the true position by several frames, which is itself visible as a
+ *     jump. Sampling the same curve the native driver is running is free and
+ *     frame-accurate.
+ *
+ *  2. **Testability.** The timeline is a pure function, so the choreography
+ *     can be pinned by unit tests instead of by eye.
+ *
+ * The curve is deliberately the same one the Animated.sequence below runs:
+ *   delay -> `Easing.in(Easing.quad)` fall to rest -> a short rebound BACK
+ *   along the travel direction -> settle. Rebounding backwards (rather than
+ *   overshooting past the slot) is not cosmetic: the grid container clips its
+ *   children, so a bottom-row tile overshooting downward would visibly shear.
+ */
+
+export interface FallRun {
+  /** Offset in px at t = 0, i.e. (old slot - new slot). Animates to 0. */
+  from: { x: number; y: number };
+  /** Wall clock (ms) when the sequence was started. */
+  startedAt: number;
+  /** Hold + per-column stagger before the tile starts moving. */
+  delayMs: number;
+  /** Free-fall duration. */
+  fallMs: number;
+  /** Rebound offset at the top of the bounce (points back up-travel). */
+  rebound: { x: number; y: number };
+  /** Time spent travelling out to `rebound`. */
+  reboundOutMs: number;
+  /** Time spent settling from `rebound` back to rest. */
+  reboundInMs: number;
+}
+
+/** Wall clock in ms, monotonic where available. */
+export function nowMs(): number {
+  const perf = (globalThis as { performance?: { now?: () => number } }).performance;
+  return typeof perf?.now === 'function' ? perf.now() : Date.now();
+}
+
+/** Easing.in(Easing.quad) — matches the fall phase. */
+function easeInQuad(t: number): number {
+  return t * t;
+}
+
+/** Easing.out(Easing.quad) — matches the rebound-out phase. */
+function easeOutQuad(t: number): number {
+  return 1 - (1 - t) * (1 - t);
+}
+
+/** Easing.inOut(Easing.quad) — matches the settle phase. */
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+/**
+ * The tile's translate offset at `now`, in the same pixel space as
+ * `FallRun.from`. Returns {0,0} once the run has finished (or for a run
+ * whose phases are all zero-length).
+ */
+export function sampleFallOffset(
+  run: FallRun,
+  now: number,
+): { x: number; y: number } {
+  const t = now - run.startedAt;
+  if (t <= run.delayMs) return { x: run.from.x, y: run.from.y };
+
+  const fallT = t - run.delayMs;
+  if (run.fallMs > 0 && fallT < run.fallMs) {
+    const p = easeInQuad(fallT / run.fallMs);
+    return { x: run.from.x * (1 - p), y: run.from.y * (1 - p) };
+  }
+
+  const outT = fallT - run.fallMs;
+  if (run.reboundOutMs > 0 && outT < run.reboundOutMs) {
+    const p = easeOutQuad(outT / run.reboundOutMs);
+    return { x: run.rebound.x * p, y: run.rebound.y * p };
+  }
+
+  const inT = outT - run.reboundOutMs;
+  if (run.reboundInMs > 0 && inT < run.reboundInMs) {
+    const p = easeInOutQuad(inT / run.reboundInMs);
+    return { x: run.rebound.x * (1 - p), y: run.rebound.y * (1 - p) };
+  }
+
+  return { x: 0, y: 0 };
+}
+
+/** Total wall time a run occupies, from start() to rest. */
+export function fallRunDuration(run: FallRun): number {
+  return run.delayMs + run.fallMs + run.reboundOutMs + run.reboundInMs;
+}
+
+/**
+ * The rebound vector for a fall: magnitude `mag`, pointing back along the
+ * direction the tile travelled.
+ *
+ * Built as a scalar multiple of `from` (rather than per-axis `sign * mag`) so
+ * that rebound.x / from.x === rebound.y / from.y. That equality is what lets a
+ * single easing curve describe BOTH axes exactly — see buildFallEasing — even
+ * for the rare diagonal offset a mid-flight re-scale can produce.
+ */
+export function reboundVector(
+  from: { x: number; y: number },
+  mag: number,
+): { x: number; y: number } {
+  const length = Math.hypot(from.x, from.y);
+  if (length === 0) return { x: 0, y: 0 };
+  return { x: (from.x / length) * mag, y: (from.y / length) * mag };
+}
+
+/**
+ * Normalized animation progress at `tMs`, i.e. the p for which
+ * `offset === from * (1 - p)`. Non-monotonic by design: it passes through 1
+ * at touchdown, dips back below 1 for the rebound, and returns to 1 at rest.
+ */
+export function fallProgressAt(run: FallRun, tMs: number): number {
+  const useY = Math.abs(run.from.y) >= Math.abs(run.from.x);
+  const fromMag = useY ? run.from.y : run.from.x;
+  if (fromMag === 0) return 1;
+  const offset = sampleFallOffset(run, run.startedAt + tMs);
+  return 1 - (useY ? offset.y : offset.x) / fromMag;
+}
+
+/**
+ * The easing curve for the ENTIRE run — hold, fall, rebound and settle — as a
+ * single native animation.
+ *
+ * Why this exists: `Animated.delay`, and the `delay` field of a timing config,
+ * are both implemented as a JS-thread `setTimeout`
+ * (TimingAnimation.start: `this._timeout = setTimeout(start, this._delay)`),
+ * and the native config has no delay of its own. So the old four-segment
+ * sequence handed the cascade's lead-in — the hold plus every column's
+ * stagger — to the one thread that is busiest at exactly that moment: the
+ * word-clear frame is also spawning particles, playing sound, logging
+ * analytics and, 350ms later, running the dead-end solver. A stalled timer
+ * there is a stalled fall, which is what the cascade stuttering came from. It
+ * also cost three native -> JS -> native round trips per tile to advance
+ * between segments.
+ *
+ * RN compiles a timing easing into a frames array
+ * (`frames[i] = easing(i / numFrames)`) that the native driver plays back with
+ * no JS involvement, and nothing requires those frames to be monotonic. Baking
+ * the hold in as a flat lead-in and the rebound as a dip past 1 collapses the
+ * whole run into ONE fully native animation with zero JS timers.
+ *
+ * As a bonus the on-screen curve and `sampleFallOffset` (which an interrupting
+ * clear samples to pick a tile up mid-air) are now literally the same
+ * function, so they cannot drift apart.
+ */
+export function buildFallEasing(run: FallRun): (t: number) => number {
+  const total = fallRunDuration(run);
+  if (total <= 0) return () => 1;
+  return (t: number) => fallProgressAt(run, t * total);
+}
+
+// ── Choreography ────────────────────────────────────────────────────────────
+// These numbers replace a set that had drifted upward across several rounds of
+// "blind motion review" — a pipeline that sampled SCREENSHOTS at ~250ms and
+// flagged motion it could not see between frames. Every fix in that loop made
+// the animation longer so it would register in static sampling, and the result
+// (up to ~1.3s from finger-lift to a settled board, with the outermost column
+// sitting still for the first ~370ms) reads as laggy in the hand even though it
+// photographs well. Tuned back toward what tile falls actually do in the genre
+// (~250-450ms end to end): the wave still reads, it just does not dawdle.
+
+/** Beat between the word clearing and the first tile moving. */
+export const FALL_HOLD_MS = 45;
+/** Per-column offset of the cascade, ordered outward from the cleared word. */
+export const FALL_COL_STAGGER_MS = 18;
+/** Columns beyond this share the last slot's delay, capping total lead-in. */
+export const FALL_MAX_STAGGERED_COLS = 5;
+/** Rebound out / settle back. */
+export const FALL_REBOUND_OUT_MS = 60;
+export const FALL_REBOUND_IN_MS = 90;
+
+/**
+ * Free-fall duration for a drop of `rowsFallen` slots. sqrt-scaled so a long
+ * drop takes longer than a short one without the time growing linearly (real
+ * free fall is t ~ sqrt(d)), floored so a one-row hop still reads as motion
+ * and capped so a full-height drop never floats.
+ */
+export function fallDurationMs(rowsFallen: number): number {
+  return Math.min(400, 135 + 95 * Math.sqrt(Math.max(1, rowsFallen)));
+}
+
+/** How far a tile kicks back up-travel on impact, scaled by drop distance. */
+export function reboundMagnitude(distancePx: number): number {
+  return Math.min(7, 2 + distancePx * 0.045);
+}
+
+/** Delay for the i-th column of the cascade (i ordered outward from centre). */
+export function columnDelayMs(index: number): number {
+  return Math.min(index, FALL_MAX_STAGGERED_COLS) * FALL_COL_STAGGER_MS;
+}
