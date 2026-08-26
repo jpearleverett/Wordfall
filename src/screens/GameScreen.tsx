@@ -64,7 +64,12 @@ import {
   selectBoosterTokens,
   selectLivesCurrent,
   selectIsAdFreeComputed,
+  selectGems,
 } from '../stores/economyStore';
+import {
+  PreLevelBoosterSheet,
+  shouldShowPreLevelBoosterSheet,
+} from '../components/PreLevelBoosterSheet';
 import { analytics } from '../services/analytics';
 import { getRemoteBoolean, getRemoteNumber, getRemoteNumberClamped } from '../services/remoteConfig';
 import BoosterComboBanner from '../components/BoosterComboBanner';
@@ -860,6 +865,7 @@ function GameScreenImpl({
   const boosterTokens = useEconomyStore(selectBoosterTokens);
   const lives = useEconomyStore(selectLivesCurrent);
   const isAdFree = useEconomyStore(selectIsAdFreeComputed);
+  const gems = useEconomyStore(selectGems);
   const {
     addCoins,
     addGems,
@@ -923,6 +929,9 @@ function GameScreenImpl({
   // Tier 6 B1 — fail-breather offer gates PostLoss when player is stuck
   const [showFailBreather, setShowFailBreather] = useState(false);
   const failBreatherShownRef = useRef(false);
+  // Pre-level booster-commit sheet on spike levels (once per level entry)
+  const [showPreLevelBooster, setShowPreLevelBooster] = useState(false);
+  const preLevelBoosterShownRef = useRef(false);
   // booster_pack: only show once per level on first entry to hard/expert
   const boosterPackShown = useRef(false);
   const offerSuppressed = showModeTutorial || showComplete || showPostLoss || showFailed || showFailBreather || activeOffer !== null;
@@ -2073,6 +2082,34 @@ function GameScreenImpl({
     }
   }, [isStuck, status, level, playerActions]);
 
+  // Pre-level booster-commit sheet: the genre's top-converting placement,
+  // fired once on entering a spike level. It only STOCKS boosters (gem pack
+  // or store bridge) — activation stays tap-to-use in the run.
+  useEffect(() => {
+    preLevelBoosterShownRef.current = false;
+    setShowPreLevelBooster(false);
+  }, [level, mode]);
+  useEffect(() => {
+    if (
+      !shouldShowPreLevelBoosterSheet({
+        enabled: getRemoteBoolean('preLevelBoosterSheetEnabled'),
+        level,
+        mode,
+        isDaily,
+        alreadyShownThisLevel: preLevelBoosterShownRef.current,
+        tutorialActive: showModeTutorial,
+      })
+    ) {
+      return;
+    }
+    preLevelBoosterShownRef.current = true;
+    const timer = setTimeout(() => {
+      setShowPreLevelBooster(true);
+      void analytics.logEvent('pre_level_booster_shown', { level, mode });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [level, mode, isDaily, showModeTutorial]);
+
   // Churn valve for the modes whose dead-end never flips status to 'failed'
   // (classic, noGravity, gravityFlip, expert): the fail-breather modal was
   // built to catch the L15-25 stuck loop, but it gated on
@@ -3132,6 +3169,44 @@ function GameScreenImpl({
           onComplete={() => {
             setShowModeTutorial(false);
             markTooltipShown(`mode_tutorial_${mode}`);
+          }}
+        />
+      )}
+
+      {/* Pre-level booster-commit sheet — spike levels only, once per entry */}
+      {showPreLevelBooster && (
+        <PreLevelBoosterSheet
+          visible={showPreLevelBooster}
+          level={level}
+          boosterCounts={{
+            wildcardTile: boosterTokens?.wildcardTile ?? 0,
+            spotlight: boosterTokens?.spotlight ?? 0,
+            smartShuffle: boosterTokens?.smartShuffle ?? 0,
+          }}
+          gemPackPrice={getOfferPrice('booster_pack').amount}
+          playerGems={gems}
+          onBuyGemPack={() => {
+            const price = getOfferPrice('booster_pack');
+            if (spendGems(price.amount)) {
+              addBoosterToken('wildcardTile');
+              addBoosterToken('spotlight');
+              addBoosterToken('smartShuffle');
+              void soundManager.playSound('buttonPress');
+              void analytics.logEvent('pre_level_booster_pack_bought', {
+                level,
+                mode,
+                gems: price.amount,
+              });
+            } else {
+              openMiniPack('gems', 'pre_level_booster_broke');
+            }
+          }}
+          onOpenBoosterStore={() => {
+            openMiniPack('boosters', 'pre_level_sheet');
+          }}
+          onPlay={() => {
+            setShowPreLevelBooster(false);
+            void analytics.logEvent('pre_level_booster_dismissed', { level, mode });
           }}
         />
       )}
