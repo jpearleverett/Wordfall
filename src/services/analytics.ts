@@ -24,6 +24,7 @@ export type AnalyticsEventName =
   | 'iap_initiated'
   | 'iap_completed'
   | 'ad_watched'
+  | 'ad_free_claim'
   // Progression & social
   | 'daily_challenge_complete'
   | 'streak_broken'

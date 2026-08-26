@@ -165,8 +165,12 @@ describe('double-reward wiring (GameScreen + EconomyContext)', () => {
 
   it('GameScreen grants the real delta after the rewarded ad resolves', () => {
     expect(gameScreen).toContain('computeDoubleRewardGrant(');
-    // Grant guarded by the per-completion exactly-once ref…
-    expect(gameScreen).toContain('if (doubleGrantedRef.current) return;');
+    // Grant guarded by the per-completion exactly-once ref AND an in-flight
+    // ref (the granted ref only flips after the ad await, so a second tap
+    // during the await would otherwise double-pay).
+    expect(gameScreen).toContain('if (doubleGrantedRef.current || doubleInFlightRef.current) return;');
+    expect(gameScreen).toContain('doubleInFlightRef.current = true;');
+    expect(gameScreen).toContain('doubleInFlightRef.current = false;');
     expect(gameScreen).toContain('doubleGrantedRef.current = true;');
     // …and re-armed at every completion boundary (new board / retry / next).
     expect(

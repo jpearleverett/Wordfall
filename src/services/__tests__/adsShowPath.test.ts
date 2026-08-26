@@ -166,6 +166,7 @@ jest.mock('../analytics', () => ({
   analytics: {
     trackAdWatched: jest.fn(async () => {}),
     trackAdRevenue: jest.fn(async () => {}),
+    logEvent: jest.fn(async () => {}),
   },
 }));
 
@@ -287,11 +288,13 @@ describe('rewarded show path', () => {
 describe('rewarded preload', () => {
   it('init preloads a real loaded ad, show consumes it without re-loading, then warms the next', async () => {
     const { adManager, fake } = await freshAdManager();
-    expect(fake.instances).toHaveLength(1);
-    expect(fake.instances[0].loaded).toBe(true);
+    // init warms BOTH formats: one rewarded and one interstitial preload.
+    const preloadedRewarded = fake.instances.filter((i: any) => i.kind === 'rewarded');
+    expect(preloadedRewarded).toHaveLength(1);
+    expect(preloadedRewarded[0].loaded).toBe(true);
     expect(adManager.isRewardedAdReady()).toBe(true);
     // Consent flags (ATT denied in this suite) flow into the request.
-    expect(fake.instances[0].requestOptions).toMatchObject({
+    expect(preloadedRewarded[0].requestOptions).toMatchObject({
       requestNonPersonalizedAdsOnly: true,
     });
 
@@ -301,25 +304,28 @@ describe('rewarded preload', () => {
 
     // The cached instance was shown as-is (single load), and the next ad
     // was preloaded behind it.
-    expect(fake.instances[0].showCallCount).toBe(1);
-    expect(fake.instances[0].loadCallCount).toBe(1);
-    expect(fake.instances).toHaveLength(2);
-    expect(fake.instances[1].loaded).toBe(true);
-    expect(fake.instances[1].showCallCount).toBe(0);
+    const rewardeds = fake.instances.filter((i: any) => i.kind === 'rewarded');
+    expect(rewardeds[0].showCallCount).toBe(1);
+    expect(rewardeds[0].loadCallCount).toBe(1);
+    expect(rewardeds).toHaveLength(2);
+    expect(rewardeds[1].loaded).toBe(true);
+    expect(rewardeds[1].showCallCount).toBe(0);
     expect(adManager.isRewardedAdReady()).toBe(true);
   });
 
   it('falls back to a fresh load when the cached ad is no longer loaded (show() would throw)', async () => {
     const { adManager, fake } = await freshAdManager();
-    // Simulate expiry/invalidation of the cached instance.
-    fake.instances[0].emit('closed');
-    expect(fake.instances[0].loaded).toBe(false);
+    // Simulate expiry/invalidation of the cached rewarded instance.
+    const cached = fake.instances.find((i: any) => i.kind === 'rewarded');
+    cached.emit('closed');
+    expect(cached.loaded).toBe(false);
 
     const result = await adManager.showRewardedAd('hint_reward');
     expect(result).toEqual({ rewarded: true, rewardType: 'hint_reward' });
-    expect(fake.instances[0].showCallCount).toBe(0);
-    expect(fake.instances[1].kind).toBe('rewarded');
-    expect(fake.instances[1].showCallCount).toBe(1);
+    expect(cached.showCallCount).toBe(0);
+    const fresh = fake.instances.filter((i: any) => i.kind === 'rewarded' && i !== cached);
+    expect(fresh.length).toBeGreaterThanOrEqual(1);
+    expect(fresh[0].showCallCount).toBe(1);
   });
 });
 
@@ -327,12 +333,17 @@ describe('interstitial show path', () => {
   it('happy path: load → LOADED → show → CLOSED resolves true and counts the view', async () => {
     const { adManager, fake } = await freshAdManager();
     const shown = await adManager.showInterstitialAd();
+    await flush();
     expect(shown).toBe(true);
     expect(adManager.interstitialsRemaining()).toBe(4);
+    // Consume-only path: the instance init preloaded was shown (one load,
+    // one show) and a warmed replacement was loaded behind it.
     const interstitials = fake.instances.filter((i: any) => i.kind === 'interstitial');
-    expect(interstitials).toHaveLength(1);
+    expect(interstitials).toHaveLength(2);
     expect(interstitials[0].loadCallCount).toBe(1);
     expect(interstitials[0].showCallCount).toBe(1);
+    expect(interstitials[1].loaded).toBe(true);
+    expect(interstitials[1].showCallCount).toBe(0);
     const { analytics } = require('../analytics') as any;
     expect(analytics.trackAdRevenue).toHaveBeenCalledWith('interstitial', 0.012);
   });
@@ -354,5 +365,29 @@ describe('interstitial show path', () => {
     } finally {
       process.off('unhandledRejection', onUnhandled);
     }
+  });
+});
+
+describe('ad-free auto-grant caps', () => {
+  it('grants without showing an ad but consumes the same daily pool and cooldown as watching', async () => {
+    const { adManager, fake } = await freshAdManager();
+    adManager.setAdsRemoved(true);
+    const before = fake.instances.length;
+
+    const first = await adManager.showRewardedAd('hint_reward');
+    expect(first).toEqual({ rewarded: true, rewardType: 'hint_reward' });
+    // No ad was created or shown for the grant.
+    expect(fake.instances.length).toBe(before);
+    // The claim consumed the shared pool…
+    expect(adManager.adsRemaining()).toBe(9);
+    // …and the shared cooldown now applies exactly as it would to a watcher.
+    const second = await adManager.showRewardedAd('hint_reward');
+    expect(second.rewarded).toBe(false);
+    expect(adManager.canClaimAdReward('hint_reward')).toBe(false);
+  });
+
+  it('canClaimAdReward mirrors canShowAd for ad-supported players', async () => {
+    const { adManager } = await freshAdManager();
+    expect(adManager.canClaimAdReward('hint_reward')).toBe(adManager.canShowAd('hint_reward'));
   });
 });
