@@ -973,6 +973,7 @@ function GameScreenImpl({
   // Exactly-once guard for the doubler grant, reset per completion
   // (retry / next level / new board).
   const doubleGrantedRef = useRef(false);
+  const doubleInFlightRef = useRef(false);
   // Once-per-level-attempt guard for the timeout "+30s continue" offer
   // (Time Pressure). Reset on retry / next level / new board.
   const timeExtendUsedRef = useRef(false);
@@ -983,23 +984,31 @@ function GameScreenImpl({
     // a delta equal to the coins+gems actually awarded for this completion
     // (wave 1 made those authoritative: 0 on repeat boards / cap-exhausted
     // clears, so doubling 0 correctly grants 0).
-    if (doubleGrantedRef.current) return;
-    const result = await adManager.showRewardedAd('double_reward');
-    if (!result.rewarded) return;
-    const totals = completionTotalsRef.current;
-    const grant = computeDoubleRewardGrant(totals.coins, totals.gems, doubleGrantedRef.current);
-    doubleGrantedRef.current = true;
-    if (grant) {
-      if (grant.coins > 0) addCoins(grant.coins);
-      if (grant.gems > 0) addGems(grant.gems);
+    if (doubleGrantedRef.current || doubleInFlightRef.current) return;
+    // In-flight guard: the granted ref only flips AFTER the ad resolves, so
+    // without this a second tap during the await (instant for ad-free
+    // auto-grants) would pass the granted check and double-pay.
+    doubleInFlightRef.current = true;
+    try {
+      const result = await adManager.showRewardedAd('double_reward');
+      if (!result.rewarded) return;
+      const totals = completionTotalsRef.current;
+      const grant = computeDoubleRewardGrant(totals.coins, totals.gems, doubleGrantedRef.current);
+      doubleGrantedRef.current = true;
+      if (grant) {
+        if (grant.coins > 0) addCoins(grant.coins);
+        if (grant.gems > 0) addGems(grant.gems);
+      }
+      setRewardDoubled(true);
+      void analytics.logEvent('double_reward_granted', {
+        level,
+        mode,
+        coins: grant?.coins ?? 0,
+        gems: grant?.gems ?? 0,
+      });
+    } finally {
+      doubleInFlightRef.current = false;
     }
-    setRewardDoubled(true);
-    void analytics.logEvent('double_reward_granted', {
-      level,
-      mode,
-      coins: grant?.coins ?? 0,
-      gems: grant?.gems ?? 0,
-    });
   }, [addCoins, addGems, level, mode]);
 
   const handleMockAdComplete = useCallback((watched: boolean) => {
@@ -2877,7 +2886,7 @@ function GameScreenImpl({
             // Ad-free purchasers keep the ad-hint path: showRewardedAd
             // auto-grants for them without playing an ad, so hiding the
             // surface made Remove-Ads a net loss of free hints.
-            canShowAdHint={hintsAllowed && (isAdFree || adManager.canShowAd('hint_reward'))}
+            canShowAdHint={hintsAllowed && adManager.canClaimAdReward('hint_reward')}
             adFree={isAdFree}
             isStuck={isStuck}
             undosLeft={undosLeft}
@@ -2904,7 +2913,7 @@ function GameScreenImpl({
             undoTokens <= 0 &&
             history.length > 0 &&
             (freeRescueUsedRef.current || !getRemoteBoolean('freeStuckRescueEnabled')) &&
-            (isAdFree || adManager.canShowAd('undo_reward')) && (
+            adManager.canClaimAdReward('undo_reward') && (
             <Pressable
               style={styles.adUndoBanner}
               onPress={() => void handleWatchAdForUndo()}
@@ -2993,7 +3002,7 @@ function GameScreenImpl({
           onDoubleReward={handleWatchAdForDoubleReward}
           rewardDoubled={rewardDoubled}
           // Ad-free purchasers keep the doubler (auto-granted, no ad plays).
-          showAdOption={isAdFree || adManager.canShowAd('double_reward')}
+          showAdOption={adManager.canClaimAdReward('double_reward')}
           adFree={isAdFree}
           onChallengeFriend={() => {
             const challenge = sendChallenge('friend', {
@@ -3223,7 +3232,7 @@ function GameScreenImpl({
               {status === 'timeout' &&
                 getRemoteBoolean('timeoutContinueEnabled') &&
                 !timeExtendUsedRef.current &&
-                (isAdFree || adManager.canShowAd('time_continue')) && (
+                adManager.canClaimAdReward('time_continue') && (
                 <Pressable
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={() => void handleTimeoutContinue()}
@@ -3251,7 +3260,7 @@ function GameScreenImpl({
                   gates it out of expert/perfectSolve entirely. */}
               {hintsAllowed &&
                 hintsAvailable === 0 &&
-                (isAdFree || adManager.canShowAd('hint_reward')) && (
+                adManager.canClaimAdReward('hint_reward') && (
                 <Pressable
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={handleWatchAdForHint}

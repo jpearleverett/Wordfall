@@ -152,6 +152,15 @@ class AdManager {
   private preloadingRewarded = false;
   /** Timestamp of the last failed preload — throttles automatic retries */
   private lastPreloadFailureAt = 0;
+  /**
+   * Native mode only: an InterstitialAd instance that has fired LOADED.
+   * showInterstitialAd only ever consumes this cache — a cold load inside
+   * the level transition would hold the player up to AD_LOAD_TIMEOUT_MS,
+   * so a miss skips the ad and warms the cache for the next transition.
+   */
+  private preloadedInterstitialAd: any = null;
+  private preloadingInterstitial = false;
+  private lastInterstitialPreloadFailureAt = 0;
   private tracking: AdTracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
 
   /**
@@ -241,6 +250,7 @@ class AdManager {
         await instance.initialize();
         this.useMock = false;
         void this.preloadRewardedAd();
+        void this.preloadInterstitialAd();
         logger.log('[Ads] Native ad module (react-native-google-mobile-ads) initialised');
         crashReporter.addBreadcrumb('AdMob initialized', 'ads');
       }
@@ -346,11 +356,6 @@ class AdManager {
   async showRewardedAd(rewardType: AdRewardType): Promise<AdRewardResult> {
     await this.init();
 
-    // User paid to remove ads — grant reward without showing anything
-    if (this.adsRemoved) {
-      return { rewarded: true, rewardType };
-    }
-
     // Refresh tracking if day rolled over
     if (this.tracking.date !== todayKey()) {
       this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
@@ -383,13 +388,21 @@ class AdManager {
 
     let result: AdRewardResult;
 
-    if (this.useMock) {
+    if (this.adsRemoved) {
+      // Ad-free purchase: grant without showing an ad, but ONLY inside the
+      // same caps/cooldown an ad-watching player faces — the buyer paid for
+      // fewer ads, not for an unlimited reward faucet. (The cap checks
+      // above already ran; an uncapped early-return here handed every
+      // Remove-Ads/VIP owner infinite hints and undos.)
+      result = { rewarded: true, rewardType };
+    } else if (this.useMock) {
       result = await this.mockShowRewardedAd(rewardType);
     } else {
       result = await this.nativeShowRewardedAd(rewardType);
     }
 
-    // Update tracking on success
+    // Update tracking on success — auto-grants consume the same daily pool
+    // as watched ads so both cohorts see identical claim limits.
     if (result.rewarded) {
       this.tracking.viewCount++;
       this.tracking.lastAdTime = Date.now();
@@ -400,7 +413,11 @@ class AdManager {
         this.tracking.lifeAdCount++;
       }
       await saveTracking(this.tracking);
-      void analytics.trackAdWatched('rewarded', rewardType);
+      if (this.adsRemoved) {
+        void analytics.logEvent('ad_free_claim', { reward_type: rewardType });
+      } else {
+        void analytics.trackAdWatched('rewarded', rewardType);
+      }
     }
 
     return result;
@@ -460,6 +477,22 @@ class AdManager {
     return true;
   }
 
+  /**
+   * Whether tapping an ad-reward surface will produce a grant right now.
+   * For ad-free purchasers this is the auto-grant path — same daily caps
+   * and cooldown as watching, just without the ad — so reward buttons stay
+   * visible for buyers exactly as long as they would for ad watchers.
+   * For everyone else this is canShowAd().
+   */
+  canClaimAdReward(rewardType?: AdRewardType): boolean {
+    if (!this.adsRemoved) return this.canShowAd(rewardType);
+    if (this.tracking.date !== todayKey()) return true; // new day resets caps
+    if (this.tracking.viewCount >= adCap('maxAdsPerDay', AD_CONFIG.MAX_ADS_PER_DAY)) return false;
+    if (rewardType === 'coins_reward' && this.tracking.coinAdCount >= AD_CONFIG.MAX_COIN_ADS_PER_DAY) return false;
+    if (rewardType === 'life_reward' && this.tracking.lifeAdCount >= AD_CONFIG.MAX_LIFE_ADS_PER_DAY) return false;
+    return this.isCooldownElapsed();
+  }
+
   // ── Interstitial ads ────────────────────────────────────────────────────
 
   /**
@@ -468,6 +501,20 @@ class AdManager {
    */
   canShowInterstitial(): boolean {
     if (this.adsRemoved) return false;
+
+    // Self-heal: if the last preload failed (no fill / offline at app
+    // start) quietly retry when the UI next asks, throttled — mirrors the
+    // rewarded-path self-heal so one bad preload doesn't silence
+    // interstitials until the next app start.
+    if (
+      !this.useMock &&
+      this.initialized &&
+      !this.preloadedInterstitialAd &&
+      !this.preloadingInterstitial &&
+      Date.now() - this.lastInterstitialPreloadFailureAt >= PRELOAD_RETRY_INTERVAL_MS
+    ) {
+      void this.preloadInterstitialAd();
+    }
 
     // Refresh tracking if day rolled over
     if (this.tracking.date !== todayKey()) return true; // new day, all caps reset
@@ -514,6 +561,9 @@ class AdManager {
       logger.log('[Ads] Mock interstitial ad shown (instant)');
       shown = true;
     } else {
+      // Consume-only: a cold load here would hold the level transition up
+      // to AD_LOAD_TIMEOUT_MS. On a cache miss we skip the ad and warm the
+      // cache for the next transition instead.
       shown = await this.nativeShowInterstitialAd();
     }
 
@@ -718,16 +768,16 @@ class AdManager {
     try {
       const mobileAds = await import('react-native-google-mobile-ads' as string);
       if (mobileAds?.InterstitialAd) {
-        const ad = mobileAds.InterstitialAd.createForAdRequest(
-          AD_CONFIG.INTERSTITIAL_AD_UNIT_ID,
-          this.buildRequestOptions(),
-        );
-        const loaded = await this.loadAd(mobileAds, ad, 'interstitial');
-        if (!loaded) {
-          logger.warn('[Ads] Failed to show native interstitial ad');
+        const ad = this.takePreloadedInterstitialAd();
+        if (!ad) {
+          // Nothing loaded — never cold-load inside the transition. Warm
+          // the cache so the NEXT eligible transition shows instantly.
+          void this.preloadInterstitialAd();
           return false;
         }
         const { completed } = await this.showLoadedAd(mobileAds, ad, 'interstitial');
+        // Warm the next one so back-to-back transitions keep filling.
+        void this.preloadInterstitialAd();
         return completed;
       }
     } catch (e) {
@@ -736,8 +786,54 @@ class AdManager {
         'ads',
       );
     }
-    logger.warn('[Ads] Failed to show native interstitial ad');
     return false;
+  }
+
+  /**
+   * Consume the cached preloaded interstitial, if any. A cached instance
+   * whose `loaded` flag has gone false (shown/expired) cannot be show()n
+   * again — discard it so the caller skips instead of hitting show()'s
+   * throw.
+   */
+  private takePreloadedInterstitialAd(): any {
+    const ad = this.preloadedInterstitialAd;
+    if (!ad) return null;
+    this.preloadedInterstitialAd = null;
+    return ad.loaded === false ? null : ad;
+  }
+
+  /**
+   * Load an interstitial ahead of the transition that shows it. Never
+   * rejects — init(), canShowInterstitial()'s self-heal, and the
+   * post-show warmup call this fire-and-forget.
+   */
+  private async preloadInterstitialAd(): Promise<void> {
+    if (this.useMock || this.adsRemoved) return;
+    if (this.preloadingInterstitial || this.preloadedInterstitialAd) return;
+    this.preloadingInterstitial = true;
+    try {
+      const mobileAds = await import('react-native-google-mobile-ads' as string);
+      if (!mobileAds?.InterstitialAd) return;
+      const ad = mobileAds.InterstitialAd.createForAdRequest(
+        AD_CONFIG.INTERSTITIAL_AD_UNIT_ID,
+        this.buildRequestOptions(),
+      );
+      const loaded = await this.loadAd(mobileAds, ad, 'interstitial');
+      if (loaded) {
+        this.preloadedInterstitialAd = ad;
+        this.lastInterstitialPreloadFailureAt = 0;
+      } else {
+        this.lastInterstitialPreloadFailureAt = Date.now();
+      }
+    } catch (e) {
+      this.lastInterstitialPreloadFailureAt = Date.now();
+      crashReporter.addBreadcrumb(
+        `Interstitial preload failed: ${e instanceof Error ? e.message : String(e)}`,
+        'ads',
+      );
+    } finally {
+      this.preloadingInterstitial = false;
+    }
   }
 
   // ── Mock ad UI integration ──────────────────────────────────────────────
