@@ -538,15 +538,10 @@ export interface EventRewardTier {
 }
 
 // ============ DAILY/WEEKLY SYSTEMS ============
-export interface DailyMission {
-  id: string;
-  description: string;
-  target: number;
-  progress: number;
-  completed: boolean;
-  type: 'findWords' | 'completePuzzles' | 'achieveCombo' | 'noHints' | 'perfectSolve' | 'useMode';
-  reward: CollectionReward;
-}
+// (The old DailyMission interface lived here; it typed only the dead
+// MISSION_TEMPLATES table in data/missions.ts — the live daily-mission
+// system is PlayerProgressContext's own template list. Both deleted, along
+// with the 'achieveCombo' member that referenced the ripped combo system.)
 
 export interface StreakData {
   currentStreak: number;
