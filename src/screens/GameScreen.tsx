@@ -82,6 +82,7 @@ import {
   computeDoubleRewardGrant,
   getOfferPrice,
   MiniPackNeed,
+  OFFER_HINT_GRANTS,
   POST_LOSS_HINT_PACK,
   TIMEOUT_CONTINUE_SECONDS,
 } from '../components/monetizationModel';
@@ -1230,7 +1231,7 @@ function GameScreenImpl({
     // display and charge cannot diverge (they did: locale strings claimed
     // gems while these branches spent coins). Coin rescues scale with the
     // difficulty tier already in scope here (x1/x1.5/x2.5/x4, rounded to 5).
-    const price = getOfferPrice(activeOffer, difficulty);
+    const price = getOfferPrice(activeOffer, difficulty, level);
     // When the player can't afford the accepted offer, the old handler
     // silently closed the modal as if they had declined. Route the intent to
     // the MiniPackSheet for the missing currency instead.
@@ -1238,7 +1239,7 @@ function GameScreenImpl({
     switch (activeOffer) {
       case 'hint_rescue':
         if (spendCoins(price.amount)) {
-          addHintTokens(5);
+          addHintTokens(OFFER_HINT_GRANTS.hint_rescue);
           accepted = true;
         } else {
           sheetNeed = 'coins';
@@ -1276,7 +1277,7 @@ function GameScreenImpl({
       }
       case 'post_puzzle':
         if (spendCoins(price.amount)) {
-          addHintTokens(10);
+          addHintTokens(OFFER_HINT_GRANTS.post_puzzle);
           accepted = true;
         } else {
           sheetNeed = 'coins';

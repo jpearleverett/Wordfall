@@ -22,11 +22,15 @@ import {
   computeDoubleRewardGrant,
   formatOddsPercent,
   getOfferPrice,
+  getRescuePriceMultiplier,
   MiniPackContext,
+  OFFER_HINT_GRANTS,
   POST_LOSS_HINT_PACK,
   PricedOfferType,
+  RESCUE_MULTIPLIER_LEVEL_BANDS,
   RESCUE_PRICE_MULTIPLIER,
   roundPriceToFive,
+  TIMEOUT_CONTINUE_GEM_COST,
   TIMEOUT_CONTINUE_SECONDS,
 } from '../components/monetizationModel';
 import { COIN_SHOP_ITEMS } from '../data/coinShop';
@@ -47,26 +51,49 @@ function readSource(rel: string): string {
 
 describe('getOfferPrice', () => {
   it('scales the coin rescues by difficulty tier, rounded to 5', () => {
-    // hint_rescue base 50: x1 / x1.5 / x2.5 / x4
-    expect(getOfferPrice('hint_rescue', 'easy')).toEqual({ currency: 'coins', amount: 50 });
-    expect(getOfferPrice('hint_rescue', 'medium')).toEqual({ currency: 'coins', amount: 75 });
-    expect(getOfferPrice('hint_rescue', 'hard')).toEqual({ currency: 'coins', amount: 125 });
-    expect(getOfferPrice('hint_rescue', 'expert')).toEqual({ currency: 'coins', amount: 200 });
+    // hint_rescue base 80: x1 / x1.5 / x2.5 / x4
+    expect(getOfferPrice('hint_rescue', 'easy')).toEqual({ currency: 'coins', amount: 80 });
+    expect(getOfferPrice('hint_rescue', 'medium')).toEqual({ currency: 'coins', amount: 120 });
+    expect(getOfferPrice('hint_rescue', 'hard')).toEqual({ currency: 'coins', amount: 200 });
+    expect(getOfferPrice('hint_rescue', 'expert')).toEqual({ currency: 'coins', amount: 320 });
     // close_finish base 25 (37.5 → 40, 62.5 → 65)
     expect(getOfferPrice('close_finish', 'easy').amount).toBe(25);
     expect(getOfferPrice('close_finish', 'medium').amount).toBe(40);
     expect(getOfferPrice('close_finish', 'hard').amount).toBe(65);
     expect(getOfferPrice('close_finish', 'expert').amount).toBe(100);
-    // post_puzzle base 80
-    expect(getOfferPrice('post_puzzle', 'easy').amount).toBe(80);
-    expect(getOfferPrice('post_puzzle', 'medium').amount).toBe(120);
-    expect(getOfferPrice('post_puzzle', 'hard').amount).toBe(200);
-    expect(getOfferPrice('post_puzzle', 'expert').amount).toBe(320);
+    // post_puzzle base 150
+    expect(getOfferPrice('post_puzzle', 'easy').amount).toBe(150);
+    expect(getOfferPrice('post_puzzle', 'medium').amount).toBe(225);
+    expect(getOfferPrice('post_puzzle', 'hard').amount).toBe(375);
+    expect(getOfferPrice('post_puzzle', 'expert').amount).toBe(600);
   });
 
   it('prices unknown or missing difficulty at the easy multiplier, never throwing', () => {
-    expect(getOfferPrice('hint_rescue').amount).toBe(50);
-    expect(getOfferPrice('hint_rescue', 'nightmare').amount).toBe(50);
+    expect(getOfferPrice('hint_rescue').amount).toBe(80);
+    expect(getOfferPrice('hint_rescue', 'nightmare').amount).toBe(80);
+  });
+
+  it('continues the rescue ladder past the expert label with level bands (x6 at L151+, x8 at L601+)', () => {
+    // The difficulty label freezes at 'expert' from L31; the level bands keep
+    // the pinch alive where income keeps its late-game shape.
+    expect(getOfferPrice('hint_rescue', 'expert', 150).amount).toBe(320); // x4
+    expect(getOfferPrice('hint_rescue', 'expert', 151).amount).toBe(480); // x6
+    expect(getOfferPrice('hint_rescue', 'expert', 600).amount).toBe(480); // x6
+    expect(getOfferPrice('hint_rescue', 'expert', 601).amount).toBe(640); // x8
+    expect(getOfferPrice('post_puzzle', 'expert', 700).amount).toBe(1200); // 150 x8
+    // Band never lowers a price below the tier multiplier.
+    expect(getRescuePriceMultiplier('expert', 30)).toBe(4);
+    expect(getRescuePriceMultiplier('easy', 700)).toBe(8);
+    expect(getRescuePriceMultiplier('easy')).toBe(1);
+  });
+
+  it('grants match the interpolated locale copy counts (display == grant)', () => {
+    expect(OFFER_HINT_GRANTS).toEqual({ hint_rescue: 3, close_finish: 1, post_puzzle: 5 });
+    // Contextual offers stay a deal but never sell below ~25c/hint at base.
+    for (const [type, count] of Object.entries(OFFER_HINT_GRANTS)) {
+      const perHint = getOfferPrice(type as PricedOfferType, 'easy').amount / count;
+      expect(perHint).toBeGreaterThanOrEqual(25);
+    }
   });
 
   it('keeps the gem offers flat regardless of difficulty', () => {
@@ -84,6 +111,10 @@ describe('getOfferPrice', () => {
 
   it('covers exactly the four difficulty tiers with the approved multipliers', () => {
     expect(RESCUE_PRICE_MULTIPLIER).toEqual({ easy: 1, medium: 1.5, hard: 2.5, expert: 4 });
+    expect(RESCUE_MULTIPLIER_LEVEL_BANDS).toEqual([
+      { minLevel: 601, multiplier: 8 },
+      { minLevel: 151, multiplier: 6 },
+    ]);
   });
 
   it('roundPriceToFive rounds to the nearest 5 with a floor of 5', () => {
@@ -205,7 +236,9 @@ describe('double-reward wiring (GameScreen + EconomyContext)', () => {
 
 describe('POST_LOSS_HINT_PACK', () => {
   it('pins the pack shape both surfaces read', () => {
-    expect(POST_LOSS_HINT_PACK).toEqual({ hintCount: 5, costCoins: 80 });
+    // 3-for-120 (40c/hint): a post-loss deal against the 100c shop hint, but
+    // no longer the 16c/hint leak that undercut every hint SKU.
+    expect(POST_LOSS_HINT_PACK).toEqual({ hintCount: 3, costCoins: 120 });
   });
 
   it('PostLossModal renders the price from the shared record (the fake "$0.99" is gone)', () => {
@@ -312,7 +345,7 @@ describe('buildMiniPackOptions', () => {
   });
 
   it('every listed id resolves to a real catalog entry (no silently dropped rows)', () => {
-    for (const need of ['hints', 'gems', 'coins', 'boosters'] as const) {
+    for (const need of ['hints', 'gems', 'coins', 'boosters', 'undo'] as const) {
       const options = buildMiniPackOptions(need, baseCtx);
       expect(options.length).toBeGreaterThanOrEqual(3);
     }
@@ -333,6 +366,16 @@ describe('buildMiniPackOptions', () => {
       'coin_wildcard',
       'booster_crate',
     ]);
+  });
+
+  it('undo: both coin undo items plus coin liquidity (a zero-token undo tap is never a dead end)', () => {
+    const options = buildMiniPackOptions('undo', baseCtx);
+    expect(options.map((o) => o.id)).toEqual(['coin_undo_1', 'coin_undo_3', 'coins_500']);
+  });
+
+  it('pins the gem timeout-continue fallback price next to the ad path', () => {
+    expect(TIMEOUT_CONTINUE_SECONDS).toBe(30);
+    expect(TIMEOUT_CONTINUE_GEM_COST).toBe(12);
   });
 
   it('marks unaffordable coin items instead of hiding them', () => {

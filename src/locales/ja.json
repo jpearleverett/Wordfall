@@ -66,8 +66,8 @@
     "hintRescue": {
       "ribbon": "行き詰まった？",
       "title": "ヒントレスキューパック",
-      "description": "ヒント5個でこのレベルを攻略しよう。クリアはもう目前です！",
-      "button": "ヒント5個をゲット",
+      "description": "ヒント{{count}}個でこのレベルを攻略しよう。クリアはもう目前です！",
+      "button": "ヒント{{count}}個をゲット",
       "price": "コイン{{amount}}枚"
     },
     "lifeRefill": {
@@ -102,7 +102,7 @@
       "ribbon": "ヒント残りわずか",
       "title": "ヒントを補充",
       "description": "お見事！次の挑戦に備えてヒントを補充しよう。",
-      "button": "ヒント10個をゲット",
+      "button": "ヒント{{count}}個をゲット",
       "price": "コイン{{amount}}枚"
     },
     "boosterPack": {

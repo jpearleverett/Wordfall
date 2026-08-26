@@ -66,8 +66,8 @@
     "hintRescue": {
       "ribbon": "TRAVOU?",
       "title": "Pacote Resgate de Dicas",
-      "description": "Ganhe 5 dicas para vencer este nível. Você está mais perto do que imagina!",
-      "button": "QUERO 5 DICAS",
+      "description": "Ganhe {{count}} dicas para vencer este nível. Você está mais perto do que imagina!",
+      "button": "QUERO {{count}} DICAS",
       "price": "{{amount}} moedas"
     },
     "lifeRefill": {
@@ -102,7 +102,7 @@
       "ribbon": "POUCAS DICAS",
       "title": "Faça Estoque",
       "description": "Mandou bem! Garanta dicas para o próximo desafio.",
-      "button": "QUERO 10 DICAS",
+      "button": "QUERO {{count}} DICAS",
       "price": "{{amount}} moedas"
     },
     "boosterPack": {

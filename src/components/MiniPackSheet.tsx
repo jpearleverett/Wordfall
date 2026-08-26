@@ -63,6 +63,7 @@ const NEED_TITLES: Record<MiniPackNeed, { ribbon: string; title: string }> = {
   gems: { ribbon: 'NOT ENOUGH GEMS', title: 'Get Gems' },
   coins: { ribbon: 'NOT ENOUGH COINS', title: 'Get Coins' },
   boosters: { ribbon: 'OUT OF BOOSTERS', title: 'Get Boosters' },
+  undo: { ribbon: 'OUT OF UNDOS', title: 'Get Undos' },
 };
 
 function todayKey(): string {
@@ -76,6 +77,7 @@ export function MiniPackSheet({ need, source, presentation = 'overlay', onClose 
     spendCoins,
     addHintTokens,
     addBoosterToken,
+    addUndoTokens,
     processAdReward,
   } = useEconomyActions();
   const { purchaseProduct } = useCommerce();
@@ -164,13 +166,16 @@ export function MiniPackSheet({ need, source, presentation = 'overlay', onClose 
             return true;
           }
           return false;
+        case 'undo':
+          addUndoTokens(reward.amount ?? 1);
+          return true;
         default:
-          // The sheet only lists hint/booster coin items; anything else is a
-          // catalog drift bug — refuse rather than charge-and-deliver-nothing.
+          // The sheet only lists hint/booster/undo coin items; anything else
+          // is a catalog drift bug — refuse rather than charge-and-deliver-nothing.
           return false;
       }
     },
-    [addHintTokens, addBoosterToken],
+    [addHintTokens, addBoosterToken, addUndoTokens],
   );
 
   const handleOption = useCallback(

@@ -66,8 +66,8 @@
     "hintRescue": {
       "ribbon": "¿ATASCADO?",
       "title": "Pack Rescate de Pistas",
-      "description": "Consigue 5 pistas para superar este nivel. ¡Estás más cerca de lo que crees!",
-      "button": "OBTENER 5 PISTAS",
+      "description": "Consigue {{count}} pistas para superar este nivel. ¡Estás más cerca de lo que crees!",
+      "button": "OBTENER {{count}} PISTAS",
       "price": "{{amount}} monedas"
     },
     "lifeRefill": {
@@ -102,7 +102,7 @@
       "ribbon": "POCAS PISTAS",
       "title": "Llena tu reserva",
       "description": "¡Gran partida! Lleva pistas para el próximo desafío.",
-      "button": "OBTENER 10 PISTAS",
+      "button": "OBTENER {{count}} PISTAS",
       "price": "{{amount}} monedas"
     },
     "boosterPack": {

@@ -48,9 +48,9 @@
   "lives": {
     "outOfLives": "Out of Lives",
     "youHaveOf": "You have {{current}} of {{max}} lives.",
-    "watchAdForLife": "\u25B6\uFE0F  Watch Ad for +1 Life",
+    "watchAdForLife": "▶️  Watch Ad for +1 Life",
     "watchAdA11y": "Watch an ad to earn one life",
-    "fullRefillGems": "\uD83D\uDC8E {{count}} Gems \u2014 Full Refill",
+    "fullRefillGems": "💎 {{count}} Gems — Full Refill",
     "youHaveGems": "You have {{count}} gems",
     "getMoreGems": "You have {{count}} — tap to get more gems",
     "getMoreGemsA11y": "Not enough gems. Opens gem offers",
@@ -66,8 +66,8 @@
     "hintRescue": {
       "ribbon": "STUCK?",
       "title": "Hint Rescue Pack",
-      "description": "Get 5 hints to help crack this level. You're closer than you think!",
-      "button": "GET 5 HINTS",
+      "description": "Get {{count}} hints to help crack this level. You're closer than you think!",
+      "button": "GET {{count}} HINTS",
       "price": "{{amount}} coins"
     },
     "lifeRefill": {
@@ -102,7 +102,7 @@
       "ribbon": "LOW ON HINTS",
       "title": "Stock Up",
       "description": "Great solve! Grab hints for the next challenge.",
-      "button": "GET 10 HINTS",
+      "button": "GET {{count}} HINTS",
       "price": "{{amount}} coins"
     },
     "boosterPack": {

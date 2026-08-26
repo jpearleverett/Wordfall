@@ -66,8 +66,8 @@
     "hintRescue": {
       "ribbon": "BLOQUÉ ?",
       "title": "Pack d'indices de secours",
-      "description": "Reçois 5 indices pour venir à bout de ce niveau. Tu es plus près du but que tu ne le crois !",
-      "button": "OBTENIR 5 INDICES",
+      "description": "Reçois {{count}} indices pour venir à bout de ce niveau. Tu es plus près du but que tu ne le crois !",
+      "button": "OBTENIR {{count}} INDICES",
       "price": "{{amount}} pièces"
     },
     "lifeRefill": {
@@ -102,7 +102,7 @@
       "ribbon": "PEU D'INDICES",
       "title": "Fais le plein",
       "description": "Bien joué ! Fais le plein d'indices pour le prochain défi.",
-      "button": "OBTENIR 10 INDICES",
+      "button": "OBTENIR {{count}} INDICES",
       "price": "{{amount}} pièces"
     },
     "boosterPack": {

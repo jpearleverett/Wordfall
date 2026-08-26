@@ -54,14 +54,49 @@ export const RESCUE_PRICE_MULTIPLIER: Record<string, number> = {
   expert: 4,
 };
 
+/**
+ * The difficulty label freezes at 'expert' from L31 onward while per-level
+ * income keeps its late-game shape, so the x4 cap made every rescue trivially
+ * cheap for the deepest (highest-LTV) cohort. Two level bands continue the
+ * ladder past the label plateau.
+ */
+export const RESCUE_MULTIPLIER_LEVEL_BANDS: ReadonlyArray<{ minLevel: number; multiplier: number }> = [
+  { minLevel: 601, multiplier: 8 },
+  { minLevel: 151, multiplier: 6 },
+];
+
+export function getRescuePriceMultiplier(difficulty?: string, level?: number): number {
+  const base = RESCUE_PRICE_MULTIPLIER[difficulty ?? 'easy'] ?? 1;
+  if (typeof level === 'number' && Number.isFinite(level)) {
+    for (const band of RESCUE_MULTIPLIER_LEVEL_BANDS) {
+      if (level >= band.minLevel) return Math.max(base, band.multiplier);
+    }
+  }
+  return base;
+}
+
+/**
+ * Hints granted by each coin-priced rescue offer. Display (locale strings
+ * interpolate {{count}}) and grant (GameScreen's accept handler) both read
+ * this record — same display==charge rule as the prices.
+ */
+export const OFFER_HINT_GRANTS = {
+  hint_rescue: 3,
+  close_finish: 1,
+  post_puzzle: 5,
+} as const;
+
 const OFFER_BASE_PRICES: Record<
   PricedOfferType,
   { currency: OfferCurrency; base: number; scalesWithDifficulty?: boolean }
 > = {
   // Coin-priced rescues — scale with difficulty (task: display == charge).
-  hint_rescue: { currency: 'coins', base: 50, scalesWithDifficulty: true },
+  // Bases hold the per-hint floor at >= ~25c: contextual offers stay a deal
+  // relative to the 100c coin-shop hint, but no longer sell at 8-16c/hint,
+  // which undercut every hint SKU at exactly the moments of highest intent.
+  hint_rescue: { currency: 'coins', base: 80, scalesWithDifficulty: true },
   close_finish: { currency: 'coins', base: 25, scalesWithDifficulty: true },
-  post_puzzle: { currency: 'coins', base: 80, scalesWithDifficulty: true },
+  post_puzzle: { currency: 'coins', base: 150, scalesWithDifficulty: true },
   // Gem-priced offers — flat.
   booster_pack: { currency: 'gems', base: 15 },
   life_refill: { currency: 'gems', base: 10 },
@@ -81,7 +116,7 @@ export function roundPriceToFive(value: number): number {
  * tier string from `getDifficultyTier(level)` — unknown/absent tiers price
  * at the easy multiplier rather than throwing.
  */
-export function getOfferPrice(type: PricedOfferType, difficulty?: string): OfferPrice {
+export function getOfferPrice(type: PricedOfferType, difficulty?: string, level?: number): OfferPrice {
   if (type === 'close_finish_premium') {
     // Same read the accept handler has always used — RC-tunable without a build.
     const rc = Math.round(getRemoteNumber('closeFinishPremiumGemCost'));
@@ -89,7 +124,7 @@ export function getOfferPrice(type: PricedOfferType, difficulty?: string): Offer
   }
   const def = OFFER_BASE_PRICES[type];
   if (def.scalesWithDifficulty) {
-    const mult = RESCUE_PRICE_MULTIPLIER[difficulty ?? 'easy'] ?? 1;
+    const mult = getRescuePriceMultiplier(difficulty, level);
     return { currency: def.currency, amount: roundPriceToFive(def.base * mult) };
   }
   return { currency: def.currency, amount: def.base };
@@ -103,14 +138,28 @@ export function getOfferPrice(type: PricedOfferType, difficulty?: string): Offer
  * both read this record now.
  */
 export const POST_LOSS_HINT_PACK = {
-  hintCount: 5,
-  costCoins: 80,
+  hintCount: 3,
+  costCoins: 120,
 } as const;
 
 // ── Timeout continue ────────────────────────────────────────────────────────
 
 /** Seconds granted by the Time Pressure "watch ad → continue" offer. */
 export const TIMEOUT_CONTINUE_SECONDS = 30;
+
+/**
+ * Gem fallback for the timeout continue once the once-per-attempt ad continue
+ * is spent (or ads are unavailable/capped). Same +30s grant as the ad path.
+ */
+export const TIMEOUT_CONTINUE_GEM_COST = 12;
+
+// ── Partial hint (first-letter reveal) ──────────────────────────────────────
+
+/**
+ * Cheaper rung under the 100c full-word hint: reveals only the first cell of
+ * a findable word. Priced as a direct coin spend at tap time (no inventory).
+ */
+export const FIRST_LETTER_HINT_COST_COINS = 40;
 
 // ── Double-reward grant (victory screen "Watch ad to DOUBLE rewards") ───────
 
@@ -154,7 +203,7 @@ export function formatOddsPercent(percent: number): string {
 
 // ── Mini pack sheet options ─────────────────────────────────────────────────
 
-export type MiniPackNeed = 'hints' | 'gems' | 'coins' | 'boosters';
+export type MiniPackNeed = 'hints' | 'gems' | 'coins' | 'boosters' | 'undo';
 
 export interface MiniPackContext {
   /** Player's current coin balance (drives the affordable flag). */
@@ -284,6 +333,14 @@ export function buildMiniPackOptions(need: MiniPackNeed, ctx: MiniPackContext): 
       options.push(coinItem('coin_shuffle', ctx));
       options.push(coinItem('coin_wildcard', ctx));
       options.push(iapOption('booster_crate', ctx));
+      break;
+    case 'undo':
+      // Undo demand peaks at the stuck moment; before this need existed a
+      // zero-token undo tap silently no-oped (the only consumable with no
+      // store bridge). Coin items first, coin liquidity as the fallback.
+      options.push(coinItem('coin_undo_1', ctx));
+      options.push(coinItem('coin_undo_3', ctx));
+      options.push(iapOption('coins_500', ctx));
       break;
   }
   return options.filter((o): o is MiniPackOption => o !== null);
