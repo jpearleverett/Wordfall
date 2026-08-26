@@ -173,6 +173,7 @@ export type GameAction =
   | { type: 'GRANT_UNDO' }
   | { type: 'GRANT_BOOSTER'; booster: 'wildcardTile' | 'spotlight' | 'smartShuffle' }
   | { type: 'USE_PREMIUM_HINT' }
+  | { type: 'USE_PARTIAL_HINT' }
   | { type: 'ACTIVATE_SCORE_DOUBLER' }
   | { type: 'ACTIVATE_BOARD_FREEZE' }
   | {

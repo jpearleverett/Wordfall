@@ -221,9 +221,24 @@ export interface MiniPackContext {
   purchasesToday?: Record<string, number>;
   /** Live currency-localized price for an IAP id; catalog fallback otherwise. */
   iapPriceFor?: (productId: string) => string | undefined;
+  /**
+   * A first-letter partial hint can be delivered right now (mid-run, board
+   * can produce a hint, and the opener passed an onPartialHint handler).
+   * Adds the cheap 40c rung above the 100c full-word hint.
+   */
+  partialHintAvailable?: boolean;
 }
 
 export type MiniPackOption =
+  | {
+      kind: 'partial_hint';
+      id: 'partial_hint';
+      title: string;
+      detail: string;
+      icon: string;
+      costCoins: number;
+      affordable: boolean;
+    }
   | {
       kind: 'coin_item';
       id: string;
@@ -301,6 +316,21 @@ export function buildMiniPackOptions(need: MiniPackNeed, ctx: MiniPackContext): 
   const options: (MiniPackOption | null)[] = [];
   switch (need) {
     case 'hints':
+      if (ctx.partialHintAvailable) {
+        // The bottom rung of the precision ladder: reveal just the first
+        // letter for 40c. Wordscapes' 100/200/300 tiering is its highest-
+        // volume SKU structure; this fills the empty rung under the 100c
+        // full-word reveal.
+        options.push({
+          kind: 'partial_hint',
+          id: 'partial_hint',
+          title: 'First-Letter Peek',
+          detail: 'Lights up the first letter of a findable word — instantly.',
+          icon: '\u{1F526}',
+          costCoins: FIRST_LETTER_HINT_COST_COINS,
+          affordable: ctx.coins >= FIRST_LETTER_HINT_COST_COINS,
+        });
+      }
       if (ctx.adAvailable || ctx.isAdFree) {
         options.push({
           kind: 'ad',

@@ -85,6 +85,7 @@ import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { MiniPackSheet } from '../components/MiniPackSheet';
 import {
   computeDoubleRewardGrant,
+  FIRST_LETTER_HINT_COST_COINS,
   getOfferPrice,
   MiniPackNeed,
   OFFER_HINT_GRANTS,
@@ -2082,6 +2083,24 @@ function GameScreenImpl({
     }
   }, [isStuck, status, level, playerActions]);
 
+  // One-time proactive "plan one move ahead" tip at the L31 regime onset:
+  // random-play stuck rate jumps 12% -> 57% at L31 while one-ply lookahead
+  // solves 100% of the same boards — a pure teaching gap, and the last
+  // long-form dead-end explainer usually burned in L1-30 where dead ends
+  // are rare curiosities. 12s banner, once per profile.
+  const [showPlanAheadTip, setShowPlanAheadTip] = useState(false);
+  useEffect(() => {
+    if (mode !== 'classic' || level < 31 || isDaily) return;
+    if (tooltipsShown.includes('plan_ahead_l31')) return;
+    setShowPlanAheadTip(true);
+    markTooltipShown('plan_ahead_l31');
+    void analytics.logEvent('plan_ahead_tip_shown', { level });
+    const timer = setTimeout(() => setShowPlanAheadTip(false), 12_000);
+    return () => clearTimeout(timer);
+    // Fire once on the first qualifying level entry only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, mode, isDaily]);
+
   // Pre-level booster-commit sheet: the genre's top-converting placement,
   // fired once on entering a spike level. It only STOCKS boosters (gem pack
   // or store bridge) — activation stays tap-to-use in the run.
@@ -3005,6 +3024,7 @@ function GameScreenImpl({
             isFirstStuck={showFirstStuckHelp}
             freeUndoGranted={freeUndoGranted}
             isSpike={isSpike && !isDaily && mode !== 'weekly'}
+            showPlanAheadTip={showPlanAheadTip}
             onIdleHintTap={stableHandleIdleHintBannerTap}
             onAdHintTap={stableHandleAdHintBannerTap}
             onUndoTap={stableHandleUndo}
@@ -3480,6 +3500,25 @@ function GameScreenImpl({
         <MiniPackSheet
           need={miniPack.need}
           source={miniPack.source}
+          // First-letter peek (40c): charge and delivery in ONE place so the
+          // sheet can never charge-and-deliver-nothing. Only offered while a
+          // live board can actually produce a hint and the mode allows hints.
+          onPartialHint={
+            hintsAllowed && status === 'playing' && canProduceHint(store.getState())
+              ? () => {
+                  if (!canProduceHint(store.getState())) return false;
+                  if (!spendCoins(FIRST_LETTER_HINT_COST_COINS)) return false;
+                  store.dispatch({ type: 'USE_PARTIAL_HINT' });
+                  void soundManager.playSound('hintUsed');
+                  void analytics.logEvent('partial_hint_used', {
+                    level,
+                    mode,
+                    coins: FIRST_LETTER_HINT_COST_COINS,
+                  });
+                  return true;
+                }
+              : undefined
+          }
           onClose={() => setMiniPack(null)}
         />
       )}

@@ -55,6 +55,15 @@ interface MiniPackSheetProps {
    * stack above another native Modal (NoLivesModal's gem CTA in App.tsx).
    */
   presentation?: 'overlay' | 'modal';
+  /**
+   * Deliver a first-letter partial hint NOW (GameScreen checks the board can
+   * produce one and dispatches USE_PARTIAL_HINT). Returning true means
+   * delivered; the sheet then charges FIRST_LETTER_HINT_COST_COINS was
+   * already spent by the handler — charge and delivery live together at the
+   * call site so the sheet can never charge-and-deliver-nothing. Only passed
+   * when the sheet is opened mid-run over a live board.
+   */
+  onPartialHint?: () => boolean;
   onClose: () => void;
 }
 
@@ -70,7 +79,7 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function MiniPackSheet({ need, source, presentation = 'overlay', onClose }: MiniPackSheetProps) {
+export function MiniPackSheet({ need, source, presentation = 'overlay', onPartialHint, onClose }: MiniPackSheetProps) {
   const coins = useEconomyStore(selectCoins);
   const gems = useEconomyStore(selectGems);
   const {
@@ -142,8 +151,9 @@ export function MiniPackSheet({ need, source, presentation = 'overlay', onClose 
         isAdFree,
         purchasesToday,
         iapPriceFor: (productId) => iapPrices[productId],
+        partialHintAvailable: onPartialHint !== undefined,
       }),
-    [need, coins, isAdFree, purchasesToday, iapPrices],
+    [need, coins, isAdFree, purchasesToday, iapPrices, onPartialHint],
   );
 
   const persistCounts = useCallback((counts: Record<string, number>) => {
@@ -181,6 +191,21 @@ export function MiniPackSheet({ need, source, presentation = 'overlay', onClose 
   const handleOption = useCallback(
     async (option: MiniPackOption) => {
       if (busyId) return;
+      if (option.kind === 'partial_hint') {
+        if (!option.affordable || !onPartialHint) return;
+        // Charge + delivery both live in the handler (GameScreen), keeping
+        // the charge-and-deliver-nothing class impossible from the sheet.
+        if (!onPartialHint()) return;
+        void soundManager.playSound('buttonPress');
+        void analytics.logEvent('mini_pack_purchase', {
+          need,
+          kind: 'partial_hint',
+          id: option.id,
+          source: source ?? 'unknown',
+        });
+        onClose();
+        return;
+      }
       if (option.kind === 'coin_item') {
         if (option.dailyLimitReached) {
           Alert.alert('Daily Limit Reached', `You've hit today's limit for ${option.title}.`);
@@ -239,7 +264,7 @@ export function MiniPackSheet({ need, source, presentation = 'overlay', onClose 
         setBusyId(null);
       }
     },
-    [busyId, grantCoinItem, need, persistCounts, purchasesToday, purchaseProduct, processAdReward, spendCoins],
+    [busyId, grantCoinItem, need, persistCounts, purchasesToday, purchaseProduct, processAdReward, spendCoins, onPartialHint, onClose, source],
   );
 
   const handleClose = useCallback(() => {
@@ -304,7 +329,7 @@ export function MiniPackSheet({ need, source, presentation = 'overlay', onClose 
                     <View style={styles.optionPrice}>
                       {busy ? (
                         <ActivityIndicator color={COLORS.accent} />
-                      ) : option.kind === 'coin_item' ? (
+                      ) : option.kind === 'coin_item' || option.kind === 'partial_hint' ? (
                         <View style={styles.priceRow}>
                           <GameIcon name="coin" size={14} />
                           <Text style={[styles.priceText, !option.affordable && styles.priceTextDim]}>

@@ -468,7 +468,7 @@ describe('mini pack sheet wiring', () => {
 describe('next-level interstitial', () => {
   it('is gated on the clamped Remote Config minimum level and the celebration modes', () => {
     const source = readSource('../screens/GameScreen.tsx');
-    expect(source).toContain("getRemoteNumberClamped('interstitialMinLevel', 13, 1, 200)");
+    expect(source).toContain("getRemoteNumberClamped('interstitialMinLevel', 10, 1, 200)");
     expect(source).toContain("if (isDaily || mode === 'weekly') return false;");
     expect(source).toContain('adManager.canShowInterstitial()');
     expect(source).toContain('await adManager.showInterstitialAd()');
