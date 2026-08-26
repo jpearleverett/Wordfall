@@ -11,6 +11,7 @@
  *   [perf:render]       — A React commit took >= RENDER_THRESHOLD_MS
  *   [perf:tap]          — Time from a tap/drag cell-press to React commit
  *   [perf:drag]         — Drag session summary (dispatches + duration)
+ *   [perf:cascade]      — Word-clear gravity: diff cost, tile counts, settle drift
  *
  * EXPECTED vs BAD NUMBERS (on modern hardware, 60fps budget = 16.67ms/frame)
  *
@@ -158,6 +159,52 @@ export function perfDragEnd(): void {
   );
   dragStartAt = null;
   dragDispatchCount = 0;
+}
+
+// ── Gravity cascade ─────────────────────────────────────────────────────
+// The one stretch of gameplay with nothing else measuring it. The fall itself
+// runs on the native driver and survives a blocked JS thread, so this does NOT
+// report animation smoothness — what it reports is the JS-side envelope: how
+// long the diff took, how many tiles moved, and how much wall time passed
+// between the plan being made and the last tile settling. A settle that
+// arrives much later than the planned budget means the JS thread was blocked
+// through the cascade, which is exactly the condition that makes the next
+// trace feel unresponsive.
+//
+//   [perf:cascade] plan=0.4ms falls=7 ghosts=5 budget=512ms settled=+518ms
+//
+// falls/ghosts far above a word's length means the diff saw more movement than
+// it should (a board swap animated as a cascade); a settled far above budget
+// means JS-thread contention.
+
+let cascadeStartedAt: number | null = null;
+let cascadeBudget = 0;
+
+export function perfCascadeStart(
+  planMs: number,
+  falls: number,
+  ghosts: number,
+  budgetMs: number,
+): void {
+  if (!PERF_ENABLED) return;
+  cascadeStartedAt = performance.now();
+  cascadeBudget = budgetMs;
+  // eslint-disable-next-line no-console
+  console.log(
+    `[perf:cascade] plan=${planMs.toFixed(1)}ms falls=${falls} ghosts=${ghosts} budget=${budgetMs.toFixed(0)}ms`,
+  );
+}
+
+export function perfCascadeSettled(): void {
+  if (!PERF_ENABLED) return;
+  if (cascadeStartedAt == null) return;
+  const dur = performance.now() - cascadeStartedAt;
+  const drift = dur - cascadeBudget;
+  cascadeStartedAt = null;
+  // eslint-disable-next-line no-console
+  console.log(
+    `[perf:cascade] settled=+${dur.toFixed(0)}ms drift=${drift >= 0 ? '+' : ''}${drift.toFixed(0)}ms`,
+  );
 }
 
 // ── Deferred mount hook ─────────────────────────────────────────────────

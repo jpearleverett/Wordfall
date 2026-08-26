@@ -47,7 +47,13 @@ import {
   reboundVector,
 } from './game/fallMotion';
 import { delayedTiming } from '../utils/motionTiming';
-import { perfDragStart, perfDragDispatch, perfDragEnd } from '../utils/perfInstrument';
+import {
+  perfCascadeSettled,
+  perfCascadeStart,
+  perfDragStart,
+  perfDragDispatch,
+  perfDragEnd,
+} from '../utils/perfInstrument';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
   clearFallResources,
@@ -574,6 +580,8 @@ function GameGridImpl({
   // recomputed on every render and only becomes the new baseline once the tree
   // actually commits.
   const pendingBaselineRef = useRef<CascadeFrame | null>(null);
+  /** Dev-only: how long the diff for the pending cascade took to compute. */
+  const pendingPlanMsRef = useRef(0);
   const ghostLayerRef = useRef<GhostLayerHandle | null>(null);
   // Fires onGravitySettled at the cascade's TOUCHDOWN rather than at the end
   // of the run. The haptic describes the board hitting bottom, and the rebound
@@ -621,6 +629,7 @@ function GameGridImpl({
   // Render-phase diff. All of the decision-making lives in planCascade, which
   // is pure and replayable; the only thing done here is the one side effect
   // that has to happen during render.
+  const planStartedAt = nowMs();
   const { decision, plan } = planCascade(
     prevFrameRef.current,
     frame,
@@ -630,9 +639,10 @@ function GameGridImpl({
       frozenPhases: frozenPhasesRef.current,
       traceOrder: lastSelectionOrderRef.current,
     },
-    nowMs(),
+    planStartedAt,
     reduceMotion,
   );
+  const planMs = nowMs() - planStartedAt;
 
   if (decision !== 'none') {
     if (plan.kind === 'snap') {
@@ -689,6 +699,7 @@ function GameGridImpl({
       }
       pendingFallsRef.current = plan.falls;
       pendingGhostsRef.current = plan.ghosts;
+      pendingPlanMsRef.current = planMs;
     }
     pendingBaselineRef.current = frame;
   }
@@ -733,6 +744,8 @@ function GameGridImpl({
     const falls = pendingFallsRef.current;
     if (falls.length === 0) return;
     pendingFallsRef.current = [];
+    const plannedBudget = pendingPlanMsRef.current;
+    pendingPlanMsRef.current = 0;
 
     // Hold just long enough for the cleared word's ghost pop to register, then
     // cascade outward from where the word was, one band at a time. A band is a
@@ -833,8 +846,10 @@ function GameGridImpl({
       0,
       cascadeTouchdownAt(fallRunsRef.current.values()) - nowMs(),
     );
+    perfCascadeStart(plannedBudget, falls.length, ghosts.length, touchdownIn);
     touchdownTimerRef.current = setTimeout(() => {
       touchdownTimerRef.current = null;
+      perfCascadeSettled();
       onGravitySettledRef.current?.();
     }, touchdownIn);
   });
