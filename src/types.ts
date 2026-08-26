@@ -873,7 +873,9 @@ export interface VictorySummaryItem {
     | 'library_teaser'
     | 'early_bonus'
     | 'mode_unlock'
-    | 'next_unlock_preview';
+    | 'next_unlock_preview'
+    | 'quest_progress'
+    | 'piggy_fill';
   icon: string;
   label: string;
   sublabel?: string;

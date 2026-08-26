@@ -17,7 +17,7 @@ import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
 import { generateShareText } from '../utils/shareGenerator';
 import { getMasteryTierForXP, MASTERY_REWARDS } from '../data/masteryRewards';
 import { eventManager } from '../services/eventManager';
-import { DailyQuestEvent } from '../data/dailyQuests';
+import { DailyQuestEvent, getQuestTemplate } from '../data/dailyQuests';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
 import { trackDifficultyPerception } from '../services/softLaunchAnalytics';
@@ -152,6 +152,8 @@ interface PlayerContextLike {
   collectStamp: (albumId: string, stampIndex: number) => void;
   unlockDecoration: (decorationId: string) => void;
   recordDailyQuestEvent: (event: DailyQuestEvent) => void;
+  /** Active quest snapshot — drives the victory quest-progress chip. */
+  dailyQuests?: { quests: Array<{ templateId: string; progress: number; claimed: boolean }> };
 }
 
 interface EconomyContextLike {
@@ -160,6 +162,8 @@ interface EconomyContextLike {
   addLibraryPoints: (amount: number) => void;
   addHintTokens: (amount: number) => void;
   addPiggyBankGems: (amount: number) => void;
+  /** Read-only jar snapshot (pre-fill) — drives the victory piggy chip. */
+  piggyBank?: { gems: number };
   addSeasonPassXp: (amount: number) => void;
   starterPackExpiresAt: number;
   activateStarterPack: () => void;
@@ -361,20 +365,27 @@ export function useRewardWiring({
       });
     }
 
-    // Daily quest progress — emit O(1) events for active quests.
-    player.recordDailyQuestEvent({ type: 'puzzle_complete' });
+    // Daily quest progress — emit O(1) events for active quests. Collected
+    // first so the victory-screen quest chip below can compute the SAME
+    // post-event progress the async context update will land on (quest
+    // tracking used to be completely invisible during play — rewards fired
+    // as surprise ceremonies while the only progress UI was a Home card).
+    const questEvents: DailyQuestEvent[] = [{ type: 'puzzle_complete' }];
     if (isPerfect) {
-      player.recordDailyQuestEvent({ type: 'flawless_complete' });
-      player.recordDailyQuestEvent({ type: 'hint_skipped_puzzle' });
+      questEvents.push({ type: 'flawless_complete' });
+      questEvents.push({ type: 'hint_skipped_puzzle' });
     }
-    player.recordDailyQuestEvent({ type: 'mode_played', mode });
+    questEvents.push({ type: 'mode_played', mode });
     if (boardData) {
       for (const w of boardData.words) {
         const len = w.word?.length ?? 0;
         if (len > 0) {
-          player.recordDailyQuestEvent({ type: 'word_found', value: len });
+          questEvents.push({ type: 'word_found', value: len });
         }
       }
+    }
+    for (const event of questEvents) {
+      player.recordDailyQuestEvent(event);
     }
 
     // Capture pre-play mode stats for first-clear detection
@@ -615,6 +626,51 @@ export function useRewardWiring({
           accentColor: COLORS.green,
         });
       }
+    }
+
+    // Visible pursuit chips \u2014 quest progress and piggy fill on the victory
+    // screen. Both systems already tracked and paid invisibly (quest events
+    // batch-fire; piggy fill shows only on Home/Shop), wasting the two
+    // strongest one-more-level meters in the game. Low priority: the
+    // victory screen's 2-item cap keeps them out of milestone moments.
+    const activeQuests = player.dailyQuests?.quests ?? [];
+    let bestQuestChip: { title: string; progress: number; target: number } | null = null;
+    for (const q of activeQuests) {
+      if (q.claimed) continue;
+      const template = getQuestTemplate(q.templateId);
+      if (!template) continue;
+      // Same post-event progress the async context update will land on.
+      const delta = questEvents.reduce((sum, e) => sum + template.matcher(e), 0);
+      const progress = Math.min(template.target, q.progress + delta);
+      if (progress >= template.target) continue; // completion pays its own ceremony
+      if (
+        !bestQuestChip ||
+        template.target - progress < bestQuestChip.target - bestQuestChip.progress
+      ) {
+        bestQuestChip = { title: template.title, progress, target: template.target };
+      }
+    }
+    if (bestQuestChip && mode !== 'daily' && mode !== 'weekly') {
+      summaryItems.push({
+        type: 'quest_progress',
+        icon: '\uD83C\uDFAF',
+        label: bestQuestChip.title,
+        sublabel: `${bestQuestChip.progress}/${bestQuestChip.target} \u2014 almost there!`,
+        accentColor: COLORS.cyan,
+      });
+    }
+    if (piggyFill > 0 && !isRepeatBoard && getRemoteBoolean('piggyBankEnabled')) {
+      const capacity = Math.max(1, Math.round(getRemoteNumber('piggyBankCapacity')));
+      // Context state is a pre-fill snapshot; this solve's fill was applied
+      // above, so add it for the displayed figure (clamped like the jar is).
+      const jarGems = Math.min(capacity, (economy.piggyBank?.gems ?? 0) + piggyFill);
+      summaryItems.push({
+        type: 'piggy_fill',
+        icon: '\uD83D\uDC37',
+        label: jarGems >= capacity ? 'Piggy Bank is FULL!' : 'Piggy Bank',
+        sublabel: `${jarGems}/${capacity} gems saved`,
+        accentColor: COLORS.gold,
+      });
     }
     // Award first-win bonus resources (handled separately from ceremony)
     if (isFirstWin) {
