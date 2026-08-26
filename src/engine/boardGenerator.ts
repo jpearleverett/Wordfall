@@ -26,9 +26,24 @@ function shuffleArray<T>(arr: T[], rng: () => number): T[] {
   return shuffled;
 }
 
+/**
+ * Cell ids must be unique across the WHOLE app, including across launches.
+ *
+ * A plain per-process counter is not: a puzzle snapshot persists its tiles'
+ * ids, and on relaunch the counter restarts at 1 — so a snapshot saved on the
+ * first board of a previous session restores ids that collide exactly with the
+ * board freshly generated for this one. Cell id is the identity the gravity
+ * cascade animates on, and `gridsShareNoCellIds` uses "no ids in common" to
+ * recognise a wholesale board REPLACEMENT and snap instead of animating it.
+ * Collide those two boards and hydrating the snapshot reads as a giant bogus
+ * cascade over the incoming board rather than a swap.
+ *
+ * A per-session prefix makes the two id spaces disjoint by construction.
+ */
+const CELL_ID_SESSION = Math.random().toString(36).slice(2, 8);
 let cellIdCounter = 0;
 function newCellId(): string {
-  return `cell_${++cellIdCounter}`;
+  return `cell_${CELL_ID_SESSION}_${++cellIdCounter}`;
 }
 
 /**

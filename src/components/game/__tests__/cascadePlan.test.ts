@@ -448,3 +448,30 @@ describe('ghost attribution', () => {
     expect(plan.ghosts.indexOf(ring)).toBe(plan.ghosts.length - 1);
   });
 });
+
+describe('board identity across app launches', () => {
+  test('generated cell ids are unique per session, so a restored snapshot is a swap', async () => {
+    // A puzzle snapshot persists its tiles' ids. With a plain per-process
+    // counter, relaunching and restoring a snapshot from the FIRST board of a
+    // previous session hands back ids identical to the board just generated
+    // for this one — and planCascade would read that swap as a transition,
+    // animating a full board's worth of bogus falls over the incoming grid.
+    const { generateBoard } = await import('../../../engine/boardGenerator');
+    const { getLevelConfig } = await import('../../../constants');
+    const config = getLevelConfig(1);
+    const first = generateBoard(config, 12345);
+    const second = generateBoard(config, 67890);
+
+    const idsOf = (g: Grid) =>
+      new Set(g.flat().filter(Boolean).map(c => c!.id));
+    const a = idsOf(first.grid);
+    const b = idsOf(second.grid);
+    expect(a.size).toBeGreaterThan(0);
+    for (const id of a) expect(b.has(id)).toBe(false);
+
+    // And an id carries something session-scoped, not just an ordinal — a bare
+    // counter would restart at 1 on the next launch.
+    const sample = [...a][0];
+    expect(sample).toMatch(/^cell_[a-z0-9]+_\d+$/);
+  }, 30000);
+});
