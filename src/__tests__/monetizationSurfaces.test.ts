@@ -456,10 +456,23 @@ describe('mini pack sheet wiring', () => {
     expect(app).toContain('presentation="modal"');
   });
 
-  it('the out-of-energy alert now carries a door to the shop', () => {
+  it('the out-of-energy wall is the designed modal at all three call sites, shop door intact', () => {
+    // Aug 2026: the bare native Alert (and its 'Go to Shop' button) was
+    // replaced by OutOfEnergyModal — branded, instrumented, A/B-able. The
+    // shop door survives as the onGemRefill broke path: a failed gem spend
+    // navigates to Shop instead of dead-ending.
     const app = fs.readFileSync(path.resolve(__dirname, '../../App.tsx'), 'utf8');
-    expect(app).not.toContain("Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.')");
-    expect(app.split("text: 'Go to Shop'").length - 1).toBeGreaterThanOrEqual(3);
+    expect(app).not.toContain("Alert.alert('Not Enough Gems'");
+    expect(app).not.toContain("Alert.alert(\n          'Take a Break!'");
+    expect(app.split('<OutOfEnergyModal').length - 1).toBeGreaterThanOrEqual(3);
+    expect(app.split('onGemRefill={').length - 1).toBeGreaterThanOrEqual(3);
+    // Every mount's broke path opens the shop (Home mounts navigate the
+    // sibling 'Shop' screen directly; the tab wrappers nest it).
+    const modalBlocks = app.split('<OutOfEnergyModal').slice(1);
+    for (const block of modalBlocks) {
+      const handler = block.split('onClose=')[0];
+      expect(handler).toContain("'Shop'");
+    }
   });
 });
 
