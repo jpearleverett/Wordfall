@@ -84,6 +84,12 @@ interface GameBannersProps {
    */
   isFirstStuck?: boolean;
   /**
+   * One-time proactive teaching banner at the L31 difficulty-regime onset
+   * (random-play stuck rate jumps 12% -> 57% there, and the gap is pure
+   * clear-order skill — the lever is teaching, never board easing).
+   */
+  showPlanAheadTip?: boolean;
+  /**
    * True when this attempt's undo was handed over by the free stuck rescue
    * rather than owned or bought. Worth saying out loud: the rescue silently
    * flips this banner from "tap to retry" to "tap to step back", so without
@@ -121,6 +127,7 @@ function GameBannersImpl({
   isFirstStuck = false,
   freeUndoGranted = false,
   isSpike = false,
+  showPlanAheadTip = false,
   onIdleHintTap,
   onAdHintTap,
   onUndoTap,
@@ -174,6 +181,16 @@ function GameBannersImpl({
             <GameIcon name="bolt" size={15} accent={COLORS.gold} />
             <Text style={[styles.cascadeText, styles.cascadeTextSpike]}>
               CHALLENGE LEVEL
+            </Text>
+          </View>
+        </View>
+      )}
+      {showPlanAheadTip && isPlaying && !isStuck && (
+        <View style={styles.cascadeBar}>
+          <View style={styles.bannerRow}>
+            <GameIcon name="hint" size={15} accent={COLORS.cyan} />
+            <Text style={styles.cascadeText}>
+              Order matters now — clear the word on TOP first
             </Text>
           </View>
         </View>

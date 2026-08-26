@@ -243,17 +243,21 @@ function isBreatherChapter(proceduralIndex: number): boolean {
 
 /**
  * Get the difficulty for a procedural chapter based on its index beyond the curated content.
- * Difficulty continues scaling beyond level 40's expert tier, with periodic
- * breather chapters so the infinite tail keeps the curated sawtooth macro-rhythm.
+ * The tail SEEDS FROM the curated endgame instead of restarting below it:
+ * L600 plays a 9x7/8-word expert board, so L601 opens at expert with the
+ * matching config (the old `proceduralIndex < 5 ? 'hard'` on-ramp handed the
+ * deepest, highest-investment cohort ~90 levels easier than level 100).
+ * Breather chapters (every 5th) remain the macro relief valve, one tier down.
  */
 function getProceduralDifficulty(proceduralIndex: number): Difficulty {
-  const baseDifficulty: Difficulty = proceduralIndex < 5 ? 'hard' : 'expert';
-  return isBreatherChapter(proceduralIndex) ? easeTier(baseDifficulty) : baseDifficulty;
+  return isBreatherChapter(proceduralIndex) ? 'hard' : 'expert';
 }
 
 /**
  * Get a BoardConfig for procedural chapters that scales beyond the curated difficulty.
- * Increases word count and grid size progressively.
+ * Every branch scales with the chapter index — the old default branch
+ * returned a FIXED 7x6/5-word board (a ~level-11 config) at any scale, which
+ * is what double-eased breathers served at level 905.
  */
 function getProceduralBoardConfig(proceduralIndex: number, difficulty: Difficulty): BoardConfig {
   // Scale word count and grid size beyond curated content
@@ -261,28 +265,46 @@ function getProceduralBoardConfig(proceduralIndex: number, difficulty: Difficult
 
   switch (difficulty) {
     case 'hard':
+      // The relief tier: opens at 8x7/6 (a genuine dip from expert's 9x7/8)
+      // and converges on the L600 endgame board (9x7/8) late in the tail —
+      // late-game "relief" is the board a mid-game player calls a finale.
       return {
-        rows: 7 + Math.floor(scaleFactor / 8),
+        rows: Math.min(8 + Math.floor(scaleFactor / 8), 9),
         cols: 7,
-        wordCount: 5 + Math.floor(scaleFactor / 5),
+        wordCount: Math.min(6 + Math.floor(scaleFactor / 5), 8),
         minWordLength: 3,
         maxWordLength: 6,
         difficulty: 'hard',
       };
-    case 'expert':
+    case 'expert': {
+      // Seeds at 9x7/8 — exactly the curated L600 config — then ramps to the
+      // documented caps (10x8, 10 words). Never regresses below the seed.
+      // decoyRichness ramps visual-search difficulty through the tail: the
+      // only difficulty axis still open once the structural caps are hit,
+      // and orthogonal to clear-order luck (see fillEmptyCells). Richer
+      // filler multiplies solver branching, so the cap tightens on the
+      // heaviest (9-10 word) boards to stay inside boardGen.perf's 900ms
+      // p95 guard.
+      const wordCount = Math.min(8 + Math.floor(scaleFactor / 5), 10);
       return {
         rows: Math.min(9 + Math.floor(scaleFactor / 6), 10),
         cols: Math.min(7 + Math.floor(scaleFactor / 10), 8),
-        wordCount: Math.min(7 + Math.floor(scaleFactor / 4), 10),
+        wordCount,
         minWordLength: 4,
         maxWordLength: 6,
         difficulty: 'expert',
+        decoyRichness: Math.min(wordCount >= 9 ? 0.25 : 0.5, scaleFactor * 0.025),
       };
+    }
     default:
+      // Reached only via the adaptive-difficulty breather path
+      // (getBreatherConfigExtended easing a breather chapter's 'hard') —
+      // still scales so a struggling level-900 player gets a mid-size board,
+      // not the level-11 one.
       return {
-        rows: 7,
+        rows: Math.min(7 + Math.floor(scaleFactor / 10), 8),
         cols: 6,
-        wordCount: 5,
+        wordCount: Math.min(5 + Math.floor(scaleFactor / 6), 7),
         minWordLength: 3,
         maxWordLength: 5,
         difficulty,
@@ -297,7 +319,10 @@ function getProceduralBoardConfig(proceduralIndex: number, difficulty: Difficult
  * bounds: rows ≤ 10, cols 4-8, wordCount 2-10, word lengths 3-6.
  */
 function applyProceduralTexture(config: BoardConfig, proceduralIndex: number): BoardConfig {
-  switch (proceduralIndex % 4) {
+  // Seven silhouettes against the 5-chapter breather rhythm: the combined
+  // cycle repeats every LCM(7,5)=35 chapters (525 levels), where the old
+  // %4 cycle locked the capped tail into an exact 300-level loop from L901.
+  switch (proceduralIndex % 7) {
     case 1: // tall + narrow — many shorter words, long gravity columns
       return {
         ...config,
@@ -318,6 +343,26 @@ function applyProceduralTexture(config: BoardConfig, proceduralIndex: number): B
         ...config,
         rows: Math.min(10, config.rows + 1),
       };
+    case 4: // wide — short stacks, long word window
+      return {
+        ...config,
+        rows: Math.max(config.minWordLength + 2, config.rows - 1),
+        cols: Math.min(8, config.cols + 1),
+        maxWordLength: 6,
+      };
+    case 5: // sparse — fewer words rattling around the full grid
+      return {
+        ...config,
+        wordCount: Math.max(5, config.wordCount - 2),
+        maxWordLength: 6,
+      };
+    case 6: // swarm — one extra short word, tighter length window
+      return {
+        ...config,
+        wordCount: Math.min(10, config.wordCount + 1),
+        minWordLength: 3,
+        maxWordLength: Math.max(4, config.maxWordLength - 1),
+      };
     default: // standard mix — the base procedural config
       return config;
   }
@@ -329,10 +374,12 @@ function applyProceduralTexture(config: BoardConfig, proceduralIndex: number): B
  * wordCount cap (procedural expert configs already reach the 10-word bound).
  */
 function applyProceduralSpike(config: BoardConfig): BoardConfig {
+  // Procedural levels are all past BOSS_WORD_MIN_LEVEL (300), so the spike's
+  // +1-length step may reach the 7-letter boss-word window.
   return {
     ...config,
     wordCount: Math.min(10, config.wordCount + 1),
-    maxWordLength: Math.min(6, config.maxWordLength + 1),
+    maxWordLength: Math.min(7, config.maxWordLength + 1),
   };
 }
 
@@ -439,6 +486,7 @@ export function generateProceduralChapter(chapterId: number): Chapter {
     wingId: `procedural_${Math.floor(proceduralIndex / 5)}`,
     icon: themeInfo.icon,
     profile,
+    isBossChapter: finale,
   };
 }
 
@@ -474,8 +522,20 @@ export function getLevelConfigExtended(level: number): BoardConfig {
   const difficulty = getProceduralDifficulty(chapterIndex);
 
   // Breather levels play the standard silhouette one tier down — a real
-  // relief valve, not just a smaller spike.
+  // relief valve, not just a smaller spike. Inside a breather CHAPTER the
+  // tier is already eased, so the per-level breather dips in config space
+  // instead of easing twice (double-easing is how level 905 used to serve a
+  // level-11 board).
   if (isBreatherLevel(level)) {
+    if (isBreatherChapter(chapterIndex)) {
+      // Dip from the same textured config the chapter's plain levels play,
+      // so the breather is always the lightest board in its own chapter.
+      const eased = applyProceduralTexture(
+        getProceduralBoardConfig(chapterIndex, difficulty),
+        chapterIndex,
+      );
+      return { ...eased, wordCount: Math.max(4, eased.wordCount - 1) };
+    }
     return getProceduralBoardConfig(chapterIndex, easeTier(difficulty));
   }
 

@@ -3,10 +3,18 @@ import {
   View,
   Text,
   StyleSheet,
+  Alert,
   Animated,
   Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { analytics } from '../services/analytics';
+import { getRemoteBoolean } from '../services/remoteConfig';
+import {
+  getWeekendWindow,
+  tournamentEventId,
+  weekendTournamentEnabled,
+} from '../data/weekendTournament';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
@@ -817,7 +825,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
   onPlayEventPuzzle: onPlayEventPuzzleProp,
   onOpenEventShop: onOpenEventShopProp,
 }) => {
-  const { addCoins, addGems, addHintTokens } = useEconomyActions();
+  const { addCoins, addGems, addHintTokens, spendGems } = useEconomyActions();
   const { user } = useAuth();
   const ownedDecorations = usePlayerStore(selectOwnedDecorations);
   const unlockedCosmetics = usePlayerStore(selectUnlockedCosmetics);
@@ -837,6 +845,17 @@ const EventScreen: React.FC<EventScreenProps> = ({
   // Get the primary event (main or first active)
   const primaryEvent = activeEvents.find(e => e.type === 'main') || activeEvents[0];
 
+  // Shared claim bounce — skipped under reduce motion (claimed styling is
+  // the durable signal; the bounce is decoration). One helper so the
+  // reduce-motion gate cannot drift between the tier-claim and buyout paths.
+  const playClaimBounce = useCallback(() => {
+    if (reduceMotion) return;
+    Animated.sequence([
+      Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
+      Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+  }, [claimAnim, reduceMotion]);
+
   // Claim a reward tier
   const handleClaimReward = useCallback((eventId: string, tier: string) => {
     const reward = eventManager.claimEventReward(eventId, tier);
@@ -851,18 +870,38 @@ const EventScreen: React.FC<EventScreenProps> = ({
 
       // Animate claim (skipped under reduce motion — claimed styling is
       // the durable signal; the bounce is decoration)
-      if (!reduceMotion) {
-        Animated.sequence([
-          Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
-          Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
-        ]).start();
-      }
+      playClaimBounce();
 
       // Refresh events and persist claimed state to PlayerContext/AsyncStorage
       setActiveEvents(eventManager.getActiveEvents());
       updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
     }
-  }, [addCoins, addGems, addHintTokens, unlockDecoration, claimAnim, updateProgress, reduceMotion]);
+  }, [addCoins, addGems, addHintTokens, unlockDecoration, playClaimBounce, updateProgress]);
+
+  // Collection buyout — the genre's sawtooth-IAP engine (Wordscapes
+  // Wildlife pattern): near the finish line, the last stretch of an event's
+  // reward ladder is purchasable for gems. Priced at ~1 gem per 1% of the
+  // full ladder, clamped so neither a rounding sliver nor a whale-sized
+  // wall appears; only offered inside the final stretch or the last day,
+  // where completion anxiety (not skipping) is what's being sold.
+  const handleBuyout = useCallback((eventId: string, remaining: number, gemCost: number) => {
+    if (!spendGems(gemCost)) {
+      Alert.alert('Not enough gems', `Finishing this collection costs ${gemCost} gems.`, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Get gems', onPress: onOpenEventShop },
+      ]);
+      return;
+    }
+    eventManager.updateEventProgress(eventId, 'gem_buyout', remaining);
+    setActiveEvents(eventManager.getActiveEvents());
+    updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
+    void analytics.logEvent('event_buyout_purchased', {
+      event_id: eventId,
+      amount: remaining,
+      gems: gemCost,
+    });
+    playClaimBounce();
+  }, [spendGems, updateProgress, playClaimBounce, onOpenEventShop]);
 
   // Get the current event's exclusive reward (must be declared before the claim callback
   // that closes over it, otherwise TS flags a "used before declaration" error).
@@ -1015,6 +1054,61 @@ const EventScreen: React.FC<EventScreenProps> = ({
           </LinearGradient>
         )}
 
+        {/* Weekend Tournament — Fri-Sun appointment in ~100-player brackets
+            (deterministic per uid+weekend, riding the per-event leaderboard
+            rails). Off-window it teases the next start. */}
+        {weekendTournamentEnabled() && (() => {
+          const weekend = getWeekendWindow();
+          if (!weekend.active) {
+            return (
+              <View style={[styles.eventCard, { borderColor: COLORS.gold + '40' }]}>
+                <Text style={[styles.eventName, { color: COLORS.gold }]}>
+                  {'🏆'} Weekend Tournament
+                </Text>
+                <Text style={styles.eventDesc}>
+                  Starts Friday — every solve counts toward your 100-player bracket.
+                </Text>
+                <Text style={[styles.countdownText, { color: COLORS.gold, marginTop: 6 }]}>
+                  {formatCountdown(weekend.nextStartsAt)} until it begins
+                </Text>
+              </View>
+            );
+          }
+          const bracketEventId = user?.uid
+            ? tournamentEventId(user.uid, weekend.weekendId)
+            : null;
+          return (
+            <View style={[styles.eventCard, { borderColor: COLORS.gold + '55', ...SHADOWS.glow(COLORS.gold) }]}>
+              <Text style={[styles.eventName, { color: COLORS.gold }]}>
+                {'🏆'} Weekend Tournament — LIVE
+              </Text>
+              <Text style={styles.eventDesc}>
+                Every solve scores. Top your bracket before the buzzer.
+              </Text>
+              <Text style={[styles.countdownText, { color: COLORS.gold, marginTop: 6 }]}>
+                {formatCountdown(weekend.endsAt)} remaining
+              </Text>
+              {bracketEventId ? (
+                <View style={styles.leaderboardGlass}>
+                  <LinearGradient
+                    colors={[...GRADIENTS.glassOverlay] as [string, string]}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0.5, y: 0 }}
+                    end={{ x: 0.5, y: 1 }}
+                  />
+                  <EventLeaderboardCard
+                    eventId={bracketEventId}
+                    currentUserId={user?.uid}
+                    previewSize={5}
+                  />
+                </View>
+              ) : (
+                <Text style={styles.eventDesc}>Sign in to join a bracket.</Text>
+              )}
+            </View>
+          );
+        })()}
+
         {/* Active Events List */}
         {activeEvents.length > 0 && (
           <SectionHeader
@@ -1109,6 +1203,39 @@ const EventScreen: React.FC<EventScreenProps> = ({
                 color={color}
                 rewards={activeEvent.rewards}
               />
+
+              {/* Collection buyout — purchasable last stretch (final 25% of
+                  the ladder, or any unfinished ladder in the last 24h).
+                  ~1 gem per 1% of the full ladder, clamped [5, 80]. */}
+              {(() => {
+                if (!getRemoteBoolean('eventBuyoutEnabled')) return null;
+                const remaining = maxThreshold - progress;
+                if (remaining <= 0 || progress <= 0) return null;
+                const remainingFrac = remaining / Math.max(maxThreshold, 1);
+                const lastDay =
+                  activeEvent.endTime - Date.now() <= 24 * 60 * 60 * 1000;
+                if (remainingFrac > 0.25 && !lastDay) return null;
+                const gemCost = Math.max(5, Math.min(80, Math.ceil(remainingFrac * 100)));
+                return (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.buyoutButton,
+                      { borderColor: color + '66' },
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={() => handleBuyout(activeEvent.id, remaining, gemCost)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Finish the collection for ${gemCost} gems`}
+                  >
+                    <Text style={[styles.buyoutText, { color }]}>
+                      {'\u{1F48E}'} FINISH IT — {gemCost} GEMS
+                    </Text>
+                    <Text style={styles.buyoutSub}>
+                      Completes the last {Math.ceil(remainingFrac * 100)}% of the ladder
+                    </Text>
+                  </Pressable>
+                );
+              })()}
 
               {/* Reward Tiers — cards scale up with reward magnitude; every
                   tier shows its OWN reward glyph at full brightness (locked =
@@ -1463,6 +1590,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     backgroundColor: COLORS.surface,
+  },
+  buyoutButton: {
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  buyoutText: {
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 0.8,
+  },
+  buyoutSub: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontFamily: FONTS.bodyRegular,
+    marginTop: 2,
   },
   eventTopEdge: {
     position: 'absolute',

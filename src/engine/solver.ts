@@ -29,10 +29,6 @@ export function findWordInGrid(
 
   function dfs(r: number, c: number, idx: number, path: CellPosition[]): void {
     if (limit > 0 && results.length >= limit) return;
-    if (idx === word.length) {
-      results.push([...path]);
-      return;
-    }
     if (r < 0 || r >= rows || c < 0 || c >= cols) return;
     if (visited[r][c]) return;
     const cell = grid[r][c];
@@ -41,9 +37,18 @@ export function findWordInGrid(
     visited[r][c] = true;
     path.push({ row: r, col: c });
 
-    for (const [dr, dc] of DIRS) {
-      if (limit > 0 && results.length >= limit) break;
-      dfs(r + dr, c + dc, idx + 1, path);
+    // Completion is checked AFTER consuming the cell. The old version
+    // checked `idx === word.length` at function entry, which fired once per
+    // neighbor direction of the final cell — the same path was pushed up to
+    // 8 times. Invisible to the limit=1 callers, but it made any
+    // occurrence COUNT (limit > 1) meaningless.
+    if (path.length === word.length) {
+      results.push([...path]);
+    } else {
+      for (const [dr, dc] of DIRS) {
+        if (limit > 0 && results.length >= limit) break;
+        dfs(r + dr, c + dc, idx + 1, path);
+      }
     }
 
     path.pop();

@@ -39,6 +39,12 @@ export interface RemoteConfigValues {
    * unaffected.
    */
   dailyFlawlessGemCap: number;
+  /**
+   * Aggregate per-UTC-day gem ceiling shared by the recurring meta faucets
+   * (daily quests, mystery wheel, bonus chest, weekly goals). Clamped
+   * [0,200] at the read in data/economyTuning.ts.
+   */
+  dailyTotalGemCap: number;
   // Energy
   maxEnergy: number;
   energyRegenMinutes: number;
@@ -48,9 +54,8 @@ export interface RemoteConfigValues {
   interstitialIntervalMs: number;
   /**
    * First level at which interstitial ads may show. Callers must read this
-   * through getRemoteNumberClamped(key, 13, 1, 200) — an accidental 0 would
+   * through getRemoteNumberClamped(key, 10, 1, 200) — an accidental 0 would
    * put an interstitial on a brand-new player's very first puzzle.
-   * (Declared August 2026; the interstitial call site wires it in wave 2.)
    */
   interstitialMinLevel: number;
   // Events
@@ -71,6 +76,28 @@ export interface RemoteConfigValues {
   adaptiveDifficultyEnabled: boolean;
   /** Tier 6 B1 — surface a free-hint breather modal after 2 consecutive fails. */
   failBreatherEnabled: boolean;
+  /**
+   * Remove-Ads auto-grant scope: 'legacy' keeps consumable auto-grants at
+   * the watch-path caps; 'scoped' tightens them to 3/day (double_reward and
+   * time_continue unaffected). See services/ads.ts autoGrantScope().
+   */
+  removeAdsAutoGrantScope: string;
+  /** Allow the next-level interstitial on the zero-tap auto-advance path. */
+  interstitialOnAutoAdvance: boolean;
+  /** Pre-level booster-commit sheet on spike levels (once per level entry). */
+  preLevelBoosterSheetEnabled: boolean;
+  /** Authored low-forgiveness pinch slots past L150 (see isPinchLevel). */
+  pinchLevelsEnabled: boolean;
+  /** Gem buyout of an event ladder's last stretch (EventScreen "FINISH IT"). */
+  eventBuyoutEnabled: boolean;
+  /** Fri-Sun weekend tournament in hashed brackets (data/weekendTournament). */
+  weekendTournamentEnabled: boolean;
+  /**
+   * Bracket BUCKET count for the weekend tournament — expected bracket size
+   * ≈ weekend actives / count; tune to hold ~100/bracket as DAU moves.
+   * Clamped [1, 4096] at the read.
+   */
+  tournamentBracketCount: number;
   /** Tier 6 B6 — render the dynamic "For You" offers row on Shop / Home. */
   dynamicOffersEnabled: boolean;
   /** Tier 6 B2 — queue the first-purchase-offer modal post-onboarding. */
@@ -295,6 +322,8 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Per-UTC-day gem ceiling for flawless clears (clamped [0,100] at the
   // read in data/economyTuning.ts).
   dailyFlawlessGemCap: 5,
+  // Aggregate per-UTC-day cap across the recurring meta gem faucets.
+  dailyTotalGemCap: 10,
   // Energy
   maxEnergy: 30,
   energyRegenMinutes: 15,
@@ -305,7 +334,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // No interstitials before level 13 (clamped [1,200] at the call site —
   // wired in wave 2). Matches ECONOMY_TUNING.firstPurchasePressureLevel:
   // players see zero forced ads until they've hit real difficulty.
-  interstitialMinLevel: 13,
+  // Lowered 13→10 (Aug 2026): genre norm starts interstitials ~L10 and
+  // the ad-free honeymoon plus auto-advance guard keep early feel safe.
+  interstitialMinLevel: 10,
   // Events — both ON by default. The features have been live (via the
   // authored event rotation and getFlashSale hash) for a while; these
   // flags are now real ops kill-switches wired in getCurrentEvent
@@ -335,6 +366,22 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Tier 6 B1 — breather modal after two fails; kill-switch to false if
   // cohort data shows it hurts whale grind retention.
   failBreatherEnabled: true,
+  // Paid-product behavior flips only by explicit experiment, never silently.
+  removeAdsAutoGrantScope: 'legacy',
+  // Zero-tap auto-advance never ambushes an interstitial by default.
+  interstitialOnAutoAdvance: false,
+  // Spike-level booster-commit sheet; kill-switch if entry-flow friction
+  // shows up in funnel data.
+  preLevelBoosterSheetEnabled: true,
+  // Authored pinch slots; kill-switch if churn data shows the window is
+  // tuned too tight.
+  pinchLevelsEnabled: true,
+  // Event-ladder gem buyout; the recurring gem sink the tightened faucets
+  // route demand toward.
+  eventBuyoutEnabled: true,
+  // Weekend tournament (Fri 17:00 → Sun 22:00 UTC), hashed brackets.
+  weekendTournamentEnabled: true,
+  tournamentBracketCount: 32,
   // Tier 6 B6 — dynamic "For You" comeback-ladder row; kill-switch if the
   // segmentation logic misfires on any tier post-launch.
   dynamicOffersEnabled: true,
@@ -413,8 +460,11 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   invalidShakeEnabled: true,
   freeStuckRescueEnabled: true,
   offerMinLevel: 6,
-  offerMaxPerSession: 3,
-  offerCooldownMinutes: 8,
+  // Raised 3→4 / 8→6 (Aug 2026): in the L31-120 band the naive stuck rate
+  // is 57%, so most high-intent rescue moments fell outside the old pacing
+  // window and showed no offer at all.
+  offerMaxPerSession: 4,
+  offerCooldownMinutes: 6,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
 

@@ -1,10 +1,10 @@
 import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition, GameMode, GenerationProfile, Difficulty } from '../types';
 import { applyGravity } from './gravity';
-import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating, isSolvableShrinkingBoard, estimateForgiveness } from './solver';
+import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating, isSolvableShrinkingBoard, estimateForgiveness, findWordInGrid } from './solver';
 import { getWordsByLength } from '../words';
 import { weekIdSeed } from '../utils/weekId';
 import { getDailyTheme, getWeeklyTheme } from '../data/sharedBoardThemes';
-import { DIFFICULTY_CONFIGS } from '../constants';
+import { DIFFICULTY_CONFIGS, isPinchLevel } from '../constants';
 
 // Simple seeded PRNG (mulberry32)
 function createRng(seed: number) {
@@ -120,25 +120,36 @@ function placeWord(
  * Fill all null cells in the grid with random letters.
  * Uses uncommon consonant clusters to minimize accidental word formation.
  */
-function fillEmptyCells(grid: Grid, rng: () => number): void {
-  // Weighted letter pool: heavy on uncommon consonants to reduce accidental words
+function fillEmptyCells(grid: Grid, rng: () => number, decoyRichness: number = 0): void {
+  // Weighted letter pool: heavy on uncommon consonants to reduce accidental words.
+  //
+  // `decoyRichness` (0..1) shifts weight from the uncommon bucket toward
+  // vowels + common consonants. Richer filler makes list words slower to
+  // SPOT (near-miss traces abound) without touching clear-order luck — the
+  // one difficulty axis orthogonal to the guarded stuckRate/skilledPlay
+  // invariants, and invalid traces cost nothing in a no-submit game. The
+  // late procedural tail ramps this; everything else passes 0 and keeps the
+  // shipped 25/30/45 split byte for byte. attemptGenerate pairs any
+  // richness > 0 with a duplicate-occurrence rejection pass, since richer
+  // filler erodes the statistical protection against accidental copies of
+  // list words.
   const vowels = 'AEIOU';
   const commonConsonants = 'BCDFGHLMNPRST';
   const uncommonConsonants = 'JKQVWXYZ';
+  const richness = Math.max(0, Math.min(1, decoyRichness));
+  const vowelShare = 0.25 + 0.1 * richness;    // 25% → 35%
+  const commonShare = 0.3 + 0.15 * richness;   // 30% → 45% (uncommon 45% → 20%)
 
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[0].length; c++) {
       if (grid[r][c] === null) {
         const roll = rng();
         let letter: string;
-        if (roll < 0.25) {
-          // 25% vowels (reduced from 35%)
+        if (roll < vowelShare) {
           letter = vowels[Math.floor(rng() * vowels.length)];
-        } else if (roll < 0.55) {
-          // 30% common consonants
+        } else if (roll < vowelShare + commonShare) {
           letter = commonConsonants[Math.floor(rng() * commonConsonants.length)];
         } else {
-          // 45% uncommon consonants — makes accidental words very unlikely
           letter = uncommonConsonants[Math.floor(rng() * uncommonConsonants.length)];
         }
         grid[r][c] = { letter, id: newCellId() };
@@ -146,6 +157,7 @@ function fillEmptyCells(grid: Grid, rng: () => number): void {
     }
   }
 }
+
 
 /**
  * Select words for a puzzle, ensuring variety in length and starting letters.
@@ -619,7 +631,8 @@ function attemptGenerate(
   }
 
   // Fill empty cells
-  fillEmptyCells(grid, rng);
+  const decoyRichness = Math.max(0, Math.min(1, config.decoyRichness ?? 0));
+  fillEmptyCells(grid, rng, decoyRichness);
 
   // Carve intentional holes per the chapter profile. `denseBoard` chapters
   // force a fully-filled board regardless of the declared density. Carving
@@ -644,6 +657,69 @@ function attemptGenerate(
     )
   ) {
     return null;
+  }
+
+  // Duplicate-occurrence guard (decoy boards only): richer filler can mint
+  // a SECOND occurrence of a list word. All solvers and the trace resolver
+  // use the first occurrence, so a filler copy makes the solver's model and
+  // the player's board disagree. Occurrences over the SAME cell set
+  // (alternate traversals of a repeated-letter word) are harmless. Runs
+  // AFTER the solvability gate so only surviving candidates pay for it;
+  // only short words are scanned (a 6-letter filler copy is astronomically
+  // unlikely); and copies are SURGICALLY broken — one filler cell of the
+  // offending occurrence is overwritten with an uncommon consonant — rather
+  // than rejecting the (expensive, already-solvable) candidate.
+  if (decoyRichness > 0) {
+    const cellSetKey = (ps: CellPosition[]): string =>
+      ps.map((p) => `${p.row},${p.col}`).sort().join('|');
+    const placedCells = new Set<string>();
+    for (const positions of wordPositions.values()) {
+      for (const p of positions) placedCells.add(`${p.row},${p.col}`);
+    }
+    let mutations = 0;
+    for (const placement of placements) {
+      if (mutations >= 12) break; // best-effort cap — never reject for this
+      const canonical = cellSetKey(placement.positions);
+      for (let pass = 0; pass < 6 && mutations < 12; pass++) {
+        // Only FILLER-ASSISTED copies are in scope: copies spelled entirely
+        // by placed words' crossing cells predate the decoy knob (and are
+        // statistically tolerated today) — and breaking them would break a
+        // placed word.
+        const offending = findWordInGrid(grid, placement.word, 4).find(
+          (occ) =>
+            cellSetKey(occ) !== canonical &&
+            occ.some((pos) => !placedCells.has(`${pos.row},${pos.col}`)),
+        );
+        if (!offending) break;
+        const fillerIdx = offending.findIndex(
+          (pos) => !placedCells.has(`${pos.row},${pos.col}`),
+        );
+        const pos = offending[fillerIdx];
+        const cell = grid[pos.row][pos.col];
+        if (!cell) break;
+        // Any letter that differs from the one this occurrence needs at
+        // this index breaks the copy; uncommon consonants avoid minting
+        // new words in the process.
+        cell.letter = placement.word[fillerIdx] === 'Q' ? 'X' : 'Q';
+        mutations++;
+      }
+    }
+    // Mutations can only remove accidental copies, but the solvability
+    // proof ran on the pre-mutation grid — re-verify once when any landed.
+    if (
+      mutations > 0 &&
+      !checkSolvability(
+        grid,
+        wordStrings,
+        wordPositions,
+        rng,
+        mode,
+        requireForgiving ? config.difficulty : undefined,
+        deterministic,
+      )
+    ) {
+      return null;
+    }
   }
 
   return { grid, words: placements, config };
@@ -874,6 +950,87 @@ export function generateBoard(
 
   // Should never reach here, but just in case
   throw new Error('Failed to generate board after all attempts');
+}
+
+// ── Pinch boards (authored low-forgiveness slots) ──────────────────────────
+
+/**
+ * Forgiveness window a pinch board must land in. Above the max the board
+ * doesn't bite; below the min a non-planner faces near-pure luck. The floor
+ * matters for fairness: any SOLVABLE board is winnable by a player checking
+ * one move ahead (a word whose clear keeps the rest solvable always exists
+ * while the board is solvable — the first word of the winning order), so
+ * the window shapes how hard the board leans on that skill, never whether
+ * skill can win.
+ */
+export const PINCH_FORGIVENESS_MAX = 0.35;
+export const PINCH_FORGIVENESS_MIN = 0.05;
+const PINCH_SHOP_ATTEMPTS = 8;
+const PINCH_FORGIVENESS_SAMPLES = 16;
+/** Hard wall-clock budget for shopping — well inside boardGen.perf's p95. */
+const PINCH_SHOP_BUDGET_MS = 1200;
+
+/**
+ * Inverse board-shopping: where shopFairestBoard hunts for the MOST
+ * forgiving candidate, this hunts for the tightest candidate inside the
+ * pinch window — the designed "hard level" beat that converts frustration
+ * into framed, purchasable challenge (hints/undos/boosters demand on a
+ * schedule). Falls back to normal generation when no candidate lands in
+ * the window inside the budget: a pinch slot that can't be authored plays
+ * as a plain level, never as a stall or an unfair board.
+ */
+export function generatePinchBoard(
+  config: BoardConfig,
+  seed?: number,
+  mode?: GameMode,
+  profile?: GenerationProfile,
+  themeWords?: string[],
+): Board {
+  const baseSeed = seed ?? Date.now();
+  const startTime = Date.now();
+  let best: { board: Board; forgiveness: number } | null = null;
+
+  for (let attempt = 0; attempt < PINCH_SHOP_ATTEMPTS; attempt++) {
+    if (Date.now() - startTime > PINCH_SHOP_BUDGET_MS) break;
+    const rng = createRng(baseSeed + attempt * 104729);
+    // requireForgiving=false: any SOLVABLE candidate qualifies for scoring.
+    const board = attemptGenerate(config, rng, mode, profile, themeWords, false, false);
+    if (!board) continue;
+    const forgiveness = estimateForgiveness(
+      board.grid,
+      board.words.map((w) => w.word),
+      PINCH_FORGIVENESS_SAMPLES,
+      rng,
+    );
+    if (forgiveness < PINCH_FORGIVENESS_MIN || forgiveness > PINCH_FORGIVENESS_MAX) continue;
+    if (!best || forgiveness < best.forgiveness) {
+      best = { board, forgiveness };
+    }
+    if (best.forgiveness <= 0.15) break; // tight enough — stop shopping
+  }
+
+  if (best) return best.board;
+  return generateBoard(config, baseSeed, mode, profile, themeWords);
+}
+
+/**
+ * Level-aware generation router: classic pinch levels (isPinchLevel) shop
+ * for a low-forgiveness board; everything else takes the normal path. The
+ * single entry point the classic level-load call sites use, so the pinch
+ * cadence can't drift per call site.
+ */
+export function generateLevelBoard(
+  level: number,
+  config: BoardConfig,
+  seed?: number,
+  mode?: GameMode,
+  profile?: GenerationProfile,
+  themeWords?: string[],
+): Board {
+  if (mode === 'classic' && isPinchLevel(level)) {
+    return generatePinchBoard(config, seed, mode, profile, themeWords);
+  }
+  return generateBoard(config, seed, mode, profile, themeWords);
 }
 
 /**

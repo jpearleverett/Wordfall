@@ -676,6 +676,29 @@ function gameReducer(state: GameState, action: GameActionWithExtensions): GameSt
       };
     }
 
+    case 'USE_PARTIAL_HINT': {
+      // First-letter reveal — the cheap rung under the full-word hint.
+      // Selects only the hint word's first cell; no hintsLeft charge (the
+      // caller charges coins directly). Still an assist: breaks perfectRun
+      // and counts in hintsUsed, same as every other reveal.
+      if (state.status !== 'playing') return state;
+
+      const remainingWords = state.board.words
+        .filter(w => !w.found)
+        .map(w => w.word);
+
+      const hint = pickHintForMode(state, remainingWords);
+      if (!hint || hint.positions.length === 0) return state;
+
+      return {
+        ...state,
+        selectedCells: [hint.positions[0]],
+        selectionDirection: null,
+        hintsUsed: state.hintsUsed + 1,
+        perfectRun: false,
+      };
+    }
+
     case 'UNDO_MOVE': {
       if (state.history.length === 0) return state;
       if (state.status !== 'playing' && state.status !== 'failed') return state;

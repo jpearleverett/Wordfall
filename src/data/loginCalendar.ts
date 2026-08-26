@@ -30,9 +30,15 @@ export type LoginCalendarVariant = '7day' | '30day';
 
 /** 30-day escalating calendar. Tiers:
  *  Week 1 (days 1-7)   — onboarding ramp, day-7 milestone (200 coins + 10 gems + rare tile)
- *  Week 2 (days 8-14)  — mid-cycle pull, day-14 milestone (400 coins + 25 gems)
+ *  Week 2 (days 8-14)  — mid-cycle pull, day-14 milestone (250 coins + 10 gems)
  *  Week 3 (days 15-21) — escalating rewards, day-21 unlocks cosmetic frame
- *  Week 4 (days 22-30) — peak rewards, day-30 grand prize (1000 coins + 100 gems + exclusive)
+ *  Week 4 (days 22-30) — peak rewards, day-30 grand prize (700 coins + 25 gems + exclusive)
+ *
+ * Cycle totals are deliberately capped (~6,000 coins / ~96 gems, pinned by
+ * test): the calendar alone used to average 10 gems/day against the 3/day
+ * economy design target (ECONOMY_TUNING.dailyGemDripTarget), which erased
+ * every hint/gem pinch past ~L30. Week 1 keeps its full honeymoon weight;
+ * the cuts land in weeks 2-4 where the surplus accumulated.
  */
 export const LOGIN_CALENDAR_REWARDS_30: LoginCalendarReward[] = [
   // Week 1
@@ -44,31 +50,31 @@ export const LOGIN_CALENDAR_REWARDS_30: LoginCalendarReward[] = [
   { day: 6,  rewards: { coins: 175, hints: 3 },            label: '175 Coins + 3 Hints',  icon: '💡' },
   { day: 7,  rewards: { coins: 200, gems: 10, rareTile: true }, label: 'Week 1 Milestone!', icon: '🏆' },
   // Week 2
-  { day: 8,  rewards: { coins: 100, gems: 3 },             label: '100 Coins + 3 Gems',   icon: '💎' },
-  { day: 9,  rewards: { coins: 125 },                      label: '125 Coins',            icon: '🪙' },
-  { day: 10, rewards: { coins: 150, hints: 2 },            label: '150 Coins + 2 Hints',  icon: '💡' },
-  { day: 11, rewards: { coins: 175, gems: 5 },             label: '175 Coins + 5 Gems',   icon: '💎' },
-  { day: 12, rewards: { coins: 200 },                      label: '200 Coins',            icon: '🪙' },
-  { day: 13, rewards: { coins: 250, hints: 3 },            label: '250 Coins + 3 Hints',  icon: '💡' },
-  { day: 14, rewards: { coins: 400, gems: 25 },            label: 'Week 2 Milestone!',    icon: '🏆' },
+  { day: 8,  rewards: { coins: 75, gems: 2 },              label: '75 Coins + 2 Gems',    icon: '💎' },
+  { day: 9,  rewards: { coins: 100 },                      label: '100 Coins',            icon: '🪙' },
+  { day: 10, rewards: { coins: 100, hints: 2 },            label: '100 Coins + 2 Hints',  icon: '💡' },
+  { day: 11, rewards: { coins: 125, gems: 3 },             label: '125 Coins + 3 Gems',   icon: '💎' },
+  { day: 12, rewards: { coins: 150 },                      label: '150 Coins',            icon: '🪙' },
+  { day: 13, rewards: { coins: 175, hints: 3 },            label: '175 Coins + 3 Hints',  icon: '💡' },
+  { day: 14, rewards: { coins: 250, gems: 10 },            label: 'Week 2 Milestone!',    icon: '🏆' },
   // Week 3
-  { day: 15, rewards: { coins: 150, gems: 5 },             label: '150 Coins + 5 Gems',   icon: '💎' },
-  { day: 16, rewards: { coins: 200, hints: 2 },            label: '200 Coins + 2 Hints',  icon: '💡' },
-  { day: 17, rewards: { coins: 250, gems: 8 },             label: '250 Coins + 8 Gems',   icon: '💎' },
-  { day: 18, rewards: { coins: 300, hints: 3 },            label: '300 Coins + 3 Hints',  icon: '💡' },
-  { day: 19, rewards: { coins: 350, gems: 10 },            label: '350 Coins + 10 Gems',  icon: '💎' },
-  { day: 20, rewards: { coins: 400, hints: 5 },            label: '400 Coins + 5 Hints',  icon: '💡' },
-  { day: 21, rewards: { coins: 600, gems: 50, cosmetic: 'login_21_frame' }, label: 'Week 3 — Frame Unlock!', icon: '🎨' },
+  { day: 15, rewards: { coins: 100, gems: 2 },             label: '100 Coins + 2 Gems',   icon: '💎' },
+  { day: 16, rewards: { coins: 125, hints: 2 },            label: '125 Coins + 2 Hints',  icon: '💡' },
+  { day: 17, rewards: { coins: 150, gems: 3 },             label: '150 Coins + 3 Gems',   icon: '💎' },
+  { day: 18, rewards: { coins: 175, hints: 3 },            label: '175 Coins + 3 Hints',  icon: '💡' },
+  { day: 19, rewards: { coins: 200, gems: 3 },             label: '200 Coins + 3 Gems',   icon: '💎' },
+  { day: 20, rewards: { coins: 250, hints: 5 },            label: '250 Coins + 5 Hints',  icon: '💡' },
+  { day: 21, rewards: { coins: 400, gems: 15, cosmetic: 'login_21_frame' }, label: 'Week 3 — Frame Unlock!', icon: '🎨' },
   // Week 4 / finale
-  { day: 22, rewards: { coins: 200, gems: 8 },             label: '200 Coins + 8 Gems',   icon: '💎' },
-  { day: 23, rewards: { coins: 250, hints: 3 },            label: '250 Coins + 3 Hints',  icon: '💡' },
-  { day: 24, rewards: { coins: 300, gems: 10 },            label: '300 Coins + 10 Gems',  icon: '💎' },
-  { day: 25, rewards: { coins: 350, hints: 5 },            label: '350 Coins + 5 Hints',  icon: '💡' },
-  { day: 26, rewards: { coins: 400, gems: 15 },            label: '400 Coins + 15 Gems',  icon: '💎' },
-  { day: 27, rewards: { coins: 450, hints: 5 },            label: '450 Coins + 5 Hints',  icon: '💡' },
-  { day: 28, rewards: { coins: 500, gems: 20 },            label: '500 Coins + 20 Gems',  icon: '💎' },
-  { day: 29, rewards: { coins: 500, gems: 25 },            label: '500 Coins + 25 Gems',  icon: '💎' },
-  { day: 30, rewards: { coins: 1000, gems: 100, rareTile: true, cosmetic: 'login_30_exclusive' }, label: 'GRAND PRIZE!', icon: '🏆' },
+  { day: 22, rewards: { coins: 150, gems: 2 },             label: '150 Coins + 2 Gems',   icon: '💎' },
+  { day: 23, rewards: { coins: 175, hints: 3 },            label: '175 Coins + 3 Hints',  icon: '💡' },
+  { day: 24, rewards: { coins: 200, gems: 3 },             label: '200 Coins + 3 Gems',   icon: '💎' },
+  { day: 25, rewards: { coins: 250, hints: 5 },            label: '250 Coins + 5 Hints',  icon: '💡' },
+  { day: 26, rewards: { coins: 250, gems: 3 },             label: '250 Coins + 3 Gems',   icon: '💎' },
+  { day: 27, rewards: { coins: 300, hints: 5 },            label: '300 Coins + 5 Hints',  icon: '💡' },
+  { day: 28, rewards: { coins: 350, gems: 5 },             label: '350 Coins + 5 Gems',   icon: '💎' },
+  { day: 29, rewards: { coins: 375, gems: 5 },             label: '375 Coins + 5 Gems',   icon: '💎' },
+  { day: 30, rewards: { coins: 700, gems: 25, rareTile: true, cosmetic: 'login_30_exclusive' }, label: 'GRAND PRIZE!', icon: '🏆' },
 ];
 
 /** Legacy 7-day calendar, still available as an A/B variant. */

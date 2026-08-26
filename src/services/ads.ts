@@ -11,7 +11,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AD_CONFIG } from '../constants';
-import { getRemoteNumberClamped } from './remoteConfig';
+import { getRemoteBoolean, getRemoteNumberClamped, getRemoteString } from './remoteConfig';
 import { logger } from '../utils/logger';
 import { analytics } from './analytics';
 import { crashReporter } from './crashReporting';
@@ -57,6 +57,55 @@ interface AdTracking {
   lastAdTime: number; // timestamp of last ad shown
   interstitialCount: number; // separate cap for interstitials (max 5/day)
   lastInterstitialTime: number; // timestamp of last interstitial shown
+  /**
+   * Consumable auto-grants (hints/undos/spins/coins/lives) taken by a
+   * Remove-Ads owner today WITHOUT watching. Only enforced when the
+   * removeAdsAutoGrantScope RC is 'scoped'. Optional: absent in tracking
+   * persisted before the field existed — read with `?? 0`.
+   */
+  autoGrantConsumableCount?: number;
+}
+
+function freshTracking(): AdTracking {
+  return { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0, autoGrantConsumableCount: 0 };
+}
+
+/**
+ * Reward types that hand a Remove-Ads owner a consumable with no ad watched.
+ * double_reward and time_continue stay outside the scoped cap: they only
+ * amplify a completion / continue a run, so auto-granting them is the
+ * "fewer interruptions" the buyer actually paid for.
+ */
+const CONSUMABLE_AUTO_GRANT_TYPES: ReadonlySet<AdRewardType> = new Set([
+  'hint_reward', 'undo_reward', 'spin_reward', 'coins_reward', 'life_reward',
+]);
+
+/** Daily consumable auto-grants allowed in 'scoped' mode. */
+const MAX_SCOPED_AUTO_GRANTS_PER_DAY = 3;
+
+/**
+ * 'legacy' (default): auto-grants share the watch-path caps only — up to
+ * maxAdsPerDay consumables/day with zero ads watched, which permanently
+ * undercut the hint/undo IAP bundles for exactly the cohort with proven
+ * willingness to pay. 'scoped': consumable auto-grants tighten to
+ * MAX_SCOPED_AUTO_GRANTS_PER_DAY/day (double_reward/time_continue
+ * unaffected). RC-gated so flipping paid-product behavior is an explicit
+ * experiment, never a silent code change.
+ */
+function autoGrantScope(): 'legacy' | 'scoped' {
+  return getRemoteString('removeAdsAutoGrantScope') === 'scoped' ? 'scoped' : 'legacy';
+}
+
+/**
+ * Whether the next-level interstitial may fire on the ZERO-TAP auto-advance
+ * (the 3.5s timer that walks the player into the next level). Default false:
+ * an ad the player did not tap into is an ambush, and the auto-advance runs
+ * exactly through the L13-30 ramp where ad tolerance is still forming. The
+ * tap-advance interstitial path is unaffected. GameScreen consults this
+ * before awaiting maybeShowNextLevelInterstitial on the auto-advance path.
+ */
+export function isInterstitialOnAutoAdvanceEnabled(): boolean {
+  return getRemoteBoolean('interstitialOnAutoAdvance');
 }
 
 function todayKey(): string {
@@ -73,7 +122,7 @@ async function loadTracking(): Promise<AdTracking> {
   } catch {
     // Ignore — fall through to default
   }
-  return { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+  return freshTracking();
 }
 
 async function saveTracking(tracking: AdTracking): Promise<void> {
@@ -161,7 +210,7 @@ class AdManager {
   private preloadedInterstitialAd: any = null;
   private preloadingInterstitial = false;
   private lastInterstitialPreloadFailureAt = 0;
-  private tracking: AdTracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+  private tracking: AdTracking = freshTracking();
 
   /**
    * Consent + audience state used to build AdMob `RequestOptions`.
@@ -358,7 +407,7 @@ class AdManager {
 
     // Refresh tracking if day rolled over
     if (this.tracking.date !== todayKey()) {
-      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+      this.tracking = freshTracking();
     }
 
     // Daily cap check
@@ -394,6 +443,16 @@ class AdManager {
       // fewer ads, not for an unlimited reward faucet. (The cap checks
       // above already ran; an uncapped early-return here handed every
       // Remove-Ads/VIP owner infinite hints and undos.)
+      // In 'scoped' mode consumable auto-grants tighten further to
+      // MAX_SCOPED_AUTO_GRANTS_PER_DAY — see autoGrantScope().
+      if (
+        autoGrantScope() === 'scoped' &&
+        CONSUMABLE_AUTO_GRANT_TYPES.has(rewardType) &&
+        (this.tracking.autoGrantConsumableCount ?? 0) >= MAX_SCOPED_AUTO_GRANTS_PER_DAY
+      ) {
+        logger.log('[Ads] Scoped auto-grant cap reached');
+        return { rewarded: false, rewardType };
+      }
       result = { rewarded: true, rewardType };
     } else if (this.useMock) {
       result = await this.mockShowRewardedAd(rewardType);
@@ -411,6 +470,9 @@ class AdManager {
       }
       if (rewardType === 'life_reward') {
         this.tracking.lifeAdCount++;
+      }
+      if (this.adsRemoved && CONSUMABLE_AUTO_GRANT_TYPES.has(rewardType)) {
+        this.tracking.autoGrantConsumableCount = (this.tracking.autoGrantConsumableCount ?? 0) + 1;
       }
       await saveTracking(this.tracking);
       if (this.adsRemoved) {
@@ -490,6 +552,14 @@ class AdManager {
     if (this.tracking.viewCount >= adCap('maxAdsPerDay', AD_CONFIG.MAX_ADS_PER_DAY)) return false;
     if (rewardType === 'coins_reward' && this.tracking.coinAdCount >= AD_CONFIG.MAX_COIN_ADS_PER_DAY) return false;
     if (rewardType === 'life_reward' && this.tracking.lifeAdCount >= AD_CONFIG.MAX_LIFE_ADS_PER_DAY) return false;
+    if (
+      autoGrantScope() === 'scoped' &&
+      rewardType !== undefined &&
+      CONSUMABLE_AUTO_GRANT_TYPES.has(rewardType) &&
+      (this.tracking.autoGrantConsumableCount ?? 0) >= MAX_SCOPED_AUTO_GRANTS_PER_DAY
+    ) {
+      return false;
+    }
     return this.isCooldownElapsed();
   }
 
@@ -538,7 +608,7 @@ class AdManager {
 
     // Refresh tracking if day rolled over
     if (this.tracking.date !== todayKey()) {
-      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+      this.tracking = freshTracking();
     }
 
     // Daily cap check

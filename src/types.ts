@@ -30,6 +30,15 @@ export interface BoardConfig {
   minWordLength: number;
   maxWordLength: number;
   difficulty: Difficulty;
+  /**
+   * 0..1 — shifts the filler-letter distribution from uncommon consonants
+   * toward vowels/common consonants, making list words slower to SPOT
+   * (visual-search difficulty) with zero effect on clear-order luck. The
+   * late procedural tail ramps this; absent means the shipped 25/30/45
+   * split. Generation pairs any value > 0 with a duplicate-occurrence
+   * rejection pass in attemptGenerate.
+   */
+  decoyRichness?: number;
 }
 
 export interface Board {
@@ -173,6 +182,7 @@ export type GameAction =
   | { type: 'GRANT_UNDO' }
   | { type: 'GRANT_BOOSTER'; booster: 'wildcardTile' | 'spotlight' | 'smartShuffle' }
   | { type: 'USE_PREMIUM_HINT' }
+  | { type: 'USE_PARTIAL_HINT' }
   | { type: 'ACTIVATE_SCORE_DOUBLER' }
   | { type: 'ACTIVATE_BOARD_FREEZE' }
   | {
@@ -315,6 +325,12 @@ export interface Chapter {
   icon: string;
   /** Optional generation constraints. When absent, defaults apply. */
   profile?: GenerationProfile;
+  /**
+   * Wing-finale chapter (every 5th procedural chapter): denser long-word
+   * boards. UI labels these as boss chapters and the completion pays a
+   * chest ceremony.
+   */
+  isBossChapter?: boolean;
   /**
    * Optional per-chapter visual palette. When present, AmbientBackdrop's
    * `'game'` variant swaps its default synthwave gradient for this palette
@@ -532,15 +548,10 @@ export interface EventRewardTier {
 }
 
 // ============ DAILY/WEEKLY SYSTEMS ============
-export interface DailyMission {
-  id: string;
-  description: string;
-  target: number;
-  progress: number;
-  completed: boolean;
-  type: 'findWords' | 'completePuzzles' | 'achieveCombo' | 'noHints' | 'perfectSolve' | 'useMode';
-  reward: CollectionReward;
-}
+// (The old DailyMission interface lived here; it typed only the dead
+// MISSION_TEMPLATES table in data/missions.ts — the live daily-mission
+// system is PlayerProgressContext's own template list. Both deleted, along
+// with the 'achieveCombo' member that referenced the ripped combo system.)
 
 export interface StreakData {
   currentStreak: number;
@@ -872,7 +883,9 @@ export interface VictorySummaryItem {
     | 'library_teaser'
     | 'early_bonus'
     | 'mode_unlock'
-    | 'next_unlock_preview';
+    | 'next_unlock_preview'
+    | 'quest_progress'
+    | 'piggy_fill';
   icon: string;
   label: string;
   sublabel?: string;

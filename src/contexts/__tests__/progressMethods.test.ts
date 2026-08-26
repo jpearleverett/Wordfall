@@ -301,3 +301,48 @@ describe('seasonal quest final reward at pop time', () => {
     expect(h.state.unlockedCosmetics).toEqual([quest.finalReward.cosmetic!.id]);
   });
 });
+
+describe('procedural wing ceremonies past level 600', () => {
+  const CURATED_WINGS = [
+    'arts', 'elements', 'history', 'mythology', 'nature', 'ocean', 'science', 'space',
+  ];
+
+  it('completing the first procedural wing (chapters 41-45) queues its ceremony', () => {
+    // Level 675 is the last level of chapter 45 (procedural wing 0's boss
+    // finale). Completing it moves activeChapter to 46, which must mark
+    // procedural_0 done — the static CHAPTERS filter froze wing ceremonies
+    // at L600 for the deepest cohort.
+    // totalStars is recomputed from starsByLevel inside the method, so the
+    // star gate needs real per-level stars, not a totalStars override.
+    const manyStars = Object.fromEntries(
+      Array.from({ length: 674 }, (_, i) => [i + 1, 3]),
+    );
+    const h = harness({
+      currentLevel: 675,
+      highestLevel: 674,
+      starsByLevel: manyStars,
+      restoredWings: [...CURATED_WINGS],
+    });
+    h.methods.recordPuzzleComplete(675, 500, 3, false);
+    expect(h.state.restoredWings).toContain('procedural_0');
+    const wing = h.state.pendingCeremonies.find(
+      (c: { type: string }) => c.type === 'wing_complete',
+    ) as { type: string; data: { wingId: string; wingName: string; reward: { coins: number; gems: number } } };
+    expect(wing).toBeDefined();
+    expect(wing.data.wingId).toBe('procedural_0');
+    expect(wing.data.wingName).toBe('Endless Wing 1');
+    expect(wing.data.reward).toEqual({ coins: 1000, gems: 25 });
+  });
+
+  it('mid-wing procedural levels queue nothing new', () => {
+    const h = harness({
+      currentLevel: 662,
+      highestLevel: 661,
+      starsByLevel: Object.fromEntries(Array.from({ length: 661 }, (_, i) => [i + 1, 3])),
+      restoredWings: [...CURATED_WINGS],
+    });
+    h.methods.recordPuzzleComplete(662, 500, 3, false);
+    expect(h.state.restoredWings).not.toContain('procedural_0');
+    expect(h.state.pendingCeremonies.filter((c: { type: string }) => c.type === 'wing_complete')).toHaveLength(0);
+  });
+});

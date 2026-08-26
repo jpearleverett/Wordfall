@@ -104,12 +104,18 @@ interface FaucetLedger {
   flawlessGemsGranted: number;
   /** Week id (utils/weekId) whose weekly board completion has been paid. */
   weeklyPaidWeekId: string;
+  /** UTC day (YYYY-MM-DD) the aggregate metered-gem counter belongs to. */
+  meteredGemDate: string;
+  /** Gems granted on `meteredGemDate` across ALL metered faucet sources. */
+  meteredGemsGranted: number;
 }
 
 const EMPTY_LEDGER: FaucetLedger = {
   flawlessGemDate: '',
   flawlessGemsGranted: 0,
   weeklyPaidWeekId: '',
+  meteredGemDate: '',
+  meteredGemsGranted: 0,
 };
 
 let ledger: FaucetLedger = { ...EMPTY_LEDGER };
@@ -150,6 +156,19 @@ export function hydrateFaucetLedger(): Promise<void> {
       const currentWeek = getWeekId();
       if (parsed.weeklyPaidWeekId === currentWeek && ledger.weeklyPaidWeekId !== currentWeek) {
         ledger.weeklyPaidWeekId = currentWeek;
+      }
+      // Metered-gem counter: same max-wins merge as the flawless counter.
+      if (
+        typeof parsed.meteredGemDate === 'string' &&
+        parsed.meteredGemDate === todayUtcKey()
+      ) {
+        const persistedMetered = Math.max(0, Number(parsed.meteredGemsGranted) || 0);
+        if (ledger.meteredGemDate === parsed.meteredGemDate) {
+          ledger.meteredGemsGranted = Math.max(ledger.meteredGemsGranted, persistedMetered);
+        } else if (!ledger.meteredGemDate) {
+          ledger.meteredGemDate = parsed.meteredGemDate;
+          ledger.meteredGemsGranted = persistedMetered;
+        }
       }
     } catch {
       // Corrupt or unreadable — start fresh; worst case one extra payout.
@@ -193,6 +212,54 @@ export function claimFlawlessGems(requested: number): number {
     persistLedger();
   }
   return grant;
+}
+
+/**
+ * Per-UTC-day ceiling on the AGGREGATE of the recurring meta gem faucets
+ * (daily quests, mystery wheel, bonus chest, weekly goals). Individually
+ * each looks small; together they averaged 12-25 gems/day against the 3/day
+ * design target (`dailyGemDripTarget`), which erased gem-SKU demand for
+ * every engaged player. Same clamp rationale as the flawless cap.
+ */
+export function meteredGemDailyCap(): number {
+  return getRemoteNumberClamped('dailyTotalGemCap', 10, 0, 200);
+}
+
+/**
+ * Claim gems from a RECURRING meta faucet against the shared daily cap.
+ * Returns the grantable amount (possibly 0); callers credit exactly the
+ * return value, same contract as `claimFlawlessGems`.
+ *
+ * ONLY for recurring faucets, where clamped overflow simply reappears in
+ * tomorrow's budget. One-time grants (achievement tiers, milestone
+ * ceremonies, purchases, VIP drip) must NOT route through this — a one-time
+ * reward eaten by a daily cap is lost forever.
+ *
+ * `source` is a stable slug for telemetry at the call site ('daily_quest',
+ * 'mystery_wheel', 'bonus_chest', 'weekly_goal').
+ */
+export function claimMeteredGems(requested: number, source: string): number {
+  if (!Number.isFinite(requested) || requested <= 0) return 0;
+  const today = todayUtcKey();
+  if (ledger.meteredGemDate !== today) {
+    ledger.meteredGemDate = today;
+    ledger.meteredGemsGranted = 0;
+  }
+  const grant = Math.min(requested, Math.max(0, meteredGemDailyCap() - ledger.meteredGemsGranted));
+  if (grant > 0) {
+    ledger.meteredGemsGranted += grant;
+    persistLedger();
+  } else {
+    logger.info(`[EconomyTuning] metered gem faucet '${source}' clamped (cap reached)`);
+  }
+  return grant;
+}
+
+/** Gems still grantable today across the metered faucets (UI affordance). */
+export function meteredGemsRemainingToday(): number {
+  const today = todayUtcKey();
+  const spent = ledger.meteredGemDate === today ? ledger.meteredGemsGranted : 0;
+  return Math.max(0, meteredGemDailyCap() - spent);
 }
 
 /**

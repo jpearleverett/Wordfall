@@ -30,7 +30,7 @@ import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, isPinchLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { wordFoundHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
@@ -64,7 +64,12 @@ import {
   selectBoosterTokens,
   selectLivesCurrent,
   selectIsAdFreeComputed,
+  selectGems,
 } from '../stores/economyStore';
+import {
+  PreLevelBoosterSheet,
+  shouldShowPreLevelBoosterSheet,
+} from '../components/PreLevelBoosterSheet';
 import { analytics } from '../services/analytics';
 import { getRemoteBoolean, getRemoteNumber, getRemoteNumberClamped } from '../services/remoteConfig';
 import BoosterComboBanner from '../components/BoosterComboBanner';
@@ -80,12 +85,15 @@ import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { MiniPackSheet } from '../components/MiniPackSheet';
 import {
   computeDoubleRewardGrant,
+  FIRST_LETTER_HINT_COST_COINS,
   getOfferPrice,
   MiniPackNeed,
+  OFFER_HINT_GRANTS,
   POST_LOSS_HINT_PACK,
+  TIMEOUT_CONTINUE_GEM_COST,
   TIMEOUT_CONTINUE_SECONDS,
 } from '../components/monetizationModel';
-import { adManager, AdRewardType } from '../services/ads';
+import { adManager, AdRewardType, isInterstitialOnAutoAdvanceEnabled } from '../services/ads';
 import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
 import { MockAdModal } from '../components/MockAdModal';
 import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
@@ -715,7 +723,9 @@ function GameScreenImpl({
   // Challenge-spike marker — computed once per level so a Remote Config
   // flip or level change rolls through. Suppressed for daily/weekly which
   // don't use the ramp-based level config at all.
-  const isSpike = useMemo(() => isSpikeLevel(level), [level]);
+  // Pinch levels share the spike's CHALLENGE framing (banner + pre-level
+  // booster sheet): both are designed hard beats the boosters honestly help.
+  const isSpike = useMemo(() => isSpikeLevel(level) || isPinchLevel(level), [level]);
 
   const modeConfig = MODE_CONFIGS[mode];
   const effectiveTimeLimit = modeConfig.rules.hasTimer
@@ -858,6 +868,7 @@ function GameScreenImpl({
   const boosterTokens = useEconomyStore(selectBoosterTokens);
   const lives = useEconomyStore(selectLivesCurrent);
   const isAdFree = useEconomyStore(selectIsAdFreeComputed);
+  const gems = useEconomyStore(selectGems);
   const {
     addCoins,
     addGems,
@@ -921,6 +932,9 @@ function GameScreenImpl({
   // Tier 6 B1 — fail-breather offer gates PostLoss when player is stuck
   const [showFailBreather, setShowFailBreather] = useState(false);
   const failBreatherShownRef = useRef(false);
+  // Pre-level booster-commit sheet on spike levels (once per level entry)
+  const [showPreLevelBooster, setShowPreLevelBooster] = useState(false);
+  const preLevelBoosterShownRef = useRef(false);
   // booster_pack: only show once per level on first entry to hard/expert
   const boosterPackShown = useRef(false);
   const offerSuppressed = showModeTutorial || showComplete || showPostLoss || showFailed || showFailBreather || activeOffer !== null;
@@ -1230,7 +1244,7 @@ function GameScreenImpl({
     // display and charge cannot diverge (they did: locale strings claimed
     // gems while these branches spent coins). Coin rescues scale with the
     // difficulty tier already in scope here (x1/x1.5/x2.5/x4, rounded to 5).
-    const price = getOfferPrice(activeOffer, difficulty);
+    const price = getOfferPrice(activeOffer, difficulty, level);
     // When the player can't afford the accepted offer, the old handler
     // silently closed the modal as if they had declined. Route the intent to
     // the MiniPackSheet for the missing currency instead.
@@ -1238,7 +1252,7 @@ function GameScreenImpl({
     switch (activeOffer) {
       case 'hint_rescue':
         if (spendCoins(price.amount)) {
-          addHintTokens(5);
+          addHintTokens(OFFER_HINT_GRANTS.hint_rescue);
           accepted = true;
         } else {
           sheetNeed = 'coins';
@@ -1276,7 +1290,7 @@ function GameScreenImpl({
       }
       case 'post_puzzle':
         if (spendCoins(price.amount)) {
-          addHintTokens(10);
+          addHintTokens(OFFER_HINT_GRANTS.post_puzzle);
           accepted = true;
         } else {
           sheetNeed = 'coins';
@@ -2071,6 +2085,85 @@ function GameScreenImpl({
     }
   }, [isStuck, status, level, playerActions]);
 
+  // One-time proactive "plan one move ahead" tip at the L31 regime onset:
+  // random-play stuck rate jumps 12% -> 57% at L31 while one-ply lookahead
+  // solves 100% of the same boards — a pure teaching gap, and the last
+  // long-form dead-end explainer usually burned in L1-30 where dead ends
+  // are rare curiosities. 12s banner, once per profile.
+  const [showPlanAheadTip, setShowPlanAheadTip] = useState(false);
+  useEffect(() => {
+    if (mode !== 'classic' || level < 31 || isDaily) return;
+    if (tooltipsShown.includes('plan_ahead_l31')) return;
+    setShowPlanAheadTip(true);
+    markTooltipShown('plan_ahead_l31');
+    void analytics.logEvent('plan_ahead_tip_shown', { level });
+    const timer = setTimeout(() => setShowPlanAheadTip(false), 12_000);
+    return () => clearTimeout(timer);
+    // Fire once on the first qualifying level entry only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, mode, isDaily]);
+
+  // Pre-level booster-commit sheet: the genre's top-converting placement,
+  // fired once on entering a spike level. It only STOCKS boosters (gem pack
+  // or store bridge) — activation stays tap-to-use in the run.
+  useEffect(() => {
+    preLevelBoosterShownRef.current = false;
+    setShowPreLevelBooster(false);
+  }, [level, mode]);
+  useEffect(() => {
+    if (
+      !shouldShowPreLevelBoosterSheet({
+        enabled: getRemoteBoolean('preLevelBoosterSheetEnabled'),
+        level,
+        mode,
+        isDaily,
+        alreadyShownThisLevel: preLevelBoosterShownRef.current,
+        tutorialActive: showModeTutorial,
+      })
+    ) {
+      return;
+    }
+    preLevelBoosterShownRef.current = true;
+    const timer = setTimeout(() => {
+      setShowPreLevelBooster(true);
+      void analytics.logEvent('pre_level_booster_shown', { level, mode });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [level, mode, isDaily, showModeTutorial]);
+
+  // Churn valve for the modes whose dead-end never flips status to 'failed'
+  // (classic, noGravity, gravityFlip, expert): the fail-breather modal was
+  // built to catch the L15-25 stuck loop, but it gated on
+  // status==='failed'||'timeout' — unreachable in exactly the mode and band
+  // it targets. The SECOND recorded struggle on the same level (dead-end →
+  // retry → dead-end, via recordFailure above + the handleRetry reset)
+  // surfaces the same relief here, under the same RC flag and cooldown.
+  useEffect(() => {
+    if (!isStuck || status !== 'playing') return;
+    if (mode === 'relax') return;
+    const persistentFails = failCountByLevel?.[level] ?? 0;
+    const totalFails = Math.max(sessionFailCount.current, persistentFails);
+    if (totalFails < 2) return;
+    const breatherEligible =
+      getRemoteBoolean('failBreatherEnabled') &&
+      (!lastBreatherOfferedAt ||
+        Date.now() - lastBreatherOfferedAt > BREATHER_COOLDOWN_MS) &&
+      !failBreatherShownRef.current;
+    if (!breatherEligible) return;
+    failBreatherShownRef.current = true;
+    const timer = setTimeout(() => {
+      setShowFailBreather(true);
+      void analytics.logEvent('fail_breather_shown', {
+        consecutive_failures: consecutiveFailures,
+        last_level_stars: lastLevelStars,
+        level,
+        mode,
+        trigger: 'stuck_loop',
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [isStuck, status, mode, level, failCountByLevel, lastBreatherOfferedAt, consecutiveFailures, lastLevelStars]);
+
   // Free rescue on a genuinely dead board.
   //
   // Getting stuck is a real, intended fail state — the order you clear words
@@ -2405,7 +2498,14 @@ function GameScreenImpl({
     // labeled gift whose tap did nothing. resolveUndoSource consumes the
     // granted pool first (it expires with the puzzle; tokens persist).
     const source = resolveUndoSource(mode, undosLeft, undoTokens);
-    if (source === 'blocked') return;
+    if (source === 'blocked') {
+      // Undo demand peaks at exactly this moment (usually a bad clear the
+      // player wants back). This was the one consumable whose empty tap
+      // silently no-oped — every other zero-inventory surface opens its
+      // store bridge.
+      openMiniPack('undo', 'undo_button_empty');
+      return;
+    }
     if (source === 'token') {
       spendUndoToken();
       grantUndo();
@@ -2440,7 +2540,7 @@ function GameScreenImpl({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length, openMiniPack]);
 
   // Timeout continue (Time Pressure): watch a rewarded ad to resume the
   // timed-out attempt with +30s. Once per attempt (timeExtendUsedRef); the
@@ -2461,6 +2561,28 @@ function GameScreenImpl({
     });
   }, [extendTime, level, mode]);
 
+  // Gem fallback for the timeout continue: available once the per-attempt ad
+  // continue is spent (or ads are capped/unavailable). Unlike the ad path it
+  // is repeatable — each timeout can be bought back for the same flat gem
+  // price, the genre's classic continue moment. Broke players route to the
+  // gem mini-pack instead of a silent no-op.
+  const handleTimeoutContinueGems = useCallback(() => {
+    if (!spendGems(TIMEOUT_CONTINUE_GEM_COST)) {
+      openMiniPack('gems', 'timeout_continue_broke');
+      return;
+    }
+    extendTime(TIMEOUT_CONTINUE_SECONDS);
+    setShowFailed(false);
+    setShowPostLoss(false);
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('timeout_continue_gems_used', {
+      level,
+      mode,
+      seconds: TIMEOUT_CONTINUE_SECONDS,
+      gems: TIMEOUT_CONTINUE_GEM_COST,
+    });
+  }, [spendGems, extendTime, level, mode, openMiniPack]);
+
   const handleRetry = useCallback(() => {
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
@@ -2478,6 +2600,12 @@ function GameScreenImpl({
     // throws away all board progress, which costs far more than one undo.
     freeRescueUsedRef.current = false;
     setFreeUndoGranted(false);
+    // Same reasoning for the adaptive-difficulty struggle signal: newGame
+    // reuses the SAME board object, so the [board] reset effect never fires
+    // on retry and dead-end→retry→dead-end recorded ONE failure — hiding the
+    // exact struggling player the easer's >2-attempts trigger and the
+    // breather's consecutiveFailures>=2 predicate were built to catch.
+    stuckFailRecordedRef.current = false;
 
     setShowFailed(false);
   }, [board, level, mode, effectiveMaxMoves, effectiveTimeLimit, newGame]);
@@ -2506,7 +2634,7 @@ function GameScreenImpl({
   // placement and the largest untapped revenue wire in the game. Eligibility
   // is deliberately conservative: never on the daily/weekly celebration,
   // never during a tutorial, never before `interstitialMinLevel` (RC, default
-  // 13 — clamped so a console slip can't put an ad on a new player's first
+  // 10 — clamped so a console slip can't put an ad on a new player's first
   // puzzle), and never stacked under another offer/sheet. adManager
   // additionally self-enforces the daily cap, minimum interval, and ad-free
   // purchase; `canShowInterstitial()` is the fast no-ad path so the
@@ -2518,7 +2646,7 @@ function GameScreenImpl({
     // Never under a queued ceremony — the celebration owns that moment, and
     // an interstitial popping over a milestone screen reads as punishment.
     if (isCeremonyVisible()) return false;
-    if (level < getRemoteNumberClamped('interstitialMinLevel', 13, 1, 200)) return false;
+    if (level < getRemoteNumberClamped('interstitialMinLevel', 10, 1, 200)) return false;
     if (!adManager.canShowInterstitial()) return false;
     crashReporter.addBreadcrumb(`interstitial requested at next-level (L${level} ${mode})`, 'ads');
     const shown = await adManager.showInterstitialAd();
@@ -2530,7 +2658,7 @@ function GameScreenImpl({
     return shown;
   }, [isDaily, mode, showModeTutorial, tensionActive, activeOffer, miniPack, level]);
 
-  const handleNextLevel = useCallback(() => {
+  const handleNextLevel = useCallback((opts?: { auto?: boolean }) => {
     setShowComplete(false);
     completionHandled.current = false;
     // Leaving this completion: re-arm the per-completion guards.
@@ -2545,6 +2673,10 @@ function GameScreenImpl({
       // appear. The offer owns this transition moment — no interstitial
       // stacked underneath it.
       trackTimeout(() => onNextLevel(), 100);
+    } else if (opts?.auto && !isInterstitialOnAutoAdvanceEnabled()) {
+      // The zero-tap auto-advance walked the player here — an interstitial
+      // they never tapped into is an ambush (RC-gated; default skips it).
+      onNextLevel();
     } else {
       void (async () => {
         await maybeShowNextLevelInterstitial();
@@ -2894,6 +3026,7 @@ function GameScreenImpl({
             isFirstStuck={showFirstStuckHelp}
             freeUndoGranted={freeUndoGranted}
             isSpike={isSpike && !isDaily && mode !== 'weekly'}
+            showPlanAheadTip={showPlanAheadTip}
             onIdleHintTap={stableHandleIdleHintBannerTap}
             onAdHintTap={stableHandleAdHintBannerTap}
             onUndoTap={stableHandleUndo}
@@ -3062,6 +3195,44 @@ function GameScreenImpl({
         />
       )}
 
+      {/* Pre-level booster-commit sheet — spike levels only, once per entry */}
+      {showPreLevelBooster && (
+        <PreLevelBoosterSheet
+          visible={showPreLevelBooster}
+          level={level}
+          boosterCounts={{
+            wildcardTile: boosterTokens?.wildcardTile ?? 0,
+            spotlight: boosterTokens?.spotlight ?? 0,
+            smartShuffle: boosterTokens?.smartShuffle ?? 0,
+          }}
+          gemPackPrice={getOfferPrice('booster_pack').amount}
+          playerGems={gems}
+          onBuyGemPack={() => {
+            const price = getOfferPrice('booster_pack');
+            if (spendGems(price.amount)) {
+              addBoosterToken('wildcardTile');
+              addBoosterToken('spotlight');
+              addBoosterToken('smartShuffle');
+              void soundManager.playSound('buttonPress');
+              void analytics.logEvent('pre_level_booster_pack_bought', {
+                level,
+                mode,
+                gems: price.amount,
+              });
+            } else {
+              openMiniPack('gems', 'pre_level_booster_broke');
+            }
+          }}
+          onOpenBoosterStore={() => {
+            openMiniPack('boosters', 'pre_level_sheet');
+          }}
+          onPlay={() => {
+            setShowPreLevelBooster(false);
+            void analytics.logEvent('pre_level_booster_dismissed', { level, mode });
+          }}
+        />
+      )}
+
       {/* Tier 6 B1 — fail-breather offer: precedes PostLoss on stuck loops */}
       {showFailBreather && (
         <FailBreatherOffer
@@ -3080,7 +3251,12 @@ function GameScreenImpl({
             });
             setShowFailBreather(false);
             // Skip PostLossModal this time — the breather is the relief.
-            setShowFailed(true);
+            // On the stuck-loop trigger the board is still live (status
+            // 'playing'): the player takes the free hint straight back into
+            // the attempt, so no failed overlay.
+            if (status !== 'playing') {
+              setShowFailed(true);
+            }
           }}
           onDismiss={() => {
             if (typeof (playerActionsAny as Record<string, unknown>).updateProgress === 'function') {
@@ -3093,6 +3269,9 @@ function GameScreenImpl({
               mode,
             });
             setShowFailBreather(false);
+            // Stuck-loop trigger: the board is still live — dismissing just
+            // returns to it. Only a real loss falls through to post-loss.
+            if (status === 'playing') return;
             // Fall through to the standard post-loss flow on next frame.
             if (!postLossShownRef.current && foundWords > 0) {
               postLossShownRef.current = true;
@@ -3247,6 +3426,26 @@ function GameScreenImpl({
                   </View>
                 </Pressable>
               )}
+              {/* Gem continue — the fallback once the once-per-attempt ad
+                  continue is spent or ads are capped out. Same RC gate. */}
+              {status === 'timeout' &&
+                getRemoteBoolean('timeoutContinueEnabled') &&
+                (timeExtendUsedRef.current || !adManager.canClaimAdReward('time_continue')) && (
+                <Pressable
+                  style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
+                  onPress={handleTimeoutContinueGems}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <GameIcon name="hourglass" size={16} accent={COLORS.green} />
+                    <Text style={styles.adHintButtonText}>
+                      {t('result.timeoutContinueGems', {
+                        seconds: TIMEOUT_CONTINUE_SECONDS,
+                        gems: TIMEOUT_CONTINUE_GEM_COST,
+                      })}
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
               <Pressable
                 style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
                 onPress={handleRetry}
@@ -3303,6 +3502,25 @@ function GameScreenImpl({
         <MiniPackSheet
           need={miniPack.need}
           source={miniPack.source}
+          // First-letter peek (40c): charge and delivery in ONE place so the
+          // sheet can never charge-and-deliver-nothing. Only offered while a
+          // live board can actually produce a hint and the mode allows hints.
+          onPartialHint={
+            hintsAllowed && status === 'playing' && canProduceHint(store.getState())
+              ? () => {
+                  if (!canProduceHint(store.getState())) return false;
+                  if (!spendCoins(FIRST_LETTER_HINT_COST_COINS)) return false;
+                  store.dispatch({ type: 'USE_PARTIAL_HINT' });
+                  void soundManager.playSound('hintUsed');
+                  void analytics.logEvent('partial_hint_used', {
+                    level,
+                    mode,
+                    coins: FIRST_LETTER_HINT_COST_COINS,
+                  });
+                  return true;
+                }
+              : undefined
+          }
           onClose={() => setMiniPack(null)}
         />
       )}

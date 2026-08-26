@@ -125,6 +125,22 @@ describe('generateWeeklyGoals', () => {
     expect(result.allCompleteBonus.gems).toBeGreaterThan(0);
   });
 
+  it('caps the reward budget so weekly goals cannot re-flood the economy', () => {
+    // Pre-cut, the pool paid ~470 coins/day equivalent — a top contributor to
+    // the coin surplus that erased every rescue/hint pinch past L30. The
+    // halved table is pinned here so the drumbeat cannot silently regrow.
+    const coins = WEEKLY_GOAL_TEMPLATES.reduce((s, t) => s + t.reward.coins, 0);
+    const gems = WEEKLY_GOAL_TEMPLATES.reduce((s, t) => s + t.reward.gems, 0);
+    expect(coins).toBeLessThanOrEqual(12500);
+    expect(gems).toBeLessThanOrEqual(250);
+    for (const t of WEEKLY_GOAL_TEMPLATES) {
+      expect(t.reward.coins).toBeLessThanOrEqual(1250);
+      expect(t.reward.gems).toBeLessThanOrEqual(20);
+    }
+    const bonus = generateWeeklyGoals().allCompleteBonus;
+    expect(bonus).toEqual({ coins: 250, gems: 8 });
+  });
+
   it('selects different goals on different calls (randomness check)', () => {
     // Run 10 times, at least 2 should differ
     const results = Array.from({ length: 10 }, () =>

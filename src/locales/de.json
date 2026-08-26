@@ -66,8 +66,8 @@
     "hintRescue": {
       "ribbon": "FESTGEFAHREN?",
       "title": "Tipp-Rettungspaket",
-      "description": "Hol dir 5 Tipps für dieses Level. Du bist näher dran, als du denkst!",
-      "button": "5 TIPPS HOLEN",
+      "description": "Hol dir {{count}} Tipps für dieses Level. Du bist näher dran, als du denkst!",
+      "button": "{{count}} TIPPS HOLEN",
       "price": "{{amount}} Münzen"
     },
     "lifeRefill": {
@@ -102,7 +102,7 @@
       "ribbon": "WENIG TIPPS",
       "title": "Vorrat auffüllen",
       "description": "Stark gelöst! Schnapp dir Tipps für die nächste Herausforderung.",
-      "button": "10 TIPPS HOLEN",
+      "button": "{{count}} TIPPS HOLEN",
       "price": "{{amount}} Münzen"
     },
     "boosterPack": {
@@ -285,6 +285,7 @@
     "claimFreeHint": "Gratis-Tipp einlösen (ohne Werbung)",
     "timeoutContinue": "Werbung ansehen: +{{seconds}} Sek. weiterspielen",
     "timeoutContinueFree": "Weiterspielen: +{{seconds}} Sek. — gratis",
+    "timeoutContinueGems": "💎 {{gems}} Juwelen — +{{seconds}} s",
     "undoLastMove": "LETZTEN ZUG ZURÜCK",
     "dayStreak": "Tage-Serie",
     "keepItGoing": "Bleib dran!",

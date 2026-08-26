@@ -305,12 +305,47 @@ export function isSpikeLevel(level: number): boolean {
   return getRemoteBoolean('spikeLevelsEnabled');
 }
 
+/**
+ * First level whose spike boards may carry a 7-letter "boss word". Below
+ * this the dictionary's 3-6 window holds everywhere; from here the spike's
+ * +1-length step can reach 7, making the long-dormant 7-letter celebration
+ * (GameScreen's "{N} LETTERS!" ceremony) reachable — spectacle, not
+ * difficulty: every word is on the visible find-list, so length is not a
+ * difficulty signal in this genre.
+ */
+export const BOSS_WORD_MIN_LEVEL = 300;
+
+/**
+ * Authored pinch slots: the penultimate level of each chapter past L150
+ * (level % 15 === 14 — never a breather, since 14 mod 5 = 4; spikes win
+ * the rare collisions at 299/494/689/…). On these levels the generator
+ * shops for a LOW-forgiveness board inside a fairness window instead of a
+ * forgiving one — the designed "hard level" beat that creates hint/undo/
+ * booster demand on a schedule. RC kill switch: `pinchLevelsEnabled`.
+ * These slots must be exempt from the adaptive easer, which otherwise
+ * defuses them on retry (its 'easier' trigger fires at >2 attempts —
+ * exactly the state a pinch induces).
+ */
+export const PINCH_MIN_LEVEL = 151;
+export function isPinchLevel(level: number): boolean {
+  if (level < PINCH_MIN_LEVEL) return false;
+  if (level % 15 !== 14) return false;
+  if (isBreatherLevel(level) || isSpikeLevel(level)) return false;
+  // Lazy require to avoid a constants -> services cycle (same as isSpikeLevel).
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getRemoteBoolean } = require('./services/remoteConfig') as {
+    getRemoteBoolean: (key: string) => boolean;
+  };
+  return getRemoteBoolean('pinchLevelsEnabled');
+}
+
 /** Apply spike-level transformation: one more word + one longer word. */
-function applySpike(base: BoardConfig): BoardConfig {
+function applySpike(base: BoardConfig, level: number): BoardConfig {
+  const lengthCap = level >= BOSS_WORD_MIN_LEVEL ? 7 : 6;
   return {
     ...base,
     wordCount: base.wordCount + 1,
-    maxWordLength: Math.min(6, base.maxWordLength + 1),
+    maxWordLength: Math.min(lengthCap, base.maxWordLength + 1),
   };
 }
 
@@ -414,7 +449,7 @@ export function getLevelConfig(level: number): BoardConfig {
   const effectiveLevel = isBreather ? Math.max(1, level - 4) : level;
   const base = getPhaseConfig(effectiveLevel);
   const applySpikeThisLevel = !isBreather && isSpikeLevel(level);
-  return applySpikeThisLevel ? applySpike(base) : base;
+  return applySpikeThisLevel ? applySpike(base, level) : base;
 }
 
 // Legacy helper: get the broad difficulty tier for a level (used for rewards, UI labels)
@@ -663,6 +698,29 @@ export const EARLY_GAME_BONUSES: {
   { level: 150, coins: 600, gems: 20, wheelSpins: 1 },      // Sesquicentennial
 ];
 
+/**
+ * Scheduled per-level bonus for ANY level — the static table above through
+ * L150, then a procedural drumbeat to infinity. The table used to end dead
+ * at 150, so L151-1000 read as "the game stopped noticing me" (up to
+ * 14-level dry stretches, unguarded by any test). The extension is
+ * deliberately CONSUMABLE-weighted: hints feed the habit the hint economy
+ * monetizes and wheel spins route into an existing monetized surface, while
+ * coins/gems stay confined to century markers so the drumbeat cannot
+ * re-flood an economy the Aug 2026 faucet cuts just drained.
+ */
+export function getScheduledLevelBonus(level: number): (typeof EARLY_GAME_BONUSES)[number] | undefined {
+  const row = EARLY_GAME_BONUSES.find((b) => b.level === level);
+  if (row) return row;
+  if (level <= 150) return undefined;
+  if (level % 100 === 0) {
+    return { level, coins: 250, gems: 10, hints: 2, wheelSpins: 1 };
+  }
+  if (level % 25 === 0) {
+    return { level, hints: 2, wheelSpins: 1 };
+  }
+  return undefined;
+}
+
 // Starter pack activation delay — don't start the 72hr timer until player
 // has solved enough puzzles to understand the value of items
 export const STARTER_PACK_DELAY_PUZZLES = 5;
@@ -741,31 +799,31 @@ export const ECONOMY = {
     { day: 6, coins: 175, hints: 3 },
     { day: 7, coins: 200, gems: 10, rareTile: true },
     // Week 2
-    { day: 8, coins: 100, gems: 3 },
-    { day: 9, coins: 125 },
-    { day: 10, coins: 150, hints: 2 },
-    { day: 11, coins: 175, gems: 5 },
-    { day: 12, coins: 200 },
-    { day: 13, coins: 250, hints: 3 },
-    { day: 14, coins: 400, gems: 25 },
+    { day: 8, coins: 75, gems: 2 },
+    { day: 9, coins: 100 },
+    { day: 10, coins: 100, hints: 2 },
+    { day: 11, coins: 125, gems: 3 },
+    { day: 12, coins: 150 },
+    { day: 13, coins: 175, hints: 3 },
+    { day: 14, coins: 250, gems: 10 },
     // Week 3
-    { day: 15, coins: 150, gems: 5 },
-    { day: 16, coins: 200, hints: 2 },
-    { day: 17, coins: 250, gems: 8 },
-    { day: 18, coins: 300, hints: 3 },
-    { day: 19, coins: 350, gems: 10 },
-    { day: 20, coins: 400, hints: 5 },
-    { day: 21, coins: 600, gems: 50, cosmetic: 'login_21_frame' },
+    { day: 15, coins: 100, gems: 2 },
+    { day: 16, coins: 125, hints: 2 },
+    { day: 17, coins: 150, gems: 3 },
+    { day: 18, coins: 175, hints: 3 },
+    { day: 19, coins: 200, gems: 3 },
+    { day: 20, coins: 250, hints: 5 },
+    { day: 21, coins: 400, gems: 15, cosmetic: 'login_21_frame' },
     // Week 4+
-    { day: 22, coins: 200, gems: 8 },
-    { day: 23, coins: 250, hints: 3 },
-    { day: 24, coins: 300, gems: 10 },
-    { day: 25, coins: 350, hints: 5 },
-    { day: 26, coins: 400, gems: 15 },
-    { day: 27, coins: 450, hints: 5 },
-    { day: 28, coins: 500, gems: 20 },
-    { day: 29, coins: 500, gems: 25 },
-    { day: 30, coins: 1000, gems: 100, cosmetic: 'login_30_exclusive', rareTile: true },
+    { day: 22, coins: 150, gems: 2 },
+    { day: 23, coins: 175, hints: 3 },
+    { day: 24, coins: 200, gems: 3 },
+    { day: 25, coins: 250, hints: 5 },
+    { day: 26, coins: 250, gems: 3 },
+    { day: 27, coins: 300, hints: 5 },
+    { day: 28, coins: 350, gems: 5 },
+    { day: 29, coins: 375, gems: 5 },
+    { day: 30, coins: 700, gems: 25, cosmetic: 'login_30_exclusive', rareTile: true },
   ] as { day: number; coins: number; gems?: number; hints?: number; rareTile?: boolean; cosmetic?: string }[],
   loginRewardCycleLength: 30,
   loginRewardRepeatMultiplier: 1.5,
@@ -822,10 +880,14 @@ export const STREAK = {
     10: { coins: 600, gems: 15 },
     14: { coins: 1000, gems: 25 },
     21: { coins: 1500, gems: 35 },
-    30: { coins: 2500, gems: 50, cosmetic: 'streak_30_frame' },
-    45: { coins: 3500, gems: 75 },
-    60: { coins: 5000, gems: 100, cosmetic: 'streak_60_title' },
-    100: { coins: 10000, gems: 200, cosmetic: 'streak_100_badge' },
+    // Late tiers halved (Aug 2026): amortized over the run they added
+    // ~100c/day to an economy already 2-3x oversupplied, and a 10,000c dump
+    // wiped out weeks of intended scarcity in one ceremony. The cosmetics —
+    // the part players actually chase at these depths — are untouched.
+    30: { coins: 1600, gems: 40, cosmetic: 'streak_30_frame' },
+    45: { coins: 2000, gems: 45 },
+    60: { coins: 3000, gems: 60, cosmetic: 'streak_60_title' },
+    100: { coins: 5000, gems: 100, cosmetic: 'streak_100_badge' },
   },
 };
 
@@ -1116,9 +1178,9 @@ export const AD_CONFIG = {
   /** Minimum cooldown between rewarded ads (ms) */
   REWARDED_COOLDOWN_MS: 30_000, // 30 seconds
   /** Maximum interstitial ads per day */
-  MAX_INTERSTITIALS_PER_DAY: 5,
+  MAX_INTERSTITIALS_PER_DAY: 6,
   /** Minimum interval between interstitial ads (ms) */
-  INTERSTITIAL_INTERVAL_MS: 90_000, // 90 seconds
+  INTERSTITIAL_INTERVAL_MS: 75_000, // 75 seconds
 };
 
 // Economy Tuning — central knobs for balancing the free-to-play economy.

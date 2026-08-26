@@ -53,13 +53,14 @@ import MasteryScreen from './src/screens/MasteryScreen';
 import SeasonPassScreen from './src/screens/SeasonPassScreen';
 import { ConsentGate } from './src/components/ConsentGate';
 import { hasAcceptedTos } from './src/services/consent';
-import { generateBoard, generateDailyBoard, generateWeeklyBoard } from './src/engine/boardGenerator';
+import { generateBoard, generateDailyBoard, generateLevelBoard, generateWeeklyBoard } from './src/engine/boardGenerator';
 import { getWeekId } from './src/utils/weekId';
 import { getChapterForLevel } from './src/data/chapters';
 import { getCurrentEvent, getEventPlayConfig } from './src/data/events';
 import { DAILY_REWARD_TIMERS, canClaimTimer, rollBonusChestReward } from './src/data/dailyRewardTimers';
+import { claimMeteredGems } from './src/data/economyTuning';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
+import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS, isPinchLevel } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { useAuth } from './src/contexts/AuthContext';
 import { useEconomy } from './src/contexts/EconomyContext';
@@ -81,6 +82,7 @@ import { useSettings } from './src/contexts/SettingsContext';
 import { usePlayer } from './src/contexts/PlayerContext';
 import { useHardEnergy } from './src/hooks/useHardEnergy';
 import { NoLivesModal } from './src/components/NoLivesModal';
+import { OutOfEnergyModal } from './src/components/OutOfEnergyModal';
 import { MiniPackSheet } from './src/components/MiniPackSheet';
 import PostStreakBreakOffer, {
   RESTORE_GEM_COST,
@@ -243,6 +245,7 @@ function useStableContextFacades() {
 // Event screen wrapper — wires navigation callbacks for Play and Shop buttons
 function EventScreenWrapperNav({ navigation }: any) {
   const { player, economy } = useStableContextFacades();
+  const [energyWallMinutes, setEnergyWallMinutes] = useState<number | null>(null);
 
   const handlePlayEventPuzzle = useCallback(() => {
     // Events run in the mode their rules describe (speedSolve → timer,
@@ -252,38 +255,14 @@ function EventScreenWrapperNav({ navigation }: any) {
     const eventPlay = getEventPlayConfig(getCurrentEvent());
     const mode: GameMode = eventPlay.mode;
 
-    // Energy check (same pattern as ModesScreenWrapper)
+    // Energy check (same pattern as ModesScreenWrapper) — designed modal,
+    // not a bare OS Alert: this is the game's only true hard block and it
+    // needed branding, analytics, and A/B-ability.
     const isFreeMode = ENERGY.FREE_MODES.includes(mode);
     if (!isFreeMode) {
       const energyInfo = player.getEnergyDisplay();
       if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
-        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
-        Alert.alert(
-          'Take a Break!',
-          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
-          [
-            { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
-            {
-              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
-              onPress: () => {
-                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
-                  player.refillEnergy('gems');
-                } else {
-                  // Dead-end fix: "visit the shop" now comes with the door.
-                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
-                    { text: 'Not Now', style: 'cancel' },
-                    {
-                      text: 'Go to Shop',
-                      onPress: () =>
-                        navigation.navigate('Home' as never, { screen: 'Shop' } as never),
-                    },
-                  ]);
-                }
-              },
-            },
-          ]
-        );
+        setEnergyWallMinutes(Math.ceil(player.getTimeUntilNextEnergy() / 60000));
         return;
       }
     }
@@ -353,10 +332,32 @@ function EventScreenWrapperNav({ navigation }: any) {
   }, [navigation]);
 
   return (
-    <EventScreen
-      onPlayEventPuzzle={handlePlayEventPuzzle}
-      onOpenEventShop={() => navigation.navigate('Home', { screen: 'Shop' })}
-    />
+    <>
+      <EventScreen
+        onPlayEventPuzzle={handlePlayEventPuzzle}
+        onOpenEventShop={() => navigation.navigate('Home', { screen: 'Shop' })}
+      />
+      <OutOfEnergyModal
+        visible={energyWallMinutes !== null}
+        minutesUntilNext={energyWallMinutes ?? 0}
+        gemCost={ENERGY.GEM_REFILL_COST}
+        playerGems={economy.gems}
+        source="event"
+        onWatchAd={() => {
+          setEnergyWallMinutes(null);
+          void watchAdForEnergyRefill(player);
+        }}
+        onGemRefill={() => {
+          setEnergyWallMinutes(null);
+          if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+            player.refillEnergy('gems');
+          } else {
+            navigation.navigate('Home', { screen: 'Shop' });
+          }
+        }}
+        onClose={() => setEnergyWallMinutes(null)}
+      />
+    </>
   );
 }
 
@@ -614,6 +615,7 @@ function MainTabs() {
 // Modes screen wrapper - wires navigation to start game in selected mode
 function ModesScreenWrapper({ navigation, route }: any) {
   const { player, economy } = useStableContextFacades();
+  const [energyWallMinutes, setEnergyWallMinutes] = useState<number | null>(null);
 
   // Warm the shared-board caches while the player is reading the mode list.
   //
@@ -637,38 +639,13 @@ function ModesScreenWrapper({ navigation, route }: any) {
   const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
 
-    // Energy check — free modes (daily, endless, relax) cost 0 energy
+    // Energy check — free modes (daily, endless, relax) cost 0 energy.
+    // Designed modal, not a bare OS Alert (see OutOfEnergyModal).
     const isFreeMode = ENERGY.FREE_MODES.includes(mode);
     if (!isFreeMode) {
       const energyInfo = player.getEnergyDisplay();
       if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
-        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
-        Alert.alert(
-          'Take a Break!',
-          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
-          [
-            { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
-            {
-              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
-              onPress: () => {
-                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
-                  player.refillEnergy('gems');
-                } else {
-                  // Dead-end fix: "visit the shop" now comes with the door.
-                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
-                    { text: 'Not Now', style: 'cancel' },
-                    {
-                      text: 'Go to Shop',
-                      onPress: () =>
-                        navigation.navigate('Home' as never, { screen: 'Shop' } as never),
-                    },
-                  ]);
-                }
-              },
-            },
-          ]
-        );
+        setEnergyWallMinutes(Math.ceil(player.getTimeUntilNextEnergy() / 60000));
         return;
       }
     }
@@ -710,13 +687,16 @@ function ModesScreenWrapper({ navigation, route }: any) {
 
       let config = getLevelConfigExtended(modeLevel);
 
-      // Apply adaptive difficulty adjustment
-      const adjusted = getAdjustedConfig(config, player.performanceMetrics);
-      config = adjusted.config;
+      // Apply adaptive difficulty adjustment (pinch slots exempt — the
+      // easer would defuse the authored low-forgiveness board on retry)
+      if (!(mode === 'classic' && isPinchLevel(modeLevel))) {
+        const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+        config = adjusted.config;
+      }
 
       const seed = Date.now() + modeLevel * 1337;
       const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
-      board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
+      board = generateLevelBoard(modeLevel, config, seed, mode, chapter?.profile, chapter?.themeWords);
 
       const modeConfig = MODE_CONFIGS[mode];
       navigation.navigate('Game', {
@@ -774,7 +754,31 @@ function ModesScreenWrapper({ navigation, route }: any) {
     handleSelectMode(autoStartMode);
   }, [route?.params?.autoStartMode, handleSelectMode, navigation]);
 
-  return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />;
+  return (
+    <>
+      <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />
+      <OutOfEnergyModal
+        visible={energyWallMinutes !== null}
+        minutesUntilNext={energyWallMinutes ?? 0}
+        gemCost={ENERGY.GEM_REFILL_COST}
+        playerGems={economy.gems}
+        source="modes"
+        onWatchAd={() => {
+          setEnergyWallMinutes(null);
+          void watchAdForEnergyRefill(player);
+        }}
+        onGemRefill={() => {
+          setEnergyWallMinutes(null);
+          if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+            player.refillEnergy('gems');
+          } else {
+            navigation.navigate('Home' as never, { screen: 'Shop' } as never);
+          }
+        }}
+        onClose={() => setEnergyWallMinutes(null)}
+      />
+    </>
+  );
 }
 
 // Wrapper to pass navigation params to GameScreen with full context wiring
@@ -904,9 +908,13 @@ function GameScreenWrapper({ route, navigation }: any) {
     const modeLevel = mode === 'classic'
       ? (params.level || 0) + 1
       : player.getModeLevel(mode);
-    const useBreather = player.needsBreather();
+    // Pinch slots are exempt from the breather and the adaptive easer —
+    // both would defuse the authored low-forgiveness board on retry, which
+    // is exactly the state a pinch induces.
+    const pinch = mode === 'classic' && isPinchLevel(modeLevel);
+    const useBreather = !pinch && player.needsBreather();
     let config = useBreather ? getBreatherConfigExtended(modeLevel) : getLevelConfigExtended(modeLevel);
-    if (!useBreather) {
+    if (!useBreather && !pinch) {
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
     }
@@ -943,7 +951,8 @@ function GameScreenWrapper({ route, navigation }: any) {
         try {
           const target = computeNextTarget();
           if (prefetchedNext.current?.key === target.key) return;
-          const board = generateBoard(
+          const board = generateLevelBoard(
+            target.modeLevel,
             target.config,
             target.modeLevel * 1337 + Date.now(),
             target.mode,
@@ -973,7 +982,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       prefetchedNext.current = null;
       const board = cached && cached.key === target.key
         ? cached.board
-        : generateBoard(config, modeLevel * 1337 + Date.now(), mode, chapter?.profile, chapter?.themeWords);
+        : generateLevelBoard(modeLevel, config, modeLevel * 1337 + Date.now(), mode, chapter?.profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -1047,7 +1056,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       const config = getLevelConfigExtended(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
       const chapter = mode === 'classic' ? getChapterForLevel(nextModeLevel) : undefined;
-      let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
+      let board = generateLevelBoard(nextModeLevel, config, seed, mode, chapter?.profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -1263,6 +1272,7 @@ function HomeMainScreen({ route, navigation }: any) {
   const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
+  const [energyWallMinutes, setEnergyWallMinutes] = useState<number | null>(null);
   // Sweep the server-side reward inbox (weekly-leaderboard payouts,
   // personal club-goal completions) once per app run — these types had no
   // client reader, so the grants were invisible and unclaimable.
@@ -1510,10 +1520,16 @@ function HomeMainScreen({ route, navigation }: any) {
     // Update wheel state in player context
     player.updateMysteryWheel(updatedState);
 
-    // Award rewards from the spin result
+    // Award rewards from the spin result. Gems route through the shared
+    // metered-faucet cap (claimMeteredGems): the wheel is a recurring
+    // faucet, and together with quests/timers it pushed engaged players to
+    // 12-25 gems/day against a 3/day design target.
     const reward = segment.reward;
     if (reward.coins) economy.addCoins(reward.coins);
-    if (reward.gems) economy.addGems(reward.gems);
+    if (reward.gems) {
+      const granted = claimMeteredGems(reward.gems, 'mystery_wheel');
+      if (granted > 0) economy.addGems(granted);
+    }
     if (reward.hints) economy.addHintTokens(reward.hints);
     if (reward.rareTile) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1528,7 +1544,10 @@ function HomeMainScreen({ route, navigation }: any) {
     if (mysteryBoxReward) {
       const mbReward = mysteryBoxReward.reward;
       if (mbReward.coins) economy.addCoins(mbReward.coins);
-      if (mbReward.gems) economy.addGems(mbReward.gems);
+      if (mbReward.gems) {
+        const granted = claimMeteredGems(mbReward.gems, 'mystery_wheel');
+        if (granted > 0) economy.addGems(granted);
+      }
       if (mbReward.hints) economy.addHintTokens(mbReward.hints);
       if (mbReward.rareTile) {
         const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1707,35 +1726,11 @@ function HomeMainScreen({ route, navigation }: any) {
 
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
-      // Energy check — classic mode costs 1 energy
+      // Energy check — classic mode costs 1 energy. Designed modal, not a
+      // bare OS Alert (see OutOfEnergyModal).
       const energyInfo = player.getEnergyDisplay();
       if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
-        // Truly out of energy + bonus plays — show friendly "take a break" prompt
-        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
-        Alert.alert(
-          'Take a Break!',
-          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
-          [
-            { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
-            {
-              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
-              onPress: () => {
-                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
-                  player.refillEnergy('gems');
-                } else {
-                  // Dead-end fix: "visit the shop" now comes with the door.
-                  // HomeMainScreen lives in the Home stack, so Shop is a
-                  // sibling screen — no cross-tab hop needed.
-                  Alert.alert('Not Enough Gems', 'Get more gems in the shop.', [
-                    { text: 'Not Now', style: 'cancel' },
-                    { text: 'Go to Shop', onPress: () => navigation.navigate('Shop' as never) },
-                  ]);
-                }
-              },
-            },
-          ]
-        );
+        setEnergyWallMinutes(Math.ceil(player.getTimeUntilNextEnergy() / 60000));
         return;
       }
 
@@ -1748,17 +1743,21 @@ function HomeMainScreen({ route, navigation }: any) {
           let config;
           if (difficulty) {
             config = DIFFICULTY_CONFIGS[difficulty];
-          } else if (player.needsBreather()) {
+          } else if (!isPinchLevel(player.currentLevel) && player.needsBreather()) {
             config = getBreatherConfigExtended(player.currentLevel);
           } else {
             config = getLevelConfigExtended(player.currentLevel);
-            // Apply adaptive difficulty adjustment (invisible to player)
-            const adjusted = getAdjustedConfig(config, player.performanceMetrics);
-            config = adjusted.config;
+            // Apply adaptive difficulty adjustment (invisible to player;
+            // pinch slots exempt so the easer can't defuse them on retry)
+            if (!isPinchLevel(player.currentLevel)) {
+              const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+              config = adjusted.config;
+            }
           }
           const level = difficulty ? 0 : player.currentLevel;
           const chapter = !difficulty ? getChapterForLevel(player.currentLevel) : undefined;
-          const board = generateBoard(
+          const board = generateLevelBoard(
+            level,
             config,
             level * 1337 + Date.now(),
             'classic',
@@ -1822,7 +1821,10 @@ function HomeMainScreen({ route, navigation }: any) {
       const reward: { coins?: number; gems?: number; hints?: number; spins?: number } =
         timer.reward.random ? rollBonusChestReward() : timer.reward;
       if (reward.coins) economy.addCoins(reward.coins);
-      if (reward.gems) economy.addGems(reward.gems);
+      if (reward.gems) {
+        const granted = claimMeteredGems(reward.gems, 'daily_timer');
+        if (granted > 0) economy.addGems(granted);
+      }
       if (reward.hints) economy.addHintTokens(reward.hints);
       if (reward.spins) player.awardFreeSpin();
       player.updateProgress({
@@ -2010,7 +2012,10 @@ function HomeMainScreen({ route, navigation }: any) {
           const reward = player.claimDailyQuest(templateId);
           if (!reward) return;
           if (reward.coins) economy.addCoins(reward.coins);
-          if (reward.gems) economy.addGems(reward.gems);
+          if (reward.gems) {
+            const granted = claimMeteredGems(reward.gems, 'daily_quest');
+            if (granted > 0) economy.addGems(granted);
+          }
           if (reward.hintTokens) economy.addHintTokens(reward.hintTokens);
           if (reward.boosterTokens) economy.addBoosterToken('wildcardTile', reward.boosterTokens);
           if (reward.xp) economy.addSeasonPassXp(reward.xp);
@@ -2129,6 +2134,27 @@ function HomeMainScreen({ route, navigation }: any) {
           />
         );
       })()}
+      <OutOfEnergyModal
+        visible={energyWallMinutes !== null}
+        minutesUntilNext={energyWallMinutes ?? 0}
+        gemCost={ENERGY.GEM_REFILL_COST}
+        playerGems={economy.gems}
+        source="home"
+        onWatchAd={() => {
+          setEnergyWallMinutes(null);
+          void watchAdForEnergyRefill(player);
+        }}
+        onGemRefill={() => {
+          setEnergyWallMinutes(null);
+          if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+            player.refillEnergy('gems');
+          } else {
+            // HomeMainScreen lives in the Home stack, so Shop is a sibling.
+            navigation.navigate('Shop' as never);
+          }
+        }}
+        onClose={() => setEnergyWallMinutes(null)}
+      />
     </View>
   );
 }
