@@ -86,6 +86,67 @@ Key mechanics behind those numbers:
   which is a gentle dip once bands are wide but replayed level 1 verbatim at
   level 5 when they were not.
 
+## Gravity cascade (Aug 2026 — read before touching the fall)
+
+The fall after a word resolves is the game's signature motion and it is easy
+to break in ways typecheck and unit tests cannot see. It lives in three files:
+
+| File | Role |
+|---|---|
+| `src/components/Grid.tsx` | Owns the whole cascade: the render-phase diff, ghosts, and starting the animations |
+| `src/components/game/fallMotion.ts` | The motion model as a pure function — `FallRun`, `sampleFallOffset`, `buildFallEasing`, every timing constant |
+| `src/components/game/gridGeometry.ts` | Slot geometry + `computeGridTransition` / `decideGridTransitionUpdate` |
+
+**How it works.** `SUBMIT_WORD` produces the post-gravity board in one commit,
+so `Grid` reconstructs the motion FLIP-style: during render it diffs the
+previous frame's pixel bounds (by cell id) against the new geometry, seeds each
+moved tile's `Animated.ValueXY` with its OLD-position offset, and collects the
+cleared tiles as ghosts. A `useLayoutEffect` then promotes the baseline and
+starts one native animation per tile.
+
+**The invariants. Breaking any of these puts the bugs back:**
+
+- **Seed during render, promote on commit.** The seed must happen in the render
+  body, before the children render, because that is what puts the offset into
+  the *committed* props (`setValue` updates the JS-side value synchronously).
+  Everything else — advancing `prevGridRef`, stopping animations, starting new
+  ones — happens in the layout effect, so a render React discards cannot
+  swallow a fall or freeze a tile mid-air. The render phase must stay
+  replayable: repeat it and it lands on the same offsets.
+- **Tiles are absolutely positioned, keyed by cell id.** Never put them back in
+  a per-column flex tree: a tile that changes column (every clear under
+  gravityFlip's horizontal gravity) would be a different parent's child, so
+  React would unmount and remount it. It also matters for *vertical* falls —
+  `slotX`/`slotY` changing is what forces the moved tile to re-render and
+  re-commit its seeded transform.
+- **Never `addListener` a native-driven value.** It turns on per-frame
+  UI → JS propagation, and every listening node's event is dispatched to every
+  other listening node's subscriber. Sample `sampleFallOffset` instead.
+- **No JS-thread timers inside the motion.** `Animated.delay`, and a timing
+  config's `delay`, are `setTimeout`. Holds and staggers are baked into the
+  easing curve (`buildFallEasing`, and `utils/motionTiming.ts` for the ghost /
+  particle / spark staggers).
+- **Only one easing curve.** `buildFallEasing` is derived from
+  `sampleFallOffset`, so what is on screen and what an interrupting clear reads
+  cannot drift. If you change the shape, change it in `sampleFallOffset`.
+- **A cellSize change is a `resize`, not a `reset`.** `reset` snaps everything;
+  `resize` rebuilds the previous slots at the new pitch and keeps animating.
+  Only a shape change or a board replacement may reset.
+- **Layout above the grid must not move mid-puzzle.** `gridArea` is `flex:1`,
+  so anything that changes the word band's height re-measures the grid and
+  changes `cellSize`. `WordBank`'s chips are deliberately size-invariant across
+  found / valid / last-remaining for this reason.
+
+**Budget.** ~500ms typical from clear to settled, ~700ms worst case, first
+movement at 45ms. Pinned by `components/game/__tests__/fallMotion.test.ts`.
+
+**Known limitation.** RN compiles a timing easing into a frames array the
+native driver indexes at a fixed 60Hz with no interpolation, so the fall plays
+at 60fps on a 120Hz display. Reanimated would not have this cap, but it also
+cannot put the seeded offset into the React commit the way `Animated`'s
+JS-side value does — and that commit is what makes the first frame flicker-free.
+The cap is the deliberate trade.
+
 ## Gotchas
 
 Build, native-module, and runtime quirks (`Reanimated` worklet pitfalls, SDK 55 native deps, Babel plugin order, Firebase hybrid SDK, Termux EAS quirks, etc.) live in **`agent_docs/gotchas.md`**. Consult that file when a build or runtime issue surfaces.
@@ -158,7 +219,7 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 - **Dynamic cohort offers**: `src/data/dynamicPricing.ts:103–250` — `getDynamicOffers(spending, engagement, playerLevel)` already branches on the segment matrix (lapsed → 70% off starter + "WELCOME BACK" 48h; at-risk/returned → 50% off, 24h; non-payer first-purchase at level 5–15 → 75% off special; minnow/dolphin/whale tiers). Don't re-implement.
 - **Cosmetic rendering**: `ProfileScreen.tsx` reads `equippedFrame` / `equippedTheme` / `equippedTitle`, resolves via `getFrame()` / `getTheme()` / `getTitleLabel()`, and applies rarity-colored border (common/rare/epic/legendary). Titles flow through gifts/social/leaderboards. Only animated frame glow for legendary is still missing (see `launch_blockers.md`).
 - **Prestige**: `performPrestige()` at `PlayerContext.tsx:1603–1670` resets level + stars + mode levels, accumulates permanent bonuses, unlocks cosmetic reward, queues `PrestigeResetCeremony`. Fully live — 5 tiers defined in `src/data/prestigeSystem.ts`.
-- **Feel polish already shipped**: spring gravity with per-column stagger (`GameScreen.tsx:1258–1265`, tension 180 / friction 9); invalid-word 6-frame ±8px screen shake (`GameScreen.tsx:1082–1112`, RC-gated + reduce-motion safe); multi-tile bloom particles fired at three dispatch sites on word-found (`GameScreen.tsx:1377, 1379, 1415`); booster combo synergies (Eagle Eye / Lucky Roll / Power Surge) with `BoosterComboBanner` (`GameScreen.tsx:1907–1913`).
+- **Feel polish already shipped**: the word-clear gravity cascade, which lives entirely in `Grid.tsx` + `components/game/fallMotion.ts` (see **Gravity cascade** below — the old `GameScreen.tsx` spring pipeline is long gone); invalid-word 6-frame ±8px screen shake (`GameScreen.tsx:1082–1112`, RC-gated + reduce-motion safe); multi-tile bloom particles fired at three dispatch sites on word-found (`GameScreen.tsx:1377, 1379, 1415`); booster combo synergies (Eagle Eye / Lucky Roll / Power Surge) with `BoosterComboBanner` (`GameScreen.tsx:1907–1913`).
 - **Adaptive difficulty**: `getAdjustedConfig()` wired at 4 call sites in `App.tsx` (lines 178, 490, 632, 1324); RC-gated via `adaptiveDifficultyEnabled` (default ON). Classic-mode stuck events feed the adjuster. Tier 6 B1 (April 2026) loosened thresholds: easing now triggers at `averageStars < 2.4` (was 2.0) and any recent level with >2 attempts (was >3). A new **fail-breather offer** (`FailBreatherOffer.tsx` + `failBreatherEnabled` RC, 1-hour cooldown) surfaces after two consecutive fails with a free hint — catches the L15–L25 softlock zone the earlier thresholds missed.
 - **Prestige multipliers** (Tier 6 B3 — shipped April 2026): `getPrestigeXpMultiplier` / `getPrestigeCoinMultiplier` / `getPrestigeGemMultiplier` in `src/data/prestigeSystem.ts` decode the accumulated `permanentBonuses` string IDs. `useRewardWiring.ts:280–290` composes cosmetic × prestige multipliers multiplicatively (capped at `MAX_BONUS_FACTOR = 5.0`). `ProfileScreen.tsx` surfaces the live "1.50× XP · 1.25× Coin · 2.00× Gem" summary on the prestige badge.
 - **Dynamic comeback ladder** (Tier 6 B6): `getDynamicOffers()` now accepts `daysSinceActive` and routes through a 4-tier `lapsedLadder()` (Day 2–3 / 4–7 / 8–14 / 15+). `ShopScreen` renders a "For You" horizontal carousel above Featured Offers; RC-gated via `dynamicOffersEnabled`. Previously test-only; now live-wired end to end.
@@ -181,7 +242,7 @@ The authoritative, verified list lives in **`agent_docs/launch_blockers.md`**. A
 - **Tier 1 Retention (R1–R7)** — `getPersonalizedNotifications()` wired into `notifications.ts` scheduler; per-timezone `processStreakReminders`; new `processDay2Reengagement` + `processDay7Reengagement` Cloud Functions; restorative `PostStreakBreakOffer` modal (50 gems, 24h window, tracks `streaks.recentBreak`); `segmentWelcomeMessage` rendered as a welcome-back banner on HomeScreen; `maxNotificationsPerDay` RC-overridable with segment-derived cap winning.
 - **Tier 2 Monetization (M1–M3)** — `first_purchase_special` raised to 500/50/10; `wildcard_pack_5` / `spotlight_pack_5` / `shuffle_pack_5` SKUs at $1.99 each added alongside `booster_crate`; `getAssignedVariant()` now evaluates `targetSegments` (via new `segmentsForTargeting` param auto-flattened by `useExperiment()`).
 - **Tier 3 Social + Metagame (S1, S2, MG1–MG3)** — `firestoreService.listPublicClubs()` + Browse-clubs section inside `ClubScreen.renderNoClub()`; `buildReferralLink()` emits `https://wordfallgame.app/r/{code}` + parser handles `/r/` path; new `season_pass_complete` ceremony type with dedicated `SeasonPassCompleteCeremony` fired at tier 50; new `EventLeaderboardCard` + `submitEventScore` / `getEventLeaderboard` per-event ranking mounted in `EventScreen`; animated legendary frame glow on `ProfileScreen` via Reanimated pulse.
-- **Tier 4 Feel polish (C1, C2, P1, P2)** — `gravityLandHaptic()` now fires in the fall-spring `.start()` callback at `GameScreen.tsx:1274` (updated from 1272 after Tier 6 drift check); 30s / 10s timer threshold warnings (haptic + SFX) live in GameScreen's `TimerMovesBarsMemo`, driven by the store's authoritative `timeRemaining` (they were originally authored in `components/modes/TimerDisplay.tsx`, which nothing mounted AND which ran its own competing setInterval clock — that file is deleted, Aug 2026); new `economy_primer` onboarding phase teaches coins / gems / clubs. (P2's `cardSpringFadeInterpolator` was authored in `src/navigation/MainNavigator.tsx`, which nothing imported — the live navigators are defined in App.tsx, so the custom transition never ran. The dead file is deleted; the interpolator would need re-implementing against App.tsx's `screenOptions` to actually ship.)
+- **Tier 4 Feel polish (C1, C2, P1, P2)** — `gravityLandHaptic()` fires on the cascade's touchdown (scheduled by `Grid.tsx`, see **Gravity cascade**; it was originally wired to a `GameScreen` fall-spring that no longer exists); 30s / 10s timer threshold warnings (haptic + SFX) live in GameScreen's `TimerMovesBarsMemo`, driven by the store's authoritative `timeRemaining` (they were originally authored in `components/modes/TimerDisplay.tsx`, which nothing mounted AND which ran its own competing setInterval clock — that file is deleted, Aug 2026); new `economy_primer` onboarding phase teaches coins / gems / clubs. (P2's `cardSpringFadeInterpolator` was authored in `src/navigation/MainNavigator.tsx`, which nothing imported — the live navigators are defined in App.tsx, so the custom transition never ran. The dead file is deleted; the interpolator would need re-implementing against App.tsx's `screenOptions` to actually ship.)
 
 **Remaining Tier 5 items (user-side, NOT code):**
 - `assetlinks.json` SHA256: replace the `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` placeholder in `wordfallgamesite/.well-known/assetlinks.json` with the Play App Signing fingerprint.
@@ -277,7 +338,7 @@ The big monetization + social + feel-polish push landed across 13 branches. All 
 - **Booster combo synergies** — EAGLE EYE (Wildcard+Spotlight) / LUCKY ROLL (Wildcard+Shuffle) / POWER SURGE (Spotlight+Shuffle); 2× score multiplier, 3-puzzle duration; `BoosterComboBanner` rendered at `GameScreen.tsx:1907–1913` + combo haptic.
 - **Invalid-word screen shake** — 6-frame ±8px sequence at `GameScreen.tsx:1082–1112` in `showInvalidFlashAnim`; `invalidShakeEnabled` RC + reduce-motion honored.
 - **Multi-tile bloom particles** — `spawnTileBloom` dispatched at `GameScreen.tsx:1377, 1379, 1415` on word-found; per-tile stagger 30ms; cap 24 particles via `clearParticleQueue`.
-- **Spring gravity landing** — `Animated.spring(anim, { tension: 180, friction: 9 })` with per-column stagger at `GameScreen.tsx:1258–1265`; friction dropped from 12 → 9 for subtle landing bounce overshoot.
+- **Spring gravity landing** — superseded. The fall moved out of `GameScreen` into `Grid.tsx` and is no longer a spring; see **Gravity cascade** below.
 - **Animation migration** — `LetterCell` + `BoardGenBanner` on Reanimated `useSharedValue` + `withSpring`/`withSequence`.
 - **Hard-energy (Phase 4B)** — `src/hooks/useHardEnergy.ts` composes `EconomyContext` lives + `getRemoteBoolean('hardEnergyEnabled')` into `{ canPlay, livesRemaining, nextLifeAtMs, startLevel(), refillWithGems(), creditAdLife() }`. `App.tsx` `GameScreenWrapper` debits a life on level load (keyed on `route.key + mode + level`). `NoLivesModal` mounts when `canPlay=false`. Rewarded-ad `life_reward` capped at 3/day. **Remote Config flag defaults OFF.**
 - **D5 Audio wire-up** — NOT SHIPPED; waits on real audio delivery per `agent_docs/audio_brief.md`.

@@ -197,6 +197,8 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
 // Shared empty Set so memoized consumers (PlayField's GameGrid) don't re-render when spotlight is inactive.
 const EMPTY_CELL_KEY_SET: Set<string> = new Set();
 const GRID_AREA_BOTTOM_PADDING = 36;
+/** Submit squash: dip and return, finished before the cascade is seeded. */
+const GRID_SQUASH_MS = 115;
 
 // Unified booster-button body gradient — matches the tile material language
 // so the three boosters read as one shelf with different icons rather than
@@ -332,7 +334,11 @@ const EMPTY_STRING_LIST: string[] = [];
  * bursts 20-100ms early, popping particles out mid-fade.
  */
 const CLEAR_PARTICLE_FLIGHT_MS = 620;
-const CLEAR_PARTICLE_MAX_STAGGER_MS = 9 * 20;
+const CLEAR_PARTICLE_STAGGER_MS = 30;
+/** Tiles past this share the last one's delay, so a long word still bursts. */
+const CLEAR_PARTICLE_MAX_STAGGER_STEPS = 6;
+const CLEAR_PARTICLE_MAX_STAGGER_MS =
+  CLEAR_PARTICLE_MAX_STAGGER_STEPS * CLEAR_PARTICLE_STAGGER_MS;
 const CLEAR_PARTICLE_REMOVE_AFTER_MS =
   CLEAR_PARTICLE_FLIGHT_MS + CLEAR_PARTICLE_MAX_STAGGER_MS + 60;
 
@@ -507,15 +513,16 @@ function StarSpark({ x, y, delay }: { x: number; y: number; delay: number }) {
 // native-driven, decorative layer.
 const CELL_FLASH_DURATION_MS = 260;
 
-function CellClearFlash({ x, y, size }: { x: number; y: number; size: number }) {
+function CellClearFlash({ x, y, size, delay }: { x: number; y: number; size: number; delay: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(anim, {
+    const animation = delayedTiming(anim, {
       toValue: 1,
+      delay,
       duration: CELL_FLASH_DURATION_MS,
       easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
+    });
+    return startAnimationWithCleanup(animation);
   }, []);
   return (
     <Animated.View
@@ -543,6 +550,8 @@ interface ClearParticleEntry {
   id: string;
   x: number;
   y: number;
+  /** Per-tile stagger, baked into the particle's native easing. */
+  delay: number;
 }
 
 interface ClearRingEntry {
@@ -558,6 +567,8 @@ interface StarSparkEntry {
 }
 
 interface CellFlashEntry {
+  /** Per-tile stagger, baked into the flash's native easing. */
+  delay: number;
   id: string;
   x: number;
   y: number;
@@ -628,7 +639,7 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
         const t = setTimeout(() => {
           ringTimersRef.current.delete(t);
           setFlashes(prev => prev.filter(f => !idSet.has(f.id)));
-        }, CELL_FLASH_DURATION_MS + 60);
+        }, CELL_FLASH_DURATION_MS + CLEAR_PARTICLE_MAX_STAGGER_MS + 60);
         ringTimersRef.current.add(t);
       },
     }), []);
@@ -640,7 +651,7 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
     return (
       <View style={style} pointerEvents="none">
         {flashes.map(f => (
-          <CellClearFlash key={f.id} x={f.x} y={f.y} size={f.size} />
+          <CellClearFlash key={f.id} x={f.x} y={f.y} size={f.size} delay={f.delay} />
         ))}
         {rings.map(r => (
           <ClearFlashRing key={r.id} x={r.x} y={r.y} />
@@ -648,10 +659,10 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
         {stars.map((s, i) => (
           <StarSpark key={s.id} x={s.x} y={s.y} delay={(i % 8) * 15} />
         ))}
-        {queue.map((p, i) => (
+        {queue.map(p => (
           <WordClearParticle
             key={p.id}
-            delay={(i % 10) * 20}
+            delay={p.delay}
             startX={p.x}
             startY={p.y}
           />
@@ -856,6 +867,12 @@ function GameScreenImpl({
     pendingTimeoutsRef.current.clear();
   }, []);
   const gridScaleAnim = useRef(new Animated.Value(1)).current;
+  // Submit "pop" driver: 0 -> 1, interpolated into a dip-and-return so the
+  // whole squash is a single native animation. Kept shorter than the 50ms
+  // auto-submit window plus the cascade's hold, because it scales the tiles'
+  // shared parent — any of it still running once the fall has been seeded is
+  // a moving frame of reference underneath the falling tiles.
+  const gridSquashAnim = useRef(new Animated.Value(1)).current;
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
@@ -1366,8 +1383,18 @@ function GameScreenImpl({
 
   // Memoize the composed grid scale to avoid creating a new style object each render
   const gridScaleStyle = useMemo(() => ({
-    transform: [{ scale: Animated.multiply(gridScaleAnim, undoPulseAnim) }],
-  }), [gridScaleAnim, undoPulseAnim]);
+    transform: [
+      {
+        scale: Animated.multiply(
+          Animated.multiply(gridScaleAnim, undoPulseAnim),
+          gridSquashAnim.interpolate({
+            inputRange: [0, 0.4, 1],
+            outputRange: [1, 0.975, 1],
+          }),
+        ),
+      },
+    ],
+  }), [gridScaleAnim, undoPulseAnim, gridSquashAnim]);
 
   // Memoize the root shake container style so the Animated.View ref stays
   // stable across the thousands of re-renders a puzzle triggers (one per
@@ -1472,25 +1499,31 @@ function GameScreenImpl({
       const maxTiles = Math.max(1, Math.floor(MAX_BLOOM_PARTICLES / perTile));
       const tiles = cells.slice(0, maxTiles);
       const bloomBatchId = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      // The whole burst is queued in ONE commit, with each tile's stagger
+      // carried on its entry and baked into the particle's native easing.
+      // Pushing tile-by-tile on a chain of setTimeouts meant a React commit
+      // and three native view mounts every 30ms, landing one after another
+      // right across the gravity cascade — the burst was paying for its own
+      // stagger twice, once in animation and once in reconciliation.
+      const entries: ClearParticleEntry[] = [];
+      const flashes: CellFlashEntry[] = [];
       tiles.forEach((cell, idx) => {
-        trackTimeout(() => {
-          const { x, y } = cellPositionToScreen(cell.row, cell.col);
-          if (gridCellSize > 0) {
-            particleLayerRef.current?.pushCellFlashes([
-              { id: `${bloomBatchId}-${idx}-flash`, x, y, size: gridCellSize },
-            ]);
-          }
-          const entries: ClearParticleEntry[] = [];
-          for (let p = 0; p < perTile; p++) {
-            entries.push({ id: `${bloomBatchId}-${idx}-${p}`, x, y });
-          }
-          particleLayerRef.current?.push(entries);
-          const ids = entries.map(e => e.id);
-          trackTimeout(() => {
-            particleLayerRef.current?.removeIds(ids);
-          }, CLEAR_PARTICLE_REMOVE_AFTER_MS);
-        }, idx * 30);
+        const { x, y } = cellPositionToScreen(cell.row, cell.col);
+        const delay = Math.min(idx, CLEAR_PARTICLE_MAX_STAGGER_STEPS) * CLEAR_PARTICLE_STAGGER_MS;
+        if (gridCellSize > 0) {
+          flashes.push({ id: `${bloomBatchId}-${idx}-flash`, x, y, size: gridCellSize, delay });
+        }
+        for (let p = 0; p < perTile; p++) {
+          entries.push({ id: `${bloomBatchId}-${idx}-${p}`, x, y, delay });
+        }
       });
+      if (flashes.length > 0) particleLayerRef.current?.pushCellFlashes(flashes);
+      if (entries.length === 0) return;
+      particleLayerRef.current?.push(entries);
+      const ids = entries.map(e => e.id);
+      trackTimeout(() => {
+        particleLayerRef.current?.removeIds(ids);
+      }, CLEAR_PARTICLE_REMOVE_AFTER_MS);
     },
     [cellPositionToScreen, trackTimeout, gridCellSize],
   );
@@ -1658,19 +1691,26 @@ function GameScreenImpl({
     prevFoundWordsRef.current = foundWords;
     if (foundWords > prevFound && status === 'playing') {
       const previousGrid = history[history.length - 1]?.grid;
-      const moved = previousGrid
-        ? getMovedCellPositions(previousGrid, grid)
-        : [];
       void soundManager.playSound('gravity');
-      // Defer analytics serialization off the gravity frame so the event
-      // dispatch doesn't compete with the animation that just started.
-      const analyticsPayload = { level, mode, movedCells: moved.length };
+      // getMovedCellPositions walks the whole board to re-derive a diff Grid
+      // has already computed, purely to put a count in an analytics field —
+      // so it runs off the word-clear frame along with the serialization,
+      // not on it.
       requestAnimationFrame(() => {
-        void analytics.logEvent('gravity_interaction', analyticsPayload);
+        const moved = previousGrid
+          ? getMovedCellPositions(previousGrid, grid)
+          : [];
+        void analytics.logEvent('gravity_interaction', {
+          level,
+          mode,
+          movedCells: moved.length,
+        });
+        // Grid skips all motion under reduce-motion, so its touchdown never
+        // fires there — the feedback must not vanish with the animation.
+        if (reduceMotion && moved.length > 0) {
+          void gravityLandHaptic();
+        }
       });
-      if (reduceMotion && moved.length > 0) {
-        void gravityLandHaptic();
-      }
     }
   }, [foundWords, status]);
 
@@ -1846,17 +1886,14 @@ function GameScreenImpl({
             // commits once (Fix F). Removals are likewise batched via
             // a single trackTimeout chain.
             const fallback: ClearParticleEntry[] = [
-              { id: `${fallbackId}-a`, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 },
-              { id: `${fallbackId}-b`, x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40 },
+              { id: `${fallbackId}-a`, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60, delay: 0 },
+              { id: `${fallbackId}-b`, x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40, delay: 250 },
             ];
-            particleLayerRef.current?.push([fallback[0]]);
+            // Both in one commit; the second's offset is its own easing lead-in.
+            particleLayerRef.current?.push(fallback);
             trackTimeout(() => {
-              particleLayerRef.current?.removeIds([fallback[0].id]);
-              particleLayerRef.current?.push([fallback[1]]);
-              trackTimeout(() => {
-                particleLayerRef.current?.removeIds([fallback[1].id]);
-              }, 500);
-            }, 250);
+              particleLayerRef.current?.removeIds(fallback.map(f => f.id));
+            }, 250 + CLEAR_PARTICLE_REMOVE_AFTER_MS);
           }
         } else {
           bigWordAnim.setValue(1);
@@ -1880,7 +1917,7 @@ function GameScreenImpl({
           spawnStarSparks(cells);
         } else {
           const fallbackId = `chain-${Date.now()}`;
-          const entry: ClearParticleEntry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
+          const entry: ClearParticleEntry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60, delay: 0 };
           particleLayerRef.current?.push([entry]);
           trackTimeout(() => {
             particleLayerRef.current?.removeIds([entry.id]);
@@ -1996,11 +2033,17 @@ function GameScreenImpl({
         // reference under the falling tiles — the board breathing and the
         // tiles dropping at the same time is exactly the kind of compounded
         // motion that reads as jank.
-        gridScaleAnim.setValue(1);
-        Animated.sequence([
-          Animated.timing(gridScaleAnim, { toValue: 0.975, duration: 45, useNativeDriver: true }),
-          Animated.timing(gridScaleAnim, { toValue: 1.0, duration: 70, useNativeDriver: true }),
-        ]).start();
+        // ONE native animation: a 0 -> 1 driver whose interpolation dips to
+        // 0.975 and returns. An Animated.sequence would advance between its
+        // two legs through the JS thread, on the frame that thread is
+        // busiest.
+        gridSquashAnim.setValue(0);
+        Animated.timing(gridSquashAnim, {
+          toValue: 1,
+          duration: GRID_SQUASH_MS,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }).start();
       }
 
       validFlashTimerRef.current = setTimeout(() => {

@@ -11,6 +11,7 @@ import {
   FALL_REBOUND_IN_MS,
   FALL_REBOUND_OUT_MS,
   fallDurationMs,
+  fallPhaseProgress,
   fallRunDuration,
   nowMs,
   reboundMagnitude,
@@ -185,6 +186,71 @@ describe('choreography budget', () => {
   });
 });
 
+describe('mid-air pickup keeps its speed', () => {
+  function continuedRun(entryProgress: number): FallRun {
+    const from = { x: 0, y: -2 * STRIDE };
+    return {
+      from,
+      startedAt: 0,
+      delayMs: 0,
+      fallMs: fallDurationMs(2),
+      entryProgress,
+      rebound: reboundVector(from, reboundMagnitude(2 * STRIDE)),
+      reboundOutMs: FALL_REBOUND_OUT_MS,
+      reboundInMs: FALL_REBOUND_IN_MS,
+    };
+  }
+
+  test('a fresh drop starts from rest', () => {
+    const run = continuedRun(0);
+    const firstFrame = Math.abs(
+      sampleFallOffset(run, 1000 / 60).y - run.from.y,
+    );
+    expect(firstFrame).toBeLessThan(1);
+  });
+
+  test('a continued fall is already moving on its first frame', () => {
+    const fresh = continuedRun(0);
+    const continued = continuedRun(0.6);
+    const frame = 1000 / 60;
+    const freshTravel = Math.abs(sampleFallOffset(fresh, frame).y - fresh.from.y);
+    const continuedTravel = Math.abs(
+      sampleFallOffset(continued, frame).y - continued.from.y,
+    );
+    expect(continuedTravel).toBeGreaterThan(freshTravel * 4);
+  });
+
+  test('a continued fall still lands exactly on the slot', () => {
+    const run = continuedRun(0.6);
+    // Touchdown is the slot itself; the rebound is what happens next.
+    expect(sampleFallOffset(run, run.fallMs).y).toBeCloseTo(0, 9);
+    expect(sampleFallOffset(run, run.fallMs - 0.001).y).toBeCloseTo(0, 3);
+    expect(sampleFallOffset(run, fallRunDuration(run))).toEqual({ x: 0, y: 0 });
+  });
+
+  test('its compiled curve still matches the sampler exactly', () => {
+    const run = continuedRun(0.45);
+    const total = fallRunDuration(run);
+    const easing = buildFallEasing(run);
+    for (let i = 0; i <= 48; i++) {
+      const t01 = i / 48;
+      const replayed = run.from.y * (1 - easing(t01));
+      expect(replayed).toBeCloseTo(sampleFallOffset(run, t01 * total).y, 6);
+    }
+  });
+
+  test('fallPhaseProgress reports the pickup point, and only while falling', () => {
+    const run = runFor(3, 0, 1);
+    expect(fallPhaseProgress(run, 0)).toBe(0);
+    expect(fallPhaseProgress(run, run.delayMs)).toBe(0);
+    const mid = fallPhaseProgress(run, run.delayMs + run.fallMs * 0.5);
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(1);
+    // Past touchdown the tile is rebounding, not falling.
+    expect(fallPhaseProgress(run, run.delayMs + run.fallMs + 1)).toBe(0);
+  });
+});
+
 describe('cascade banding', () => {
   test('vertical gravity bands by column', () => {
     expect(fallBandOf({ dx: 0, dy: -108, row: 5, col: 3 })).toBe(3);
@@ -342,6 +408,22 @@ describe('wiring', () => {
     // render would seed a position the tile never reached.
     expect(GRID_SOURCE).toContain('frozenOffsetsRef');
     expect(GRID_SOURCE).toContain('const offset = frozen ?? sampleFallOffset(run, now);');
+  });
+
+  test('a tile cleared mid-fall drops its animated value', () => {
+    // Otherwise undo restores that cell id and the JSX hands it back the same
+    // value, rendering the restored tile permanently displaced.
+    expect(GRID_SOURCE).toContain('fallAnimMapRef.current.delete(ghost.id);');
+  });
+
+  test('board-removed cells do not ghost as found-word bursts', () => {
+    expect(GRID_SOURCE).toContain('GHOST_BODY_COLORS_BOARD');
+    expect(GRID_SOURCE).toContain('fromWord: traceOrder.has(ghost.id)');
+  });
+
+  test('a mid-air pickup carries its speed into the successor run', () => {
+    expect(GRID_SOURCE).toContain('entryProgress: f.entryProgress');
+    expect(GRID_SOURCE).toContain('fallPhaseProgress(run, now)');
   });
 
   test('the cascade stagger groups tiles by travel band, not always by column', () => {

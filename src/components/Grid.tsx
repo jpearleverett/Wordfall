@@ -35,6 +35,7 @@ import {
   bandDelayMs,
   fallBandOf,
   fallDurationMs,
+  fallPhaseProgress,
   fallRunDuration,
   FALL_HOLD_MS,
   FALL_START_LATENCY_MS,
@@ -140,6 +141,8 @@ interface PendingFall {
   col: number;
   /** Already in the air; re-targeted rather than newly dropped. */
   continued: boolean;
+  /** Where on its fall curve a continued tile was picked up (0 otherwise). */
+  entryProgress: number;
 }
 
 interface GhostSpec {
@@ -149,6 +152,13 @@ interface GhostSpec {
   y: number;
   row: number;
   col: number;
+  /**
+   * Whether this tile was part of the word the player just traced. False for
+   * cells the board removed on its own — shrinkingBoard takes out a whole
+   * outer ring in the same commit as a word clear, and rendering 20+ of those
+   * in the found-word green claimed credit for a punishment.
+   */
+  fromWord: boolean;
 }
 
 interface GhostLayerHandle {
@@ -163,6 +173,9 @@ interface GhostEntry extends GhostSpec {
 // Matches LetterCell's valid-word (green) tile ramp so the ghost reads as a
 // direct continuation of the valid-word flash the tiles showed at submit.
 const GHOST_BODY_COLORS = ['#33ffaa', '#00d96e', '#008844'] as [string, string, string];
+// Cells the BOARD removed rather than the player: shrinkingBoard's outer ring.
+// Same dissolve, cold palette — it reads as the board taking something away.
+const GHOST_BODY_COLORS_BOARD = ['#8ea4c8', '#5b6f93', '#2c3752'] as [string, string, string];
 // The ghost pop is the beat the fall waits on, so its length is part of the
 // gravity budget, not a free decoration. 40/430 came out of the same
 // screenshot-sampling review that inflated the fall itself: at 430ms plus a
@@ -218,7 +231,7 @@ const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: Gh
       }}
     >
       <LinearGradient
-        colors={GHOST_BODY_COLORS}
+        colors={ghost.fromWord ? GHOST_BODY_COLORS : GHOST_BODY_COLORS_BOARD}
         start={GRADIENT_START}
         end={GRADIENT_END}
         style={StyleSheet.absoluteFillObject}
@@ -228,7 +241,7 @@ const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: Gh
           color: '#ffffff',
           fontFamily: 'SpaceGrotesk_700Bold',
           fontSize: cellSize * 0.46,
-          textShadowColor: 'rgba(0,40,15,1)',
+          textShadowColor: ghost.fromWord ? 'rgba(0,40,15,1)' : 'rgba(6,10,22,1)',
           textShadowRadius: 8,
         }}
       >
@@ -574,6 +587,8 @@ function GameGridImpl({
   // same offset. The layout effect drops the entry when the tile starts moving
   // again.
   const frozenOffsetsRef = useRef(new Map<string, { x: number; y: number }>());
+  /** Fall-phase progress at the same freeze, so the replay is complete. */
+  const frozenPhasesRef = useRef(new Map<string, number>());
   const activeFallsRef = useRef(new Map<string, Animated.CompositeAnimation>());
   const prevGridRef = useRef<GridType | null>(null);
   const prevBoundsRef = useRef<Map<string, CellBound> | null>(null);
@@ -603,7 +618,10 @@ function GameGridImpl({
   const onGravitySettledRef = useRef(onGravitySettled);
   onGravitySettledRef.current = onGravitySettled;
 
-  const clearFrozenOffsets = () => frozenOffsetsRef.current.clear();
+  const clearFrozenOffsets = () => {
+    frozenOffsetsRef.current.clear();
+    frozenPhasesRef.current.clear();
+  };
 
   const cancelTouchdown = () => {
     if (touchdownTimerRef.current !== null) {
@@ -665,11 +683,13 @@ function GameGridImpl({
           : prevBoundsRef.current!;
       const now = nowMs();
       const liveOffsets = new Map<string, { x: number; y: number }>();
+      const livePhase = new Map<string, number>();
       for (const [id, run] of fallRunsRef.current) {
         const frozen = frozenOffsetsRef.current.get(id);
         const offset = frozen ?? sampleFallOffset(run, now);
         if (offset.x !== 0 || offset.y !== 0) {
           liveOffsets.set(id, { x: offset.x * scale, y: offset.y * scale });
+          livePhase.set(id, frozenPhasesRef.current.get(id) ?? fallPhaseProgress(run, now));
         }
       }
 
@@ -698,6 +718,7 @@ function GameGridImpl({
           existing.setValue({ x: fall.dx, y: fall.dy });
           if (fallRunsRef.current.has(fall.id)) {
             frozenOffsetsRef.current.set(fall.id, liveOffsets.get(fall.id) ?? { x: 0, y: 0 });
+            frozenPhasesRef.current.set(fall.id, livePhase.get(fall.id) ?? 0);
           }
         } else {
           fallAnimMapRef.current.set(
@@ -708,29 +729,40 @@ function GameGridImpl({
         falls.push({
           ...fall,
           row: boundsById.get(fall.id)?.row ?? 0,
-          // A tile re-targeted mid-air by a re-scale is already moving. Making
-          // it sit through a fresh hold and stagger would stop it dead and
-          // start it again, which is worse than the snap this replaced.
+          // A tile re-targeted mid-air is already moving. Making it sit
+          // through a fresh hold and stagger would stop it dead and start it
+          // again, which is worse than the snap this replaced — and entering
+          // the new fall curve part-way keeps its speed instead of decelerating
+          // to zero and re-accelerating.
           continued: liveOffsets.has(fall.id),
+          entryProgress: livePhase.get(fall.id) ?? 0,
         });
       }
+      // The last trace Grid saw is the word that just resolved — the reducer
+      // empties selectedCells in the same update that clears the tiles, so
+      // this is the only record of it, and it needs no extra plumbing. It
+      // answers two questions at once: which vacated cells belong to the
+      // player's word (rather than to a board-driven removal), and in what
+      // order the player drew them.
+      const traceOrder = lastSelectionOrderRef.current;
       for (const ghost of transition.ghosts) {
         const previousBound = prevBounds.get(ghost.id);
         const previousCell = previousBound
           ? previousGrid![previousBound.row]?.[previousBound.col]
           : null;
         if (previousCell) {
-          ghosts.push({ ...ghost, letter: previousCell.letter });
+          ghosts.push({
+            ...ghost,
+            letter: previousCell.letter,
+            fromWord: traceOrder.has(ghost.id),
+          });
         }
       }
-      // Dissolve in the order the player traced, not in grid reading order.
-      // The cleared cells ARE the trace that just resolved, and the reducer
-      // empties selectedCells in the same update that clears them — so the
-      // last selection Grid saw is exactly the right ordering, with no extra
-      // plumbing. Without it a right-to-left or bottom-to-top word burst
-      // backwards against the stroke the player just made.
-      const traceOrder = lastSelectionOrderRef.current;
-      if (traceOrder.size > 0 && ghosts.length > 1) {
+      // Dissolve along the stroke. Without this a right-to-left or
+      // bottom-to-top word bursts backwards against the gesture that made it.
+      // Board-removed cells sort after the word, so a shrink ring reads as a
+      // consequence of the clear rather than part of it.
+      if (ghosts.length > 1) {
         ghosts.sort(
           (a, b) =>
             (traceOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
@@ -793,6 +825,11 @@ function GameGridImpl({
         activeFallsRef.current.delete(ghost.id);
         fallRunsRef.current.delete(ghost.id);
         frozenOffsetsRef.current.delete(ghost.id);
+        frozenPhasesRef.current.delete(ghost.id);
+        // A tile cleared mid-fall leaves a non-zero offset on its shared
+        // value. Undo restores that cell id, and the JSX would hand it back
+        // the same value — rendering the restored tile permanently displaced.
+        fallAnimMapRef.current.delete(ghost.id);
       }
       ghostLayerRef.current?.spawn(ghosts);
     }
@@ -843,6 +880,7 @@ function GameGridImpl({
           ? 0
           : FALL_HOLD_MS + (bandDelay.get(fallBandOf(f)) ?? 0),
         fallMs: fallDurationMs(slotsFallen),
+        entryProgress: f.entryProgress,
         rebound: reboundVector(from, reboundMagnitude(dist)),
         reboundOutMs: FALL_REBOUND_OUT_MS,
         reboundInMs: FALL_REBOUND_IN_MS,
@@ -861,6 +899,7 @@ function GameGridImpl({
       // tile's live offset exactly, with the UI thread never streaming it back.
       fallRunsRef.current.set(f.id, run);
       frozenOffsetsRef.current.delete(f.id);
+      frozenPhasesRef.current.delete(f.id);
       activeFallsRef.current.set(f.id, sequence);
       sequence.start(({ finished }) => {
         // Interrupted tiles belong to the successor run — it re-sampled their

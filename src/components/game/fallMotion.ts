@@ -39,6 +39,14 @@ export interface FallRun {
   delayMs: number;
   /** Free-fall duration. */
   fallMs: number;
+  /**
+   * How far along an equivalent full drop this tile already was when the run
+   * started, in [0, 1). Zero for a tile dropped from rest; non-zero only when
+   * an interrupting clear picked the tile up mid-air, in which case the fall
+   * curve is the TAIL of a parabola rather than a fresh one — otherwise a tile
+   * travelling at speed would decelerate to a stop and start over.
+   */
+  entryProgress?: number;
   /** Rebound offset at the top of the bounce (points back up-travel). */
   rebound: { x: number; y: number };
   /** Time spent travelling out to `rebound`. */
@@ -53,9 +61,20 @@ export function nowMs(): number {
   return typeof perf?.now === 'function' ? perf.now() : Date.now();
 }
 
-/** Easing.in(Easing.quad) — matches the fall phase. */
-function easeInQuad(t: number): number {
-  return t * t;
+/**
+ * The fall phase: Easing.in(Easing.quad), optionally entered part-way.
+ *
+ * `entry` is where on the parabola the tile already is, so the curve is
+ * re-normalized to start there and still reach 1 at the end. At entry = 0 this
+ * is exactly t^2; above it, the curve starts with the slope the tile is
+ * already moving at, which is what stops a mid-air pickup from stalling.
+ */
+function easeInQuad(t: number, entry: number = 0): number {
+  if (entry <= 0) return t * t;
+  const a = Math.min(entry, 0.9);
+  const base = a * a;
+  const shifted = a + (1 - a) * t;
+  return (shifted * shifted - base) / (1 - base);
 }
 
 /** Easing.out(Easing.quad) — matches the rebound-out phase. */
@@ -82,7 +101,7 @@ export function sampleFallOffset(
 
   const fallT = t - run.delayMs;
   if (run.fallMs > 0 && fallT < run.fallMs) {
-    const p = easeInQuad(fallT / run.fallMs);
+    const p = easeInQuad(fallT / run.fallMs, run.entryProgress ?? 0);
     return { x: run.from.x * (1 - p), y: run.from.y * (1 - p) };
   }
 
@@ -129,6 +148,19 @@ export function reboundVector(
  * `offset === from * (1 - p)`. Non-monotonic by design: it passes through 1
  * at touchdown, dips back below 1 for the rebound, and returns to 1 at rest.
  */
+/**
+ * How far through its fall phase a run is at `tMs`, in [0, 1] — the value to
+ * carry into a successor run's `entryProgress` when an interrupting clear
+ * picks the tile up. Zero before the fall starts, and zero once it is past
+ * touchdown (a rebounding tile is not "falling fast" any more).
+ */
+export function fallPhaseProgress(run: FallRun, now: number): number {
+  if (run.fallMs <= 0) return 0;
+  const fallT = now - run.startedAt - run.delayMs;
+  if (fallT <= 0 || fallT >= run.fallMs) return 0;
+  return easeInQuad(fallT / run.fallMs, run.entryProgress ?? 0);
+}
+
 export function fallProgressAt(run: FallRun, tMs: number): number {
   const useY = Math.abs(run.from.y) >= Math.abs(run.from.x);
   const fromMag = useY ? run.from.y : run.from.x;
