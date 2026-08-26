@@ -674,6 +674,29 @@ export const EARLY_GAME_BONUSES: {
   { level: 150, coins: 600, gems: 20, wheelSpins: 1 },      // Sesquicentennial
 ];
 
+/**
+ * Scheduled per-level bonus for ANY level — the static table above through
+ * L150, then a procedural drumbeat to infinity. The table used to end dead
+ * at 150, so L151-1000 read as "the game stopped noticing me" (up to
+ * 14-level dry stretches, unguarded by any test). The extension is
+ * deliberately CONSUMABLE-weighted: hints feed the habit the hint economy
+ * monetizes and wheel spins route into an existing monetized surface, while
+ * coins/gems stay confined to century markers so the drumbeat cannot
+ * re-flood an economy the Aug 2026 faucet cuts just drained.
+ */
+export function getScheduledLevelBonus(level: number): (typeof EARLY_GAME_BONUSES)[number] | undefined {
+  const row = EARLY_GAME_BONUSES.find((b) => b.level === level);
+  if (row) return row;
+  if (level <= 150) return undefined;
+  if (level % 100 === 0) {
+    return { level, coins: 250, gems: 10, hints: 2, wheelSpins: 1 };
+  }
+  if (level % 25 === 0) {
+    return { level, hints: 2, wheelSpins: 1 };
+  }
+  return undefined;
+}
+
 // Starter pack activation delay — don't start the 72hr timer until player
 // has solved enough puzzles to understand the value of items
 export const STARTER_PACK_DELAY_PUZZLES = 5;

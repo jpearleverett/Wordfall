@@ -233,6 +233,17 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
           CHAPTERS.filter((chapter) => chapter.id < activeChapter.id).map((chapter) => chapter.wingId),
         ),
       );
+      // Procedural wings (5 chapters each, ids 41+): the static filter above
+      // can never see them, which froze wing ceremonies at L600 for exactly
+      // the deepest cohort. Wing N spans chapter ids 41+5N .. 45+5N (its
+      // finale is the isBossChapter); it is complete once activeChapter has
+      // moved past its last chapter.
+      if (activeChapter.id > CHAPTERS.length) {
+        const wingsDone = Math.floor((activeChapter.id - CHAPTERS.length - 1) / 5);
+        for (let w = 0; w < wingsDone; w++) {
+          completedWingIds.push(`procedural_${w}`);
+        }
+      }
 
       // Detect newly completed wings for ceremony queue
       const newlyRestoredWings = completedWingIds.filter(
@@ -246,7 +257,11 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         type: 'wing_complete' as const,
         data: {
           wingId,
-          wingName: WING_NAMES[wingId] ?? wingId,
+          wingName:
+            WING_NAMES[wingId] ??
+            (wingId.startsWith('procedural_')
+              ? `Endless Wing ${Number(wingId.slice('procedural_'.length)) + 1}`
+              : wingId),
           reward: { coins: 1000, gems: 25 },
         },
       }));

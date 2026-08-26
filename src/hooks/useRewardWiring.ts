@@ -10,7 +10,7 @@ import {
   STAR_MILESTONES,
   PERFECT_MILESTONES,
   MILESTONE_DECORATIONS,
-  EARLY_GAME_BONUSES,
+  getScheduledLevelBonus,
   STARTER_PACK_DELAY_PUZZLES,
 } from '../constants';
 import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
@@ -587,7 +587,7 @@ export function useRewardWiring({
     // Use player's classic progression level (not puzzle level) to prevent
     // double-awarding when playing non-classic modes at overlapping levels.
     const progressionLevel = mode === 'classic' ? level : -1;
-    const earlyBonus = EARLY_GAME_BONUSES.find(b => b.level === progressionLevel);
+    const earlyBonus = progressionLevel > 0 ? getScheduledLevelBonus(progressionLevel) : undefined;
     if (earlyBonus && !isFirstWin) {
       // isFirstWin already awards the level-1 bonus via the ceremony above
       if (earlyBonus.coins) { economy.addCoins(earlyBonus.coins); totalCoinsAwarded += earlyBonus.coins; }

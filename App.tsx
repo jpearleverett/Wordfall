@@ -58,6 +58,7 @@ import { getWeekId } from './src/utils/weekId';
 import { getChapterForLevel } from './src/data/chapters';
 import { getCurrentEvent, getEventPlayConfig } from './src/data/events';
 import { DAILY_REWARD_TIMERS, canClaimTimer, rollBonusChestReward } from './src/data/dailyRewardTimers';
+import { claimMeteredGems } from './src/data/economyTuning';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
@@ -1510,10 +1511,16 @@ function HomeMainScreen({ route, navigation }: any) {
     // Update wheel state in player context
     player.updateMysteryWheel(updatedState);
 
-    // Award rewards from the spin result
+    // Award rewards from the spin result. Gems route through the shared
+    // metered-faucet cap (claimMeteredGems): the wheel is a recurring
+    // faucet, and together with quests/timers it pushed engaged players to
+    // 12-25 gems/day against a 3/day design target.
     const reward = segment.reward;
     if (reward.coins) economy.addCoins(reward.coins);
-    if (reward.gems) economy.addGems(reward.gems);
+    if (reward.gems) {
+      const granted = claimMeteredGems(reward.gems, 'mystery_wheel');
+      if (granted > 0) economy.addGems(granted);
+    }
     if (reward.hints) economy.addHintTokens(reward.hints);
     if (reward.rareTile) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1528,7 +1535,10 @@ function HomeMainScreen({ route, navigation }: any) {
     if (mysteryBoxReward) {
       const mbReward = mysteryBoxReward.reward;
       if (mbReward.coins) economy.addCoins(mbReward.coins);
-      if (mbReward.gems) economy.addGems(mbReward.gems);
+      if (mbReward.gems) {
+        const granted = claimMeteredGems(mbReward.gems, 'mystery_wheel');
+        if (granted > 0) economy.addGems(granted);
+      }
       if (mbReward.hints) economy.addHintTokens(mbReward.hints);
       if (mbReward.rareTile) {
         const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1822,7 +1832,10 @@ function HomeMainScreen({ route, navigation }: any) {
       const reward: { coins?: number; gems?: number; hints?: number; spins?: number } =
         timer.reward.random ? rollBonusChestReward() : timer.reward;
       if (reward.coins) economy.addCoins(reward.coins);
-      if (reward.gems) economy.addGems(reward.gems);
+      if (reward.gems) {
+        const granted = claimMeteredGems(reward.gems, 'daily_timer');
+        if (granted > 0) economy.addGems(granted);
+      }
       if (reward.hints) economy.addHintTokens(reward.hints);
       if (reward.spins) player.awardFreeSpin();
       player.updateProgress({
@@ -2010,7 +2023,10 @@ function HomeMainScreen({ route, navigation }: any) {
           const reward = player.claimDailyQuest(templateId);
           if (!reward) return;
           if (reward.coins) economy.addCoins(reward.coins);
-          if (reward.gems) economy.addGems(reward.gems);
+          if (reward.gems) {
+            const granted = claimMeteredGems(reward.gems, 'daily_quest');
+            if (granted > 0) economy.addGems(granted);
+          }
           if (reward.hintTokens) economy.addHintTokens(reward.hintTokens);
           if (reward.boosterTokens) economy.addBoosterToken('wildcardTile', reward.boosterTokens);
           if (reward.xp) economy.addSeasonPassXp(reward.xp);
