@@ -316,6 +316,12 @@ export interface Chapter {
   /** Optional generation constraints. When absent, defaults apply. */
   profile?: GenerationProfile;
   /**
+   * Wing-finale chapter (every 5th procedural chapter): denser long-word
+   * boards. UI labels these as boss chapters and the completion pays a
+   * chest ceremony.
+   */
+  isBossChapter?: boolean;
+  /**
    * Optional per-chapter visual palette. When present, AmbientBackdrop's
    * `'game'` variant swaps its default synthwave gradient for this palette
    * so each world feels distinct. Gated behind `chapterThemedBackdropEnabled`

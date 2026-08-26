@@ -4,10 +4,18 @@
  * Contract (mirrors the curated 1-600 cadence, now extended to the
  * infinite tail via getLevelConfigExtended):
  *   - Levels ≤ 600 delegate to getLevelConfig unchanged.
- *   - Every 5th level is a breather: standard silhouette one tier down.
+ *   - The tail SEEDS FROM the curated endgame: L601 opens at expert with
+ *     L600's 9x7/8-word config and never regresses below it (the old
+ *     'hard'-tier on-ramp served the deepest cohort ~90 levels easier
+ *     than level 100).
+ *   - Every 5th level is a breather: one tier down in a normal chapter, a
+ *     config-space dip (one fewer word) inside a breather chapter — never
+ *     a double-ease into an unscaled band.
  *   - Spike levels (multiples of 13, RC-gated, breathers win collisions)
  *     add one word, capped at the 10-word bound.
- *   - Board silhouette rotates per procedural chapter (4-way texture).
+ *   - Board silhouette rotates per procedural chapter (7-way texture; with
+ *     the 5-chapter breather rhythm the combined cycle is 35 chapters /
+ *     525 levels, not the old exact 300-level loop).
  *   - All configs stay inside the documented bounds forever:
  *     rows 4-10, cols 4-8, wordCount 2-10, word lengths 3-6.
  *   - generateProceduralChapter varies names, theme labels, and theme
@@ -74,19 +82,56 @@ describe('getLevelConfigExtended — post-600 bounds hold forever', () => {
   });
 });
 
+describe('getLevelConfigExtended — post-600 seeds from the curated endgame', () => {
+  it('L601 never regresses below L600 (the dip that greeted the deepest cohort)', () => {
+    const endgame = getLevelConfig(600);
+    const tail = getLevelConfigExtended(601);
+    expect(tail.difficulty).toBe('expert');
+    expect(tail.wordCount).toBeGreaterThanOrEqual(endgame.wordCount);
+    expect(tail.rows * tail.cols).toBeGreaterThanOrEqual(endgame.rows * endgame.cols);
+  });
+
+  it('non-breather chapters are expert from the first procedural chapter on', () => {
+    // Chapters at proceduralIndex 0-4 used to open 'hard' (easier than L100).
+    for (const level of [601, 616, 631, 646, 661]) {
+      expect(getLevelConfigExtended(level).difficulty).toBe('expert');
+    }
+  });
+
+  it('deep-tail breather levels never serve an unscaled early-game board', () => {
+    // 905 is a breather LEVEL inside a breather CHAPTER (proceduralIndex 20).
+    // Double-easing used to land it on the fixed 7x6/5-word (~level-11)
+    // config; now it dips one word at the chapter's own (scaled) tier.
+    const cfg = getLevelConfigExtended(905);
+    expect(cfg.difficulty).toBe('hard');
+    expect(cfg.wordCount).toBeGreaterThanOrEqual(7);
+    expect(cfg.rows * cfg.cols).toBeGreaterThanOrEqual(56);
+  });
+});
+
 describe('getLevelConfigExtended — per-level cadence past 600', () => {
-  it('breather levels ease one tier with the standard silhouette', () => {
-    // 605 sits in the first procedural chapter (hard) → breather = medium.
+  it('breather levels in a normal chapter ease one tier with the standard silhouette', () => {
+    // 605 sits in the first procedural chapter (expert) → breather = hard.
     const breather = getLevelConfigExtended(605);
-    expect(breather.difficulty).toBe('medium');
-    expect(breather.wordCount).toBe(5);
-    expect(breather.maxWordLength).toBe(5);
+    const plain = getLevelConfigExtended(604);
+    expect(breather.difficulty).toBe('hard');
+    expect(breather.wordCount).toBeLessThan(plain.wordCount);
+  });
+
+  it('breather levels in a breather chapter dip one word at the same tier', () => {
+    // 680 is a breather level inside breather chapter proceduralIndex 5.
+    // 677 is a plain neighbor (676 is a spike: 13×52).
+    const dip = getLevelConfigExtended(680);
+    const plain = getLevelConfigExtended(677);
+    expect(dip.difficulty).toBe('hard');
+    expect(dip.wordCount).toBe(Math.max(4, plain.wordCount - 1));
+    expect(plain.difficulty).toBe('hard');
   });
 
   it('breather wins a spike collision (level 650 = 13×50 and 5×130)', () => {
     const config = getLevelConfigExtended(650);
-    expect(config.difficulty).toBe('medium');
-    expect(config.wordCount).toBe(5);
+    expect(config.difficulty).toBe('hard');
+    expect(config.wordCount).toBeLessThan(getLevelConfigExtended(649).wordCount);
   });
 
   it('spike levels add exactly one word over a same-chapter neighbor', () => {
@@ -123,8 +168,17 @@ describe('getBreatherConfigExtended', () => {
   it('eases the procedural tail instead of jumping to the endgame cycle', () => {
     const breather = getBreatherConfigExtended(604);
     const normal = getLevelConfigExtended(604);
-    expect(breather.difficulty).toBe('medium');
-    expect(breather.wordCount).toBeLessThanOrEqual(normal.wordCount);
+    expect(breather.difficulty).toBe('hard');
+    expect(breather.wordCount).toBeLessThan(normal.wordCount);
+  });
+
+  it('adaptive breather in a breather chapter reaches the SCALED medium band', () => {
+    // Chapter proceduralIndex 20 is 'hard'; the adaptive path eases to
+    // medium — which now scales instead of returning the fixed 7x6/5 board.
+    const cfg = getBreatherConfigExtended(902);
+    expect(cfg.difficulty).toBe('medium');
+    expect(cfg.rows * cfg.cols).toBeGreaterThanOrEqual(48);
+    expect(cfg.wordCount).toBeGreaterThanOrEqual(7);
   });
 });
 
