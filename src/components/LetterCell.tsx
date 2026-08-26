@@ -137,6 +137,20 @@ interface LetterCellProps {
    * exactly like vertical falls.
    */
   fallAnim?: Animated.ValueXY;
+  /**
+   * Slot pitch (cellSize + gap). The tile's box is this size, pinned at the
+   * grid container's origin; `fallAnim` translates it to wherever it actually
+   * belongs. Position deliberately does NOT live in layout:
+   *
+   *  - a tile that changes COLUMN (every clear under gravityFlip's horizontal
+   *    gravity) would be a different parent's child in a flex tree, so React
+   *    would unmount and remount its whole subtree mid-fall;
+   *  - and splitting position across layout (left/top) and transform means a
+   *    gravity step writes both through different pipelines, which is a
+   *    one-frame flash waiting for the two to land out of order. They cannot
+   *    land out of order if only one of them ever moves.
+   */
+  slotSize?: number;
   /** Grid row index (0-based). Used to build screen-reader position hints. */
   row?: number;
   /** Grid column index (0-based). Used to build screen-reader position hints. */
@@ -158,6 +172,7 @@ export const LetterCell = React.memo(function LetterCell({
   isSpotlightDimmed = false,
   isBonusTile = false,
   fallAnim,
+  slotSize,
   row,
   col,
   currentWord,
@@ -290,10 +305,17 @@ export const LetterCell = React.memo(function LetterCell({
   // Animated.View is trivial compared to the remount storm.
   const outerStyle = useMemo(() => {
     const s: any = {};
+    if (slotSize !== undefined) {
+      s.position = 'absolute';
+      s.left = 0;
+      s.top = 0;
+      s.width = slotSize;
+      s.height = slotSize;
+    }
     if (isSpotlightDimmed) s.opacity = 0.3;
     if (fallAnim) s.transform = fallAnim.getTranslateTransform();
     return s;
-  }, [isSpotlightDimmed, fallAnim]);
+  }, [isSpotlightDimmed, fallAnim, slotSize]);
 
   return (
     <Animated.View

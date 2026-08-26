@@ -47,6 +47,7 @@ export interface GridTransitionGhost {
   id: string;
   x: number;
   y: number;
+  row: number;
   col: number;
 }
 
@@ -66,6 +67,7 @@ export type GridTransitionUpdateDecision =
   | 'none'
   | 'initialize'
   | 'reset'
+  | 'resize'
   | 'transition';
 
 const EMPTY_METRICS: GridMetrics = {
@@ -123,22 +125,64 @@ export function decideGridTransitionUpdate(
   next: GridTransitionRenderState,
 ): GridTransitionUpdateDecision {
   if (previous.grid === null) return 'initialize';
+  if (previous.rows !== next.rows || previous.cols !== next.cols) {
+    // The engine's slot space changed shape (board shrink, mode swap). Any
+    // in-flight offset is meaningless — snap.
+    return 'reset';
+  }
+  // Wholesale board replacement must not run the clear transition: every
+  // on-screen tile would ghost (a full-board dissolve storm over the incoming
+  // board). Route it through 'reset', which snaps values and clears animation
+  // resources atomically.
+  //
+  // Checked BEFORE the pitch comparison, not after: a swap very often changes
+  // the pitch too (hydrating a snapshot on a screen whose word band has since
+  // re-measured, a level whose word count re-wraps the chip panel), and
+  // testing pitch first would short-circuit to 'resize' and let exactly the
+  // storm this guard exists to prevent through.
   if (
-    previous.cellSize !== next.cellSize ||
-    previous.rows !== next.rows ||
-    previous.cols !== next.cols
+    previous.grid !== next.grid &&
+    next.grid !== null &&
+    gridsShareNoCellIds(previous.grid, next.grid)
   ) {
     return 'reset';
   }
-  if (previous.grid === next.grid) return 'none';
-  // Wholesale board replacement must not run the clear transition: every
-  // on-screen tile would ghost (a ~2.4s full-board green dissolve storm
-  // over the incoming board). Route it through 'reset', which snaps values
-  // and clears animation resources atomically.
-  if (next.grid !== null && gridsShareNoCellIds(previous.grid, next.grid)) {
-    return 'reset';
+  if (previous.cellSize !== next.cellSize) {
+    // A pure re-scale: same slots, different pixel pitch. This used to be
+    // lumped in with 'reset', which SNAPPED every in-flight gravity tile to
+    // its final slot. It fires far more often than it looks — the word band
+    // re-measures whenever a chip changes state, and the resulting grid-area
+    // height change lands one to three frames after the word-clear commit,
+    // i.e. while the fall is still in its hold. Callers rebuild the previous
+    // bounds at the new pitch instead and keep animating.
+    return 'resize';
   }
+  if (previous.grid === next.grid) return 'none';
   return 'transition';
+}
+
+/**
+ * Re-express a bounds map at a new cell pitch. Slot indices (row/col) are
+ * pitch-independent, so the previous frame's geometry can be reconstructed
+ * exactly under a new cellSize — which is what lets a mid-fall re-scale
+ * continue the animation instead of snapping it.
+ */
+export function rescaleBounds(
+  bounds: ReadonlyMap<string, CellBound>,
+  stride: number,
+  padding: number,
+): Map<string, CellBound> {
+  const rescaled = new Map<string, CellBound>();
+  for (const [id, bound] of bounds) {
+    rescaled.set(id, {
+      ...bound,
+      x: padding + bound.col * stride,
+      y: bound.row * stride,
+      w: stride,
+      h: stride,
+    });
+  }
+  return rescaled;
 }
 
 export function computeGridTransition(
@@ -167,6 +211,7 @@ export function computeGridTransition(
         id,
         x: bound.x + (live?.x ?? 0),
         y: bound.y + (live?.y ?? 0),
+        row: bound.row,
         col: bound.col,
       });
     }

@@ -19,20 +19,47 @@ import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import SelectionTrailOverlay from './game/SelectionTrailOverlay';
 import {
-  type CellBound,
   computeGridGeometry,
   computeGridMetrics,
-  computeGridTransition,
-  decideGridTransitionUpdate,
   GRID_FRAME_ALLOWANCE,
   hitTestGridGeometry,
 } from './game/gridGeometry';
-import { perfDragStart, perfDragDispatch, perfDragEnd } from '../utils/perfInstrument';
+import {
+  type CascadeFall,
+  type CascadeFrame,
+  type CascadeGhost,
+  planCascade,
+} from './game/cascadePlan';
+import {
+  type FallRun,
+  buildFallEasing,
+  cascadeTouchdownAt,
+  bandDelayMs,
+  cascadeIsVertical,
+  fallBandOf,
+  fallDurationMs,
+  fallRunDuration,
+  FALL_HOLD_MS,
+  FALL_START_LATENCY_MS,
+  FALL_REBOUND_IN_MS,
+  FALL_REBOUND_OUT_MS,
+  nowMs,
+  reboundMagnitude,
+  reboundVector,
+} from './game/fallMotion';
+import { delayedTiming } from '../utils/motionTiming';
+import {
+  perfCascadeSettled,
+  perfCascadeStart,
+  perfDragStart,
+  perfDragDispatch,
+  perfDragEnd,
+} from '../utils/perfInstrument';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
-  clearAnimationResources,
+  clearFallResources,
   clearTimeoutHandles,
-  releaseOwnedAnimation,
+  releaseOwnedFall,
   startAnimationWithCleanup,
 } from '../utils/animationLifecycle';
 
@@ -112,13 +139,7 @@ interface GridProps {
 // lifts, and dissolves, giving the clear a physical "burst" beat before the
 // gravity cascade lands in the vacated space. Everything is native-driven.
 
-interface GhostSpec {
-  id: string;
-  letter: string;
-  x: number;
-  y: number;
-  col: number;
-}
+type GhostSpec = CascadeGhost;
 
 interface GhostLayerHandle {
   spawn(specs: GhostSpec[]): void;
@@ -132,21 +153,38 @@ interface GhostEntry extends GhostSpec {
 // Matches LetterCell's valid-word (green) tile ramp so the ghost reads as a
 // direct continuation of the valid-word flash the tiles showed at submit.
 const GHOST_BODY_COLORS = ['#33ffaa', '#00d96e', '#008844'] as [string, string, string];
-const GHOST_STAGGER_MS = 40; // 24 → 40: word-clear sweep reads at coarse sampling (blind motion review)
-const GHOST_DURATION_MS = 430; // 340 → 430: same review — the pop was gone between frames
+// Cells the BOARD removed rather than the player: shrinkingBoard's outer ring.
+// Same dissolve, cold palette — it reads as the board taking something away.
+const GHOST_BODY_COLORS_BOARD = ['#8ea4c8', '#5b6f93', '#2c3752'] as [string, string, string];
+// The ghost pop is the beat the fall waits on, so its length is part of the
+// gravity budget, not a free decoration. 40/430 came out of the same
+// screenshot-sampling review that inflated the fall itself: at 430ms plus a
+// 40ms per-tile stagger a six-letter word was still dissolving 630ms after the
+// clear, well past the point the tiles had landed on top of it. Tightened to
+// finish with the cascade instead of trailing it.
+const GHOST_STAGGER_MS = 26;
+const GHOST_DURATION_MS = 300;
+/**
+ * Ghosts past this share the last one's delay. A word clear is 3-7 tiles, but
+ * shrinkingBoard removes an entire outer ring in the same commit — 26+ cells,
+ * which at a flat per-tile stagger meant the last one sat opaque for most of a
+ * second and the burst outlived several subsequent moves.
+ */
+const GHOST_MAX_STAGGERED = 6;
 
 const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: GhostEntry; cellSize: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const animation = Animated.sequence([
-      Animated.delay(ghost.order * GHOST_STAGGER_MS),
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: GHOST_DURATION_MS,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]);
+    // The per-tile stagger is baked into the easing rather than scheduled with
+    // Animated.delay, which is a JS-thread setTimeout — see delayedTiming. The
+    // ghosts fire on the same frame as the cascade, so their timers would be
+    // queued behind exactly the work that frame is full of.
+    const animation = delayedTiming(anim, {
+      toValue: 1,
+      delay: Math.min(ghost.order, GHOST_MAX_STAGGERED) * GHOST_STAGGER_MS,
+      duration: GHOST_DURATION_MS,
+      easing: Easing.out(Easing.quad),
+    });
     return startAnimationWithCleanup(animation);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -173,7 +211,7 @@ const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: Gh
       }}
     >
       <LinearGradient
-        colors={GHOST_BODY_COLORS}
+        colors={ghost.fromWord ? GHOST_BODY_COLORS : GHOST_BODY_COLORS_BOARD}
         start={GRADIENT_START}
         end={GRADIENT_END}
         style={StyleSheet.absoluteFillObject}
@@ -183,7 +221,7 @@ const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: Gh
           color: '#ffffff',
           fontFamily: 'SpaceGrotesk_700Bold',
           fontSize: cellSize * 0.46,
-          textShadowColor: 'rgba(0,40,15,1)',
+          textShadowColor: ghost.fromWord ? 'rgba(0,40,15,1)' : 'rgba(6,10,22,1)',
           textShadowRadius: 8,
         }}
       >
@@ -209,7 +247,10 @@ const ClearGhostLayer = React.memo(forwardRef<GhostLayerHandle, { cellSize: numb
           order: i,
         }));
         setGhosts(prev => [...prev, ...entries]);
-        const ttl = GHOST_DURATION_MS + specs.length * GHOST_STAGGER_MS + 60;
+        const ttl =
+          GHOST_DURATION_MS +
+          Math.min(specs.length, GHOST_MAX_STAGGERED + 1) * GHOST_STAGGER_MS +
+          60;
         const t = setTimeout(() => {
           timersRef.current.delete(t);
           const keys = new Set(entries.map(e => e.key));
@@ -442,17 +483,26 @@ function GameGridImpl({
     return set;
   }, [wildcardCells]);
 
-  const columns = useMemo(() => {
-    const cols_arr: { cell: NonNullable<GridType[0][0]> | null; row: number; col: number }[][] = [];
-    for (let c = 0; c < cols; c++) {
-      const column: { cell: NonNullable<GridType[0][0]> | null; row: number; col: number }[] = [];
-      for (let r = 0; r < rows; r++) {
-        column.push({ cell: grid[r]?.[c] ?? null, row: r, col: c });
-      }
-      cols_arr.push(column);
-    }
-    return cols_arr;
-  }, [grid, rows, cols]);
+  // Flat, absolutely-positioned tile list in reading order.
+  //
+  // Tiles used to be flex children of a per-column View. Two problems with
+  // that: (1) a tile that changes COLUMN — every clear in gravityFlip, where
+  // gravity runs left/right — is a different parent's child, so React unmounts
+  // its whole subtree (~10 native views incl. two LinearGradients) and mounts a
+  // fresh one at the destination, which is exactly the "teleport" the fall is
+  // supposed to hide; (2) every clear churned the `empty-row-col` placeholder
+  // keys and re-ran Yoga over the entire grid. Positioning from the canonical
+  // geometry keyed by cell id makes a tile's identity independent of where it
+  // sits, so gravity in any direction is a pure transform on a stable view, and
+  // holes cost nothing because they are simply not rendered.
+  const tiles = useMemo(
+    () =>
+      geometry.bounds.map(bound => ({
+        cell: grid[bound.row]?.[bound.col] ?? null,
+        bound,
+      })),
+    [geometry, grid],
+  );
 
   // ── Gravity animation engine ─────────────────────────────────────────────
   // Grid owns the whole fall animation. The critical property: translate
@@ -471,239 +521,350 @@ function GameGridImpl({
   // Canonical map cell ID → rendered pixel bound for the current grid.
   const boundsById = geometry.byCellId;
 
+  // Cell id -> position in the last non-empty trace. SUBMIT_WORD clears the
+  // selection in the same update that clears the tiles, so by the time the
+  // diff runs, this is the only record of the stroke that produced it.
+  const lastSelectionOrderRef = useRef(new Map<string, number>());
+  if (selectedCells.length > 0) {
+    const order = new Map<string, number>();
+    selectedCells.forEach((c, i) => {
+      const id = grid[c.row]?.[c.col]?.id;
+      if (id) order.set(id, i);
+    });
+    lastSelectionOrderRef.current = order;
+  }
+
   const fallAnimMapRef = useRef(new Map<string, Animated.ValueXY>());
-  // Live offsets reported by native-driver listeners while a fall is in
-  // flight — lets an interrupting clear start the next fall from the tile's
-  // CURRENT visual position instead of teleporting it to its settled slot.
-  const liveOffsetRef = useRef(new Map<string, { x: number; y: number }>());
-  const listenerHandleRef = useRef(new Map<
-    string,
-    { remove: () => void }
-  >());
+  // In-flight fall descriptors, keyed by cell id. An interrupting clear reads
+  // a tile's CURRENT visual offset from this (see sampleFallOffset) instead of
+  // teleporting it to its settled slot.
+  //
+  // This used to be fed by av.addListener() on the native-driven value. That
+  // is a trap: AnimatedValue.addListener on a native value calls
+  // startListeningToAnimatedNodeValue, so the UI thread emits an
+  // onAnimatedValueUpdate for that node EVERY FRAME — and every listening
+  // value subscribes to the same global 'onAnimatedValueUpdate' emitter and
+  // filters by tag. With N falling tiles (ValueXY = 2 nodes each) that is 2N
+  // events per frame each dispatched to 2N subscribers: 4N^2 JS callbacks per
+  // frame, ~15k/s for an 8-tile fall and ~54k/s for a 15-tile one, each
+  // allocating via __getValue(). It also LAGGED the true position by several
+  // frames, so picking a tile up mid-air visibly jumped it.
+  //
+  // The fall is a pure function of (start time, delay, duration, easing,
+  // start offset) and the native driver runs exactly that function, so we
+  // evaluate it analytically instead. Zero per-frame JS, and the sample is
+  // frame-accurate rather than frames-stale.
+  const fallRunsRef = useRef(new Map<string, FallRun>());
+  // Where the render phase last froze a tile, keyed by cell id.
+  //
+  // Seeding a value stops the animation running on it, so the moment render
+  // computes a mid-air pickup the tile is parked at that offset — but the run
+  // descriptor still describes a curve that is no longer playing. If React
+  // re-renders before committing (a concurrent interruption, an error-boundary
+  // retry), re-sampling that curve at the later clock would seed a position
+  // the tile never reached. Remembering the freeze makes the whole render
+  // phase replayable: repeat it as often as React likes and it lands on the
+  // same offset. The layout effect drops the entry when the tile starts moving
+  // again.
+  const frozenOffsetsRef = useRef(new Map<string, { x: number; y: number }>());
+  /** Fall-phase progress at the same freeze, so the replay is complete. */
+  const frozenPhasesRef = useRef(new Map<string, number>());
   const activeFallsRef = useRef(new Map<string, Animated.CompositeAnimation>());
-  const prevGridRef = useRef<GridType | null>(null);
-  const prevBoundsRef = useRef<Map<string, CellBound> | null>(null);
-  const prevCellSizeRef = useRef(cellSize);
-  const prevDimsRef = useRef({ rows, cols });
-  const pendingFallsRef = useRef<{ id: string; dx: number; dy: number; col: number }[]>([]);
-  const pendingGhostsRef = useRef<GhostSpec[]>([]);
-  const fallRunIdRef = useRef(0);
+  const prevFrameRef = useRef<CascadeFrame | null>(null);
+  const pendingFallsRef = useRef<CascadeFall[]>([]);
+  const pendingGhostsRef = useRef<CascadeGhost[]>([]);
+  // Committed alongside the pending falls: advancing the baseline during
+  // render would let a render React DISCARDS (a concurrent interruption, an
+  // error-boundary retry) swallow a fall forever — the next real render would
+  // diff the new grid against itself, decide 'none', and the tiles would just
+  // be at their destination. planCascade is replayable, so the diff is
+  // recomputed on every render and only becomes the new baseline once the tree
+  // actually commits.
+  const pendingBaselineRef = useRef<CascadeFrame | null>(null);
+  /** Dev-only: how long the diff for the pending cascade took to compute. */
+  const pendingPlanMsRef = useRef(0);
   const ghostLayerRef = useRef<GhostLayerHandle | null>(null);
+  // Fires onGravitySettled at the cascade's TOUCHDOWN rather than at the end
+  // of the run. The haptic describes the board hitting bottom, and the rebound
+  // that follows touchdown is the consequence, not the event — reporting it
+  // 120ms late made the buzz feel disconnected from what was on screen.
+  const touchdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onGravitySettledRef = useRef(onGravitySettled);
   onGravitySettledRef.current = onGravitySettled;
 
+  const clearFrozenOffsets = () => {
+    frozenOffsetsRef.current.clear();
+    frozenPhasesRef.current.clear();
+  };
+
+  const cancelTouchdown = () => {
+    if (touchdownTimerRef.current !== null) {
+      clearTimeout(touchdownTimerRef.current);
+      touchdownTimerRef.current = null;
+    }
+  };
+
   useEffect(() => () => {
-    fallRunIdRef.current += 1;
-    clearAnimationResources(
+    cancelTouchdown();
+    clearFrozenOffsets();
+    clearFallResources(
       activeFallsRef.current,
-      listenerHandleRef.current,
-      liveOffsetRef.current,
+      fallRunsRef.current,
       fallAnimMapRef.current,
     );
     pendingFallsRef.current = [];
     pendingGhostsRef.current = [];
+    pendingBaselineRef.current = null;
   }, []);
 
-  // Render-phase diff. Grid data changes transition stable cell IDs; geometry
-  // changes reset even when the grid object itself is unchanged.
-  const transitionDecision = decideGridTransitionUpdate(
+  const frame: CascadeFrame = {
+    grid,
+    bounds: boundsById,
+    cellSize,
+    rows,
+    cols,
+    stride: geometry.stride,
+    padding: geometry.padding,
+  };
+
+  // Render-phase diff. All of the decision-making lives in planCascade, which
+  // is pure and replayable; the only thing done here is the one side effect
+  // that has to happen during render.
+  const planStartedAt = nowMs();
+  const { decision, plan } = planCascade(
+    prevFrameRef.current,
+    frame,
     {
-      grid: prevGridRef.current,
-      cellSize: prevCellSizeRef.current,
-      rows: prevDimsRef.current.rows,
-      cols: prevDimsRef.current.cols,
+      runs: fallRunsRef.current,
+      frozenOffsets: frozenOffsetsRef.current,
+      frozenPhases: frozenPhasesRef.current,
+      traceOrder: lastSelectionOrderRef.current,
     },
-    { grid, cellSize, rows, cols },
+    planStartedAt,
+    reduceMotion,
   );
-  if (transitionDecision !== 'none') {
-    const prevBounds = prevBoundsRef.current;
-    const falls: { id: string; dx: number; dy: number; col: number }[] = [];
-    const ghosts: GhostSpec[] = [];
-    const previousGrid = prevGridRef.current;
-    if (
-      transitionDecision === 'transition' &&
-      previousGrid !== null &&
-      prevBounds &&
-      !reduceMotion
-    ) {
-      const transition = computeGridTransition(
-        prevBounds,
-        boundsById,
-        liveOffsetRef.current,
+  const planMs = nowMs() - planStartedAt;
+
+  if (decision !== 'none') {
+    if (plan.kind === 'snap') {
+      // Nothing lands, so nothing reports landing.
+      cancelTouchdown();
+      clearFrozenOffsets();
+      clearFallResources(
+        activeFallsRef.current,
+        fallRunsRef.current,
+        fallAnimMapRef.current,
       );
-      for (const fall of transition.falls) {
-        // A tile re-falling while its previous fall is still in flight (or
-        // still in its hold/stagger delay): stop the superseded sequence
-        // BEFORE seeding the value. Left running, a predecessor still in
-        // its delay phase would start after the successor and clobber the
-        // shared Animated.ValueXY with stale timing — and its not-finished
-        // completion meant the successor run's settle accounting never
-        // reached zero, dropping onGravitySettled (the landing haptic).
-        const superseded = activeFallsRef.current.get(fall.id);
-        if (superseded) {
-          superseded.stop();
-          activeFallsRef.current.delete(fall.id);
-        }
+      pendingFallsRef.current = [];
+      pendingGhostsRef.current = [];
+    } else if (plan.kind === 'animate') {
+      for (const reposition of plan.repositions) {
+        fallAnimMapRef.current
+          .get(reposition.id)
+          ?.setValue({ x: reposition.x, y: reposition.y });
+      }
+      for (const fall of plan.falls) {
+        // Seed the value to where the tile ALREADY IS, then animate it to the
+        // new slot. Because a tile's position lives entirely in this value —
+        // its layout box never moves (see LetterCell) — the seed is a visual
+        // no-op no matter when it takes effect, and the FLIP is airtight by
+        // construction rather than by timing.
+        //
+        // That matters more than it looks. setValue on a value that is not yet
+        // native flushes synchronously through AnimatedProps.update() ->
+        // instance.setNativeProps() (createAnimatedPropsHook.js, guarded by
+        // shouldUseSetNativePropsInFabric, which defaults to true), writing the
+        // new transform into the shadow tree from inside this render. When the
+        // value carried an OFFSET and layout carried the position, that write
+        // landed on a view still at its old slot and displaced the tile by a
+        // whole fall distance, the wrong way, until React committed — a real
+        // one-frame flash on each tile's first fall, i.e. on the opening
+        // clears of every board. Holding the absolute position makes the same
+        // write a no-op.
+        //
+        // setValue also stops whatever animation is running on the value, so a
+        // superseded fall does not need stopping separately; its completion
+        // callback fires with finished:false and releaseOwnedFall cleans up.
         const existing = fallAnimMapRef.current.get(fall.id);
         if (existing) {
-          existing.setValue({ x: fall.dx, y: fall.dy });
+          existing.setValue(fall.current);
+          // Record where the tile is now parked, so replaying this render
+          // reproduces the same seed rather than re-sampling a dead curve.
+          // The freeze is stored relative to the tile's PREVIOUS slot, the
+          // same space planCascade reads live offsets in, so a replayed render
+          // reproduces the identical seed instead of re-sampling a curve that
+          // is no longer playing.
+          if (fall.liveOffset) {
+            frozenOffsetsRef.current.set(fall.id, fall.liveOffset);
+            frozenPhasesRef.current.set(fall.id, fall.entryProgress);
+          }
         } else {
           fallAnimMapRef.current.set(
             fall.id,
-            new Animated.ValueXY({ x: fall.dx, y: fall.dy }),
+            new Animated.ValueXY(fall.current),
           );
         }
-        falls.push(fall);
       }
-      for (const ghost of transition.ghosts) {
-        const previousBound = prevBounds.get(ghost.id);
-        const previousCell = previousBound
-          ? previousGrid[previousBound.row]?.[previousBound.col]
-          : null;
-        if (previousCell) {
-          ghosts.push({ ...ghost, letter: previousCell.letter });
-        }
-        const active = activeFallsRef.current.get(ghost.id);
-        if (active) {
-          active.stop();
-          activeFallsRef.current.delete(ghost.id);
-        }
-        const listener = listenerHandleRef.current.get(ghost.id);
-        if (listener) {
-          listener.remove();
-          listenerHandleRef.current.delete(ghost.id);
-        }
-        liveOffsetRef.current.delete(ghost.id);
-      }
-    } else if (transitionDecision === 'reset') {
-      // Layout settle / board-shrink: the pixel space changed, so any
-      // in-flight offsets are meaningless — snap everything to rest.
-      fallRunIdRef.current += 1;
-      clearAnimationResources(
-        activeFallsRef.current,
-        listenerHandleRef.current,
-        liveOffsetRef.current,
-        fallAnimMapRef.current,
-        value => value.setValue({ x: 0, y: 0 }),
-      );
+      pendingFallsRef.current = plan.falls;
+      pendingGhostsRef.current = plan.ghosts;
+      pendingPlanMsRef.current = planMs;
     }
-    pendingFallsRef.current = falls;
-    pendingGhostsRef.current = ghosts;
-    prevGridRef.current = grid;
-    prevBoundsRef.current = boundsById;
-    prevCellSizeRef.current = cellSize;
-    prevDimsRef.current = { rows, cols };
+    pendingBaselineRef.current = frame;
   }
 
-  // Start the fall + ghost animations for the diff computed this render.
-  // useLayoutEffect so it fires in the same frame as the commit; the
-  // offsets were already applied during render, so even if a frame slips
-  // in first, tiles paint at their OLD positions (never the destination).
+  // Start the fall + ghost animations for the diff computed this render, and
+  // only NOW promote that render's grid to the baseline the next diff is taken
+  // against. Doing the promotion during render meant a render React discarded
+  // (concurrent interruption, error-boundary retry) advanced the baseline
+  // without ever committing, so the next real render diffed the new grid
+  // against itself, saw no change, and the tiles simply appeared at their
+  // destination.
+  //
+  // useLayoutEffect so it fires in the same frame as the commit; the offsets
+  // were already applied during render, so even if a frame slips in first,
+  // tiles paint at their OLD positions (never the destination).
   useLayoutEffect(() => {
+    const baseline = pendingBaselineRef.current;
+    if (baseline) {
+      pendingBaselineRef.current = null;
+      prevFrameRef.current = baseline;
+    }
     const ghosts = pendingGhostsRef.current;
     if (ghosts.length > 0) {
       pendingGhostsRef.current = [];
+      // A cleared tile hands its motion over to its ghost, so retire whatever
+      // it still had in the air. Done on commit rather than during render:
+      // stopping an animation for a tree React then throws away would leave a
+      // tile frozen mid-fall.
+      for (const ghost of ghosts) {
+        activeFallsRef.current.get(ghost.id)?.stop();
+        activeFallsRef.current.delete(ghost.id);
+        fallRunsRef.current.delete(ghost.id);
+        frozenOffsetsRef.current.delete(ghost.id);
+        frozenPhasesRef.current.delete(ghost.id);
+        // A tile cleared mid-fall leaves a non-zero offset on its shared
+        // value. Undo restores that cell id, and the JSX would hand it back
+        // the same value — rendering the restored tile permanently displaced.
+        fallAnimMapRef.current.delete(ghost.id);
+      }
       ghostLayerRef.current?.spawn(ghosts);
     }
     const falls = pendingFallsRef.current;
     if (falls.length === 0) return;
     pendingFallsRef.current = [];
-    const runId = ++fallRunIdRef.current;
+    const plannedBudget = pendingPlanMsRef.current;
+    pendingPlanMsRef.current = 0;
 
-    // Hold just long enough for the cleared word's ghost pop to register,
-    // then cascade columns outward from the cleared word's centroid.
-    const FALL_HOLD = 90;
-    // 26 → 46: the cascade read as a teleport at coarse frame sampling —
-    // wider column stagger makes gravity legible as a wave.
-    const COL_STAGGER = 46;
-    const centroidCol =
+    // Hold just long enough for the cleared word's ghost pop to register, then
+    // cascade outward from where the word was, one band at a time. A band is a
+    // line of tiles that travels together — a column under vertical gravity, a
+    // row under horizontal (gravityFlip) gravity — so tiles that have to stay
+    // shoulder to shoulder start together. The stagger is capped
+    // (FALL_MAX_STAGGERED_BANDS) so a word spanning the whole board does not
+    // leave its outermost band sitting still for a third of a second before it
+    // moves; that lead-in was most of what read as lag.
+    const verticalCascade = cascadeIsVertical(falls);
+    const bandOfGhost = (g: GhostSpec) => (verticalCascade ? g.col : g.row);
+    const centroid =
       ghosts.length > 0
-        ? ghosts.reduce((s, g) => s + g.col, 0) / ghosts.length
+        ? ghosts.reduce((sum, g) => sum + bandOfGhost(g), 0) / ghosts.length
         : null;
-    const movedColsArr = Array.from(new Set(falls.map(f => f.col))).sort((a, b) =>
-      centroidCol === null
+    const bands = Array.from(
+      new Set(falls.map(f => fallBandOf(f, verticalCascade))),
+    ).sort((a, b) =>
+      centroid === null
         ? a - b
-        : Math.abs(a - centroidCol) - Math.abs(b - centroidCol) || a - b,
+        : Math.abs(a - centroid) - Math.abs(b - centroid) || a - b,
     );
-    const colDelay = new Map<number, number>();
-    movedColsArr.forEach((c, i) => colDelay.set(c, i * COL_STAGGER));
+    const bandDelay = new Map<number, number>();
+    bands.forEach((band, i) => bandDelay.set(band, bandDelayMs(i)));
 
     const stride = geometry.stride;
-    let remaining = falls.length;
+    const startedAt = nowMs() + FALL_START_LATENCY_MS;
     for (const f of falls) {
       const av = fallAnimMapRef.current.get(f.id);
-      if (!av) { remaining -= 1; continue; }
-      // Track the live offset (native events → JS) so an interrupting
-      // clear can pick the tile up mid-air instead of snapping it.
-      if (!listenerHandleRef.current.has(f.id)) {
-        const cellId = f.id;
-        const handle = av.addListener(({ x, y }) => {
-          liveOffsetRef.current.set(cellId, { x, y });
-        });
-        listenerHandleRef.current.set(f.id, {
-          remove: () => av.removeListener(handle),
-        });
-      }
+      if (!av) continue;
       const dist = Math.hypot(f.dx, f.dy);
-      const rowsFallen = Math.max(1, dist / stride);
-      // Distance-scaled fall time (√d, like real gravity) with an
-      // accelerating ease-in, then a small directional rebound whose
-      // size scales with impact distance. Reads as: drop, thud, settle.
-      // Floor 185 → 260, cap 620 → 720 (blind motion review round 2: "the
-      // fall resolves between frames" — one-row falls finished inside a
-      // single 250ms sample window, so short falls read as teleports).
-      const fallDur = Math.min(720, 260 + 160 * Math.sqrt(rowsFallen));
-      const bounceMag = Math.min(9, dist * 0.055);
-      const bx = f.dx === 0 ? 0 : Math.sign(f.dx) * bounceMag;
-      const by = f.dy === 0 ? 0 : Math.sign(f.dy) * bounceMag;
-      const sequence = Animated.sequence([
-        Animated.delay(FALL_HOLD + (colDelay.get(f.col) ?? 0)),
-        Animated.timing(av, {
-          toValue: { x: 0, y: 0 },
-          duration: fallDur,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(av, {
-          toValue: { x: bx, y: by },
-          duration: 85,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(av, {
-          toValue: { x: 0, y: 0 },
-          duration: 100,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]);
+      const slotsFallen = stride > 0 ? dist / stride : 1;
+      // Distance-scaled fall time (√d, like real gravity) with an accelerating
+      // ease-in, then a small rebound BACK along the travel direction. Reads
+      // as: drop, thud, settle. The rebound deliberately does not overshoot
+      // past the slot — gridContainer clips its children, so a bottom-row tile
+      // overshooting downward would shear against the frame.
+      const from = { x: f.dx, y: f.dy };
+      const run: FallRun = {
+        from,
+        startedAt,
+        // A tile only skips the lead-in if it is genuinely in flight.
+        // entryProgress is zero during a hold and after touchdown, so a resize
+        // landing mid-hold no longer cancels the whole cascade's stagger.
+        delayMs:
+          f.entryProgress > 0
+            ? 0
+            : FALL_HOLD_MS + (bandDelay.get(fallBandOf(f, verticalCascade)) ?? 0),
+        fallMs: fallDurationMs(slotsFallen),
+        entryProgress: f.entryProgress,
+        rebound: reboundVector(from, reboundMagnitude(dist)),
+        reboundOutMs: FALL_REBOUND_OUT_MS,
+        reboundInMs: FALL_REBOUND_IN_MS,
+      };
+      // ONE native animation for the whole run. The hold, the band stagger,
+      // the fall, the rebound and the settle are all baked into the easing
+      // curve, so nothing about this tile's motion touches the JS thread once
+      // it has started — see buildFallEasing for why that matters.
+      const sequence = Animated.timing(av, {
+        toValue: f.target,
+        duration: fallRunDuration(run),
+        easing: buildFallEasing(run),
+        useNativeDriver: true,
+      });
+      // The run descriptor IS the curve, so an interrupting clear samples this
+      // tile's live offset exactly, with the UI thread never streaming it back.
+      fallRunsRef.current.set(f.id, run);
+      frozenOffsetsRef.current.delete(f.id);
+      frozenPhasesRef.current.delete(f.id);
       activeFallsRef.current.set(f.id, sequence);
       sequence.start(({ finished }) => {
-        // Interrupted tiles belong to the successor run — it re-computed
-        // their offsets from the live listener values and owns every shared
-        // cleanup decision, including a late `finished: true` predecessor.
-        const shouldDecrement = releaseOwnedAnimation(
+        // Interrupted tiles belong to the successor run — it re-sampled their
+        // offsets and owns every shared cleanup decision, including a late
+        // `finished: true` predecessor.
+        const owned = releaseOwnedFall(
           activeFallsRef.current,
-          listenerHandleRef.current,
-          liveOffsetRef.current,
+          fallRunsRef.current,
           f.id,
           sequence,
           finished,
         );
-        if (!shouldDecrement) return;
-        remaining -= 1;
-        if (remaining === 0 && runId === fallRunIdRef.current) {
-          onGravitySettledRef.current?.();
-          // Prune anims for tiles no longer on the board.
-          const active = prevBoundsRef.current;
-          if (active) {
-            for (const id of fallAnimMapRef.current.keys()) {
-              if (!active.has(id)) fallAnimMapRef.current.delete(id);
-            }
+        if (!owned) return;
+        // Nothing left in the air: prune anims for tiles no longer on the
+        // board. Checked against the whole map rather than one run's tally,
+        // because clearing a second word mid-cascade leaves the first run's
+        // tiles falling alongside the second's.
+        if (activeFallsRef.current.size > 0) return;
+        const active = prevFrameRef.current?.bounds;
+        if (active) {
+          for (const id of fallAnimMapRef.current.keys()) {
+            if (!active.has(id)) fallAnimMapRef.current.delete(id);
           }
         }
       });
     }
+
+    // One timer per cascade, re-armed to the latest touchdown across
+    // everything currently in the air (an interrupting clear extends it).
+    if (touchdownTimerRef.current !== null) {
+      clearTimeout(touchdownTimerRef.current);
+    }
+    const touchdownIn = Math.max(
+      0,
+      cascadeTouchdownAt(fallRunsRef.current.values()) - nowMs(),
+    );
+    perfCascadeStart(plannedBudget, falls.length, ghosts.length, touchdownIn);
+    touchdownTimerRef.current = setTimeout(() => {
+      touchdownTimerRef.current = null;
+      perfCascadeSettled();
+      onGravitySettledRef.current?.();
+    }, touchdownIn);
   });
 
   const gridRef = useRef<View>(null);
@@ -717,11 +878,16 @@ function GameGridImpl({
   const dragGlowAnim = useRef(new Animated.Value(0)).current;
 
   // Hit-testing consumes the same canonical engine-slot geometry used by
-  // rendering, trails, ghosts, glints, and fall diffs.
+  // rendering, trails, ghosts, glints, and fall diffs — but it must describe
+  // the tree that is actually ON SCREEN, so it is advanced on commit rather
+  // than during render. A render React discards would otherwise leave the
+  // gesture handler resolving taps against a board that was never shown.
   const geometryRef = useRef(geometry);
-  geometryRef.current = geometry;
   const cellSizeRef = useRef(cellSize);
-  cellSizeRef.current = cellSize;
+  useLayoutEffect(() => {
+    geometryRef.current = geometry;
+    cellSizeRef.current = cellSize;
+  }, [geometry, cellSize]);
   const wildcardModeRef = useRef(wildcardMode);
   wildcardModeRef.current = wildcardMode;
 
@@ -905,16 +1071,6 @@ function GameGridImpl({
     styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 21 }
   ], [gridWidth, gridHeight]);
 
-  const columnStyle = useMemo(
-    () => [styles.column, { width: geometry.stride, height: gridHeight }],
-    [geometry.stride, gridHeight],
-  );
-
-  const emptySlotStyle = useMemo(
-    () => ({ width: cellSize, height: cellSize, margin: CELL_GAP / 2 }),
-    [cellSize],
-  );
-
   return (
     <View style={styles.shadowWrap}>
       <Animated.View style={outerGlowStyle} />
@@ -970,56 +1126,46 @@ function GameGridImpl({
               accessibilityRole="none"
               accessibilityLabel={`Letter grid, ${rows} rows by ${cols} columns`}
             >
-              {columns.map((column, colIndex) => (
-                <View key={colIndex} style={columnStyle}>
-                  {column.map(({ cell, row, col }) => {
-                    if (!cell) {
-                      return (
-                        <View
-                          key={`empty-${row}-${col}`}
-                          style={emptySlotStyle}
-                        />
-                      );
-                    }
-                    const key = `${row},${col}`;
-                    const selIndex = selectedSet.get(key) ?? -1;
-                    const isSelected = selIndex >= 0;
-                    const isHinted = hintedSet.has(key);
-                    // The fall value is created lazily so the translate
-                    // transform is attached from a tile's very first frame.
-                    // The render-phase diff above already seeded moved
-                    // tiles' values with their old-position offsets, so the
-                    // first painted frame of the new tree can never show a
-                    // tile at its destination.
-                    let cellFallAnim = fallAnimMapRef.current.get(cell.id);
-                    if (!cellFallAnim) {
-                      cellFallAnim = new Animated.ValueXY({ x: 0, y: 0 });
-                      fallAnimMapRef.current.set(cell.id, cellFallAnim);
-                    }
+              {tiles.map(({ cell, bound }) => {
+                if (!cell) return null;
+                const { row, col } = bound;
+                const key = `${row},${col}`;
+                const selIndex = selectedSet.get(key) ?? -1;
+                const isSelected = selIndex >= 0;
+                const isHinted = hintedSet.has(key);
+                // A tile's position IS this value — its layout box sits at
+                // the origin and never moves. Created lazily at the tile's
+                // slot so its very first painted frame is already correct;
+                // the render-phase diff above has already re-seeded any tile
+                // that is mid-move.
+                let cellFallAnim = fallAnimMapRef.current.get(cell.id);
+                if (!cellFallAnim) {
+                  cellFallAnim = new Animated.ValueXY({ x: bound.x, y: bound.y });
+                  fallAnimMapRef.current.set(cell.id, cellFallAnim);
+                }
 
-                    return (
-                      <LetterCell
-                        key={cell.id}
-                        letter={cell.letter}
-                        cellId={cell.id}
-                        size={cellSize}
-                        reduceMotion={reduceMotion}
-                        isSelected={isSelected}
-                        isHinted={isHinted}
-                        selectionIndex={selIndex}
-                        isValidWord={validWord && isSelected}
-                        isWildcard={wildcardSet.has(`${row},${col}`)}
-                        isSpotlightDimmed={spotlightDimmedCells?.has(`${row},${col}`) || false}
-                        isBonusTile={bonusCellId != null && cell.id === bonusCellId}
-                        fallAnim={cellFallAnim}
-                        row={row}
-                        col={col}
-                        currentWord={isSelected && validWord ? currentWord : undefined}
-                      />
-                    );
-                  })}
-                </View>
-              ))}
+                return (
+                  <LetterCell
+                    key={cell.id}
+                    letter={cell.letter}
+                    cellId={cell.id}
+                    size={cellSize}
+                    slotSize={geometry.stride}
+                    reduceMotion={reduceMotion}
+                    isSelected={isSelected}
+                    isHinted={isHinted}
+                    selectionIndex={selIndex}
+                    isValidWord={validWord && isSelected}
+                    isWildcard={wildcardSet.has(key)}
+                    isSpotlightDimmed={spotlightDimmedCells?.has(key) || false}
+                    isBonusTile={bonusCellId != null && cell.id === bonusCellId}
+                    fallAnim={cellFallAnim}
+                    row={row}
+                    col={col}
+                    currentWord={isSelected && validWord ? currentWord : undefined}
+                  />
+                );
+              })}
             </View>
           </GestureDetector>
 
@@ -1103,18 +1249,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   gridContainer: {
-    flexDirection: 'row',
-    // Horizontal padding supplies geometry.padding. There is deliberately no
-    // vertical padding: canonical row zero begins at y=0, so tiles, overlays,
-    // hit-testing, and particles share the exact same local coordinate space.
-    paddingHorizontal: CELL_GAP / 2,
+    // Tiles are absolutely positioned from the canonical geometry, whose x
+    // already carries the half-gap inset (geometry.padding) and whose y starts
+    // at 0 — so tiles, ghosts, the trail overlay, glints, hit-testing, and
+    // particles all share one local coordinate space with no style padding to
+    // reconcile against.
     overflow: 'hidden',
     backgroundColor: 'transparent',
-  },
-  column: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
   },
   gravityArrowContainer: {
     position: 'absolute',

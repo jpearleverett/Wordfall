@@ -7,6 +7,7 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { useColors } from '../hooks/useColors';
 import { useColorblindMode } from '../services/colorblindPreference';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { CHIP_BOX } from './wordChipBox';
 import { getWordBankMotionPolicy } from '../utils/gameMotion';
 
 interface WordChipProps {
@@ -253,17 +254,31 @@ const WordChip = React.memo(function WordChip({
         {wordPlacement.word}
       </Text>
 
-      {wordPlacement.found && (
-        <Animated.View style={[styles.checkContainer, { opacity: foundAnim }]}>
-          <LinearGradient
-            colors={[palette.green, COLORS.teal] as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}
-          />
-          <Text style={styles.checkMark}>✓</Text>
-        </Animated.View>
-      )}
+      {/* The found badge is ALWAYS mounted and only fades in. Mounting it on
+          the found transition grew the chip by 16px + the 4px row gap, which
+          re-wrapped the flex-wrap panel, changed the word band's height, and
+          shrank the grid area — and a grid-area height change recomputes
+          cellSize, which Grid.tsx treats as a 'reset' and uses to SNAP every
+          in-flight gravity tile to its slot. Keeping the chip's measured box
+          constant for the whole puzzle is what lets the fall actually play. */}
+      <Animated.View
+        style={[styles.checkContainer, { opacity: foundAnim }]}
+        pointerEvents="none"
+        importantForAccessibility="no-hide-descendants"
+        accessibilityElementsHidden
+      >
+        {wordPlacement.found && (
+          <>
+            <LinearGradient
+              colors={[palette.green, COLORS.teal] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}
+            />
+            <Text style={styles.checkMark}>✓</Text>
+          </>
+        )}
+      </Animated.View>
 
     </Animated.View>
   );
@@ -609,12 +624,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   wordChip: {
+    borderWidth: CHIP_BOX.resting.borderWidth,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: CHIP_BOX.resting.paddingHorizontal,
+    paddingVertical: CHIP_BOX.resting.paddingVertical,
     borderRadius: 14,
-    borderWidth: 1,
     // Bumped from 0.22 to 0.55 — the earlier dim-backdrop shipped made
     // the previous ~22% border almost invisible against the darker
     // gradient, so the wrap panel rendered but the chips looked like
@@ -622,7 +637,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(200,77,255,0.55)',
     backgroundColor: 'rgba(26, 10, 46, 0.55)',
     overflow: 'visible',
-    gap: 4,
+    gap: CHIP_BOX.gap,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
@@ -661,7 +676,7 @@ const styles = StyleSheet.create({
   },
   wordChipValid: {
     borderColor: COLORS.green,
-    borderWidth: 2,
+    ...CHIP_BOX.emphasis,
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
@@ -670,7 +685,7 @@ const styles = StyleSheet.create({
   },
   wordChipLastRemaining: {
     borderColor: COLORS.gold,
-    borderWidth: 2,
+    ...CHIP_BOX.emphasis,
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.6,
@@ -697,13 +712,16 @@ const styles = StyleSheet.create({
   },
   wordTextValid: {
     color: COLORS.green,
-    fontFamily: 'SpaceGrotesk_700Bold',
+    // Deliberately NOT swapping fontFamily here. Inter -> SpaceGrotesk has
+    // different glyph advances, so the chip re-measured on the valid flash
+    // 50ms before submit — right into the gravity fall's setup frame. Color
+    // plus the stronger glow carries the state on their own.
     textShadowColor: COLORS.greenGlow,
     textShadowRadius: 16,
   },
   checkContainer: {
-    width: 16,
-    height: 16,
+    width: CHIP_BOX.badgeSize,
+    height: CHIP_BOX.badgeSize,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',

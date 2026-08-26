@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  clearAnimationResources,
+  clearFallResources,
   clearTimeoutHandles,
-  releaseOwnedAnimation,
+  releaseOwnedFall,
   startAnimationWithCleanup,
 } from '../utils/animationLifecycle';
 
@@ -30,37 +30,27 @@ describe('animation resource lifecycle', () => {
     expect(animation.stop).toHaveBeenCalledTimes(1);
   });
 
-  test('bulk cleanup stops animations, removes listeners, and clears maps', () => {
+  test('bulk cleanup stops animations and clears every fall map', () => {
     const firstAnimation = { stop: jest.fn() };
     const secondAnimation = { stop: jest.fn() };
-    const firstListener = { remove: jest.fn() };
-    const secondListener = { remove: jest.fn() };
     const active = new Map([
       ['A', firstAnimation],
       ['B', secondAnimation],
     ]);
-    const listeners = new Map([
-      ['A', firstListener],
-      ['B', secondListener],
-    ]);
-    const liveOffsets = new Map([
-      ['A', { x: 0, y: 10 }],
-      ['B', { x: 0, y: 20 }],
+    const runs = new Map<string, object>([
+      ['A', { from: { x: 0, y: 10 } }],
+      ['B', { from: { x: 0, y: 20 } }],
     ]);
     const animatedValues = new Map<string, object>([
       ['A', {}],
       ['B', {}],
     ]);
-
-    clearAnimationResources(active, listeners, liveOffsets, animatedValues);
+    clearFallResources(active, runs, animatedValues);
 
     expect(firstAnimation.stop).toHaveBeenCalledTimes(1);
     expect(secondAnimation.stop).toHaveBeenCalledTimes(1);
-    expect(firstListener.remove).toHaveBeenCalledTimes(1);
-    expect(secondListener.remove).toHaveBeenCalledTimes(1);
     expect(active.size).toBe(0);
-    expect(listeners.size).toBe(0);
-    expect(liveOffsets.size).toBe(0);
+    expect(runs.size).toBe(0);
     expect(animatedValues.size).toBe(0);
   });
 
@@ -91,71 +81,40 @@ describe('fall sequence ownership release', () => {
   ])('%s cannot release successor resources', (_label, finished) => {
     const predecessor = {};
     const successor = {};
-    const listener = { remove: jest.fn() };
     const active = new Map([['A', successor]]);
-    const listeners = new Map([['A', listener]]);
-    const liveOffsets = new Map([['A', { x: 0, y: 30 }]]);
+    const runs = new Map([['A', { from: { x: 0, y: 30 } }]]);
 
-    const shouldDecrement = releaseOwnedAnimation(
-      active,
-      listeners,
-      liveOffsets,
-      'A',
-      predecessor,
-      finished,
-    );
+    const shouldDecrement = releaseOwnedFall(active, runs, 'A', predecessor, finished);
 
     expect(shouldDecrement).toBe(false);
     expect(active.get('A')).toBe(successor);
-    expect(listeners.get('A')).toBe(listener);
-    expect(liveOffsets.get('A')).toEqual({ x: 0, y: 30 });
-    expect(listener.remove).not.toHaveBeenCalled();
+    expect(runs.get('A')).toEqual({ from: { x: 0, y: 30 } });
   });
 
   test('an interrupted owner releases only sequence ownership for its successor', () => {
     const sequence = {};
-    const listener = { remove: jest.fn() };
     const active = new Map([['A', sequence]]);
-    const listeners = new Map([['A', listener]]);
-    const liveOffsets = new Map([['A', { x: 0, y: 30 }]]);
+    const runs = new Map([['A', { from: { x: 0, y: 30 } }]]);
 
-    const shouldDecrement = releaseOwnedAnimation(
-      active,
-      listeners,
-      liveOffsets,
-      'A',
-      sequence,
-      false,
-    );
+    const shouldDecrement = releaseOwnedFall(active, runs, 'A', sequence, false);
 
     expect(shouldDecrement).toBe(false);
     expect(active.size).toBe(0);
-    expect(listeners.get('A')).toBe(listener);
-    expect(liveOffsets.get('A')).toEqual({ x: 0, y: 30 });
-    expect(listener.remove).not.toHaveBeenCalled();
+    // The run descriptor survives an interruption on purpose: the successor
+    // run samples it to find out where the tile actually is mid-air.
+    expect(runs.get('A')).toEqual({ from: { x: 0, y: 30 } });
   });
 
-  test('a finished owner removes its listener and live offset before accounting', () => {
+  test('a finished owner drops its run descriptor before accounting', () => {
     const sequence = {};
-    const listener = { remove: jest.fn() };
     const active = new Map([['A', sequence]]);
-    const listeners = new Map([['A', listener]]);
-    const liveOffsets = new Map([['A', { x: 0, y: 30 }]]);
+    const runs = new Map([['A', { from: { x: 0, y: 30 } }]]);
 
-    const shouldDecrement = releaseOwnedAnimation(
-      active,
-      listeners,
-      liveOffsets,
-      'A',
-      sequence,
-      true,
-    );
+    const shouldDecrement = releaseOwnedFall(active, runs, 'A', sequence, true);
 
     expect(shouldDecrement).toBe(true);
     expect(active.size).toBe(0);
-    expect(listeners.size).toBe(0);
-    expect(liveOffsets.size).toBe(0);
-    expect(listener.remove).toHaveBeenCalledTimes(1);
+    expect(runs.size).toBe(0);
   });
 });
 
