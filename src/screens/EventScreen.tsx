@@ -845,6 +845,17 @@ const EventScreen: React.FC<EventScreenProps> = ({
   // Get the primary event (main or first active)
   const primaryEvent = activeEvents.find(e => e.type === 'main') || activeEvents[0];
 
+  // Shared claim bounce — skipped under reduce motion (claimed styling is
+  // the durable signal; the bounce is decoration). One helper so the
+  // reduce-motion gate cannot drift between the tier-claim and buyout paths.
+  const playClaimBounce = useCallback(() => {
+    if (reduceMotion) return;
+    Animated.sequence([
+      Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
+      Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+  }, [claimAnim, reduceMotion]);
+
   // Claim a reward tier
   const handleClaimReward = useCallback((eventId: string, tier: string) => {
     const reward = eventManager.claimEventReward(eventId, tier);
@@ -859,18 +870,13 @@ const EventScreen: React.FC<EventScreenProps> = ({
 
       // Animate claim (skipped under reduce motion — claimed styling is
       // the durable signal; the bounce is decoration)
-      if (!reduceMotion) {
-        Animated.sequence([
-          Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
-          Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
-        ]).start();
-      }
+      playClaimBounce();
 
       // Refresh events and persist claimed state to PlayerContext/AsyncStorage
       setActiveEvents(eventManager.getActiveEvents());
       updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
     }
-  }, [addCoins, addGems, addHintTokens, unlockDecoration, claimAnim, updateProgress, reduceMotion]);
+  }, [addCoins, addGems, addHintTokens, unlockDecoration, playClaimBounce, updateProgress]);
 
   // Collection buyout — the genre's sawtooth-IAP engine (Wordscapes
   // Wildlife pattern): near the finish line, the last stretch of an event's
@@ -894,13 +900,8 @@ const EventScreen: React.FC<EventScreenProps> = ({
       amount: remaining,
       gems: gemCost,
     });
-    if (!reduceMotion) {
-      Animated.sequence([
-        Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
-        Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [spendGems, updateProgress, claimAnim, reduceMotion, onOpenEventShop]);
+    playClaimBounce();
+  }, [spendGems, updateProgress, playClaimBounce, onOpenEventShop]);
 
   // Get the current event's exclusive reward (must be declared before the claim callback
   // that closes over it, otherwise TS flags a "used before declaration" error).
