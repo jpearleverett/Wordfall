@@ -528,45 +528,17 @@ function StarSpark({ x, y, delay }: { x: number; y: number; delay: number }) {
   );
 }
 
-// Brief white flash stamped on each cleared cell — a rounded rect matching
-// the tile footprint fading 0.65 → 0 over 260ms, spawned with the bloom so
-// the cleared letters visibly "pop" before gravity moves in. Opacity-only,
-// native-driven, decorative layer.
-const CELL_FLASH_DURATION_MS = 260;
-
-function CellClearFlash({ x, y, size }: { x: number; y: number; size: number }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    // NO lead-in. This one is fully opaque at progress zero, so a baked-in
-    // hold does not delay it — it parks a 65%-white stamp of the tile on the
-    // board and leaves it there. Staggered across a word that is a static
-    // white copy of the letters the player just cleared, sitting through the
-    // start of the fall. delayedTiming is only a safe substitute for a
-    // mount-time delay when the animation is INVISIBLE at zero.
-    const animation = Animated.timing(anim, {
-      toValue: 1,
-      duration: CELL_FLASH_DURATION_MS,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    });
-    return startAnimationWithCleanup(animation);
-  }, []);
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        left: x - size / 2,
-        top: y - size / 2,
-        width: size,
-        height: size,
-        borderRadius: Math.max(6, size * 0.18),
-        backgroundColor: '#ffffff',
-        opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.65, 0] }),
-      }}
-    />
-  );
-}
+// The per-cell white clear flash is gone. It stamped a 65%-opaque white rect
+// the size of the tile on every cleared cell, ON TOP of the grid — and it was
+// spawned from GameScreen's score effect, one commit later than the ghosts
+// Grid spawns from its layout effect. So the word played as three states in
+// three frames: green tiles, then ghosts, then a white slab that washed the
+// letters out and then decayed fast enough to let them re-emerge before
+// fading. Visible, gone, visible, gone, at the word's original position.
+//
+// The ghost now wears the same face as the tile it replaces and carries the
+// clear beat on its own; the bloom particles, star sparks and shockwave ring
+// supply the rest.
 
 // ── Bloom particle queue, extracted from GameScreen (Fix F) ────────────────
 // Previously the queue lived in GameScreen's state, so every push/remove
@@ -593,13 +565,6 @@ interface StarSparkEntry {
   y: number;
 }
 
-interface CellFlashEntry {
-  id: string;
-  x: number;
-  y: number;
-  size: number;
-}
-
 export interface ClearParticleLayerHandle {
   push(entries: ClearParticleEntry[]): void;
   removeIds(ids: string[]): void;
@@ -607,8 +572,6 @@ export interface ClearParticleLayerHandle {
   pushRing(entry: ClearRingEntry): void;
   /** Star sparks batch; self-removes after the ~600ms flight. */
   pushStars(entries: StarSparkEntry[]): void;
-  /** Per-cell white clear flashes; self-remove after 260ms. */
-  pushCellFlashes(entries: CellFlashEntry[]): void;
 }
 
 interface ClearParticleLayerProps {
@@ -620,8 +583,7 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
     const [queue, setQueue] = useState<ClearParticleEntry[]>([]);
     const [rings, setRings] = useState<ClearRingEntry[]>([]);
     const [stars, setStars] = useState<StarSparkEntry[]>([]);
-    const [flashes, setFlashes] = useState<CellFlashEntry[]>([]);
-    // Self-removal timers for rings / stars / cell flashes.
+    // Self-removal timers for rings and stars.
     const ringTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
     useEffect(() => () => {
@@ -657,27 +619,14 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
         }, STAR_SPARK_DURATION_MS + 8 * 15 + 60); // flight + max stagger
         ringTimersRef.current.add(t);
       },
-      pushCellFlashes(entries) {
-        if (entries.length === 0) return;
-        setFlashes(prev => [...prev, ...entries]);
-        const idSet = new Set(entries.map(e => e.id));
-        const t = setTimeout(() => {
-          ringTimersRef.current.delete(t);
-          setFlashes(prev => prev.filter(f => !idSet.has(f.id)));
-        }, CELL_FLASH_DURATION_MS + 60);
-        ringTimersRef.current.add(t);
-      },
     }), []);
 
-    if (queue.length === 0 && rings.length === 0 && stars.length === 0 && flashes.length === 0) {
+    if (queue.length === 0 && rings.length === 0 && stars.length === 0) {
       return null;
     }
 
     return (
       <View style={style} pointerEvents="none">
-        {flashes.map(f => (
-          <CellClearFlash key={f.id} x={f.x} y={f.y} size={f.size} />
-        ))}
         {rings.map(r => (
           <ClearFlashRing key={r.id} x={r.x} y={r.y} />
         ))}
@@ -1457,7 +1406,7 @@ function GameScreenImpl({
   // Hard cap on simultaneously-rendered bloom particles. Keeps the queue
   // bounded so a 10-letter word with perTile=2 can't balloon past this limit.
   // 24 → 36 (round 2: "particle energy is sparse") → 48 (round 3: bursts
-  // still read as "sparse particles"; star sparks + cell flashes join in).
+  // still read as "sparse particles"; star sparks join in).
   const MAX_BLOOM_PARTICLES = 48;
 
   const gridMetrics = useMemo(
@@ -1535,19 +1484,13 @@ function GameScreenImpl({
       // right across the gravity cascade — the burst was paying for its own
       // stagger twice, once in animation and once in reconciliation.
       const entries: ClearParticleEntry[] = [];
-      const flashes: CellFlashEntry[] = [];
       tiles.forEach((cell, idx) => {
         const { x, y } = cellPositionToScreen(cell.row, cell.col);
         const delay = Math.min(idx, CLEAR_PARTICLE_MAX_STAGGER_STEPS) * CLEAR_PARTICLE_STAGGER_MS;
-        if (gridCellSize > 0) {
-          // Deliberately un-staggered: see CellClearFlash.
-          flashes.push({ id: `${bloomBatchId}-${idx}-flash`, x, y, size: gridCellSize });
-        }
         for (let p = 0; p < perTile; p++) {
           entries.push({ id: `${bloomBatchId}-${idx}-${p}`, x, y, delay });
         }
       });
-      if (flashes.length > 0) particleLayerRef.current?.pushCellFlashes(flashes);
       if (entries.length === 0) return;
       particleLayerRef.current?.push(entries);
       const ids = entries.map(e => e.id);
@@ -1555,7 +1498,7 @@ function GameScreenImpl({
         particleLayerRef.current?.removeIds(ids);
       }, CLEAR_PARTICLE_REMOVE_AFTER_MS);
     },
-    [cellPositionToScreen, trackTimeout, gridCellSize],
+    [cellPositionToScreen, trackTimeout],
   );
 
   // One expanding flash ring at the centroid of the cleared cells — a single

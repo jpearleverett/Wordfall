@@ -498,11 +498,13 @@ describe('wiring', () => {
 
   test('board-removed cells render in their own palette', () => {
     // planCascade decides WHICH cells those are (covered in cascadePlan.test);
-    // this is the half that only exists in the rendered tile.
+    // this is the half that only exists in the rendered ghost. A cell the
+    // player traced dissolves wearing the tile's own valid-word face; one the
+    // BOARD took (shrinkingBoard's outer ring) gets a cold palette instead, so
+    // the board is not claiming credit for a punishment.
     requireAnchor('GHOST_BODY_COLORS_BOARD');
-    expect(GRID_SOURCE).toContain(
-      'ghost.fromWord ? GHOST_BODY_COLORS : GHOST_BODY_COLORS_BOARD',
-    );
+    expect(GRID_CODE).toContain('ghost.fromWord');
+    expect(GRID_CODE).toContain('TILE_BODY_VALID');
   });
 
   test('the landing report is scheduled at touchdown, not on run completion', () => {
