@@ -198,6 +198,22 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
 // Shared empty Set so memoized consumers (PlayField's GameGrid) don't re-render when spotlight is inactive.
 const EMPTY_CELL_KEY_SET: Set<string> = new Set();
 const GRID_AREA_BOTTOM_PADDING = 36;
+
+/**
+ * Last measured grid-area box, remembered for the life of the process.
+ *
+ * The grid area is flex:1, so its size is decided entirely by the chrome
+ * around it — header, timer bars, word band, safe areas — none of which
+ * differs between puzzles. But state starts empty on every mount, and with no
+ * measurement the grid falls back to a width-derived cell size, which is the
+ * largest it can ever be. That painted one frame of an oversized board on
+ * every entry to the screen before onLayout snapped it down. Seeding from the
+ * last measurement makes every entry after the first correct on frame one; a
+ * stale value (rotation, a different device metric) is corrected by the very
+ * next onLayout, and the grid re-targets a pitch change rather than snapping
+ * to it.
+ */
+let lastMeasuredGridArea = { width: 0, height: 0 };
 /**
  * Submit squash: dip and return. Sized to finish before the cascade's first
  * tile moves — 50ms of auto-submit window plus the fall's 45ms hold — so the
@@ -518,14 +534,20 @@ function StarSpark({ x, y, delay }: { x: number; y: number; delay: number }) {
 // native-driven, decorative layer.
 const CELL_FLASH_DURATION_MS = 260;
 
-function CellClearFlash({ x, y, size, delay }: { x: number; y: number; size: number; delay: number }) {
+function CellClearFlash({ x, y, size }: { x: number; y: number; size: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const animation = delayedTiming(anim, {
+    // NO lead-in. This one is fully opaque at progress zero, so a baked-in
+    // hold does not delay it — it parks a 65%-white stamp of the tile on the
+    // board and leaves it there. Staggered across a word that is a static
+    // white copy of the letters the player just cleared, sitting through the
+    // start of the fall. delayedTiming is only a safe substitute for a
+    // mount-time delay when the animation is INVISIBLE at zero.
+    const animation = Animated.timing(anim, {
       toValue: 1,
-      delay,
       duration: CELL_FLASH_DURATION_MS,
       easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
     });
     return startAnimationWithCleanup(animation);
   }, []);
@@ -572,8 +594,6 @@ interface StarSparkEntry {
 }
 
 interface CellFlashEntry {
-  /** Per-tile stagger, baked into the flash's native easing. */
-  delay: number;
   id: string;
   x: number;
   y: number;
@@ -644,7 +664,7 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
         const t = setTimeout(() => {
           ringTimersRef.current.delete(t);
           setFlashes(prev => prev.filter(f => !idSet.has(f.id)));
-        }, CELL_FLASH_DURATION_MS + CLEAR_PARTICLE_MAX_STAGGER_MS + 60);
+        }, CELL_FLASH_DURATION_MS + 60);
         ringTimersRef.current.add(t);
       },
     }), []);
@@ -656,7 +676,7 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
     return (
       <View style={style} pointerEvents="none">
         {flashes.map(f => (
-          <CellClearFlash key={f.id} x={f.x} y={f.y} size={f.size} delay={f.delay} />
+          <CellClearFlash key={f.id} x={f.x} y={f.y} size={f.size} />
         ))}
         {rings.map(r => (
           <ClearFlashRing key={r.id} x={r.x} y={r.y} />
@@ -813,7 +833,7 @@ function GameScreenImpl({
 
   const [showComplete, setShowComplete] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
-  const [gridAreaSize, setGridAreaSize] = useState({ width: 0, height: 0 });
+  const [gridAreaSize, setGridAreaSize] = useState(() => lastMeasuredGridArea);
   const { width: gridAreaWidth, height: gridAreaHeight } = gridAreaSize;
 
   // Announce every newly-found word to screen readers (TalkBack / VoiceOver).
@@ -1422,11 +1442,16 @@ function GameScreenImpl({
   }) => {
     const { width, height } = e.nativeEvent.layout;
     if (width <= 0 || height <= 0) return;
-    setGridAreaSize((prev) => (
-      Math.abs(prev.width - width) >= 1 || Math.abs(prev.height - height) >= 1
-        ? { width, height }
-        : prev
-    ));
+    setGridAreaSize((prev) => {
+      if (
+        Math.abs(prev.width - width) < 1 &&
+        Math.abs(prev.height - height) < 1
+      ) {
+        return prev;
+      }
+      lastMeasuredGridArea = { width, height };
+      return lastMeasuredGridArea;
+    });
   }, []);
 
   // Hard cap on simultaneously-rendered bloom particles. Keeps the queue
@@ -1515,7 +1540,8 @@ function GameScreenImpl({
         const { x, y } = cellPositionToScreen(cell.row, cell.col);
         const delay = Math.min(idx, CLEAR_PARTICLE_MAX_STAGGER_STEPS) * CLEAR_PARTICLE_STAGGER_MS;
         if (gridCellSize > 0) {
-          flashes.push({ id: `${bloomBatchId}-${idx}-flash`, x, y, size: gridCellSize, delay });
+          // Deliberately un-staggered: see CellClearFlash.
+          flashes.push({ id: `${bloomBatchId}-${idx}-flash`, x, y, size: gridCellSize });
         }
         for (let p = 0; p < perTile; p++) {
           entries.push({ id: `${bloomBatchId}-${idx}-${p}`, x, y, delay });

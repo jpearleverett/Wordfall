@@ -47,7 +47,6 @@ import {
   reboundMagnitude,
   reboundVector,
 } from './game/fallMotion';
-import { delayedTiming } from '../utils/motionTiming';
 import {
   perfCascadeSettled,
   perfCascadeStart,
@@ -171,19 +170,31 @@ const GHOST_DURATION_MS = 300;
  * second and the burst outlived several subsequent moves.
  */
 const GHOST_MAX_STAGGERED = 6;
+// Enough of a head start that the first letter is visibly ahead of the last,
+// without any of them standing still.
+
 
 const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: GhostEntry; cellSize: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    // The per-tile stagger is baked into the easing rather than scheduled with
-    // Animated.delay, which is a JS-thread setTimeout — see delayedTiming. The
-    // ghosts fire on the same frame as the cascade, so their timers would be
-    // queued behind exactly the work that frame is full of.
-    const animation = delayedTiming(anim, {
+    // EVERY ghost starts dissolving on its first frame. The sweep along the
+    // word comes from how long each one takes, not from when it starts.
+    //
+    // A ghost is fully opaque at progress zero — it is standing in for the
+    // tile that was just there — so holding it at zero for a stagger leaves a
+    // solid, motionless copy of the letters the player just cleared, sitting
+    // at their old position while the rest of the board falls past. That is a
+    // ghost of the word in its original position, which is exactly what it
+    // looked like. Delaying the START of a fade is only safe for something
+    // invisible at zero (the particles and sparks); for anything already on
+    // screen, stagger the RATE instead.
+    const animation = Animated.timing(anim, {
       toValue: 1,
-      delay: Math.min(ghost.order, GHOST_MAX_STAGGERED) * GHOST_STAGGER_MS,
-      duration: GHOST_DURATION_MS,
+      duration:
+        GHOST_DURATION_MS +
+        Math.min(ghost.order, GHOST_MAX_STAGGERED) * GHOST_STAGGER_MS,
       easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
     });
     return startAnimationWithCleanup(animation);
     // eslint-disable-next-line react-hooks/exhaustive-deps
