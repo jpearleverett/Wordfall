@@ -29,6 +29,17 @@ const timingCloseSpec: StackTransitionSpec['close'] = {
   },
 };
 
+/**
+ * Push transition: spring the card in from the right and fade it up.
+ *
+ * Deliberately NO scale. Scaling the card scales its CONTENT, and on a screen
+ * whose content is a fixed-size board that is exactly what the player is
+ * looking at, an entry from 0.94 reads as the puzzle loading at the wrong size
+ * and then growing — not as motion. It is most obvious on a fast board
+ * generation, where the grid paints while the spring is barely underway and
+ * then visibly expands under it. Slide plus fade carries the same push without
+ * resizing anything.
+ */
 function cardSpringFadeInterpolator({
   current,
   next,
@@ -37,10 +48,6 @@ function cardSpringFadeInterpolator({
   const translateX = current.progress.interpolate({
     inputRange: [0, 1],
     outputRange: [layouts.screen.width * 0.14, 0],
-  });
-  const scale = current.progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.94, 1],
   });
   const opacity = current.progress.interpolate({
     inputRange: [0, 0.3, 1],
@@ -55,7 +62,7 @@ function cardSpringFadeInterpolator({
 
   return {
     cardStyle: {
-      transform: [{ translateX }, { scale }],
+      transform: [{ translateX }],
       opacity,
     },
     overlayStyle: {

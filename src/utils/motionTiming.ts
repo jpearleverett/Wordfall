@@ -25,6 +25,19 @@ type EasingFn = (value: number) => number;
  * its own. Extending the duration by the delay and flattening the leading
  * portion of the curve to zero produces exactly the same motion, entirely
  * natively, in one animation.
+ *
+ * **PRECONDITION: the animation must be INVISIBLE at progress zero.**
+ *
+ * The driver is pinned at exactly 0 for the whole lead-in, so anything driven
+ * by it is frozen in its zero state, on screen, for that long. For a particle
+ * whose opacity starts at 0 that is genuinely "not there yet". For anything
+ * already visible at zero — a fade-OUT, a stamp, a tile standing in for one
+ * that was just removed — it is the opposite of a delay: instead of arriving
+ * late it arrives immediately and then stands still, which reads as a stuck
+ * duplicate of whatever it is covering.
+ *
+ * If the thing is visible at zero, stagger its DURATION instead and let every
+ * instance start on the same frame.
  */
 export function delayedTiming(
   value: Animated.Value,

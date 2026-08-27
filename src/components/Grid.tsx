@@ -15,7 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Grid as GridType, CellPosition, GravityDirection } from '../types';
 import { LetterCell } from './LetterCell';
-import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
+import { CELL_GAP, COLORS, FONTS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import SelectionTrailOverlay from './game/SelectionTrailOverlay';
 import {
@@ -47,7 +47,6 @@ import {
   reboundMagnitude,
   reboundVector,
 } from './game/fallMotion';
-import { delayedTiming } from '../utils/motionTiming';
 import {
   perfCascadeSettled,
   perfCascadeStart,
@@ -56,6 +55,27 @@ import {
   perfDragEnd,
 } from '../utils/perfInstrument';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useColors } from '../hooks/useColors';
+import { useRoundedFontReady } from '../services/fontReady';
+import { getRemoteBoolean } from '../services/remoteConfig';
+import { useColorblindMode } from '../services/colorblindPreference';
+import { getColorblindTileRamps } from '../services/colorblind';
+import {
+  TILE_BEVEL,
+  TILE_BODY_VALID,
+  TILE_BOTTOM_SHADE,
+  TILE_GRADIENT_END,
+  TILE_GRADIENT_START,
+  TILE_HIGHLIGHT_END,
+  TILE_HIGHLIGHT_START,
+  TILE_HIGHLIGHT_VALID,
+  TILE_LETTER_SIZE_FACTOR,
+  TILE_LETTER_SPACING,
+  TILE_RADIUS_FACTOR,
+  TILE_SELECTED_REST_SCALE,
+  TILE_SPECULAR,
+  tileInsetRadius,
+} from './game/tileFace';
 import {
   clearFallResources,
   clearTimeoutHandles,
@@ -152,7 +172,6 @@ interface GhostEntry extends GhostSpec {
 
 // Matches LetterCell's valid-word (green) tile ramp so the ghost reads as a
 // direct continuation of the valid-word flash the tiles showed at submit.
-const GHOST_BODY_COLORS = ['#33ffaa', '#00d96e', '#008844'] as [string, string, string];
 // Cells the BOARD removed rather than the player: shrinkingBoard's outer ring.
 // Same dissolve, cold palette — it reads as the board taking something away.
 const GHOST_BODY_COLORS_BOARD = ['#8ea4c8', '#5b6f93', '#2c3752'] as [string, string, string];
@@ -171,28 +190,57 @@ const GHOST_DURATION_MS = 300;
  * second and the burst outlived several subsequent moves.
  */
 const GHOST_MAX_STAGGERED = 6;
+// Enough of a head start that the first letter is visibly ahead of the last,
+// without any of them standing still.
+
 
 const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: GhostEntry; cellSize: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    // The per-tile stagger is baked into the easing rather than scheduled with
-    // Animated.delay, which is a JS-thread setTimeout — see delayedTiming. The
-    // ghosts fire on the same frame as the cascade, so their timers would be
-    // queued behind exactly the work that frame is full of.
-    const animation = delayedTiming(anim, {
+    // EVERY ghost starts dissolving on its first frame. The sweep along the
+    // word comes from how long each one takes, not from when it starts.
+    //
+    // A ghost is fully opaque at progress zero — it is standing in for the
+    // tile that was just there — so holding it at zero for a stagger leaves a
+    // solid, motionless copy of the letters the player just cleared, sitting
+    // at their old position while the rest of the board falls past. Delaying
+    // the START of a fade is only safe for something invisible at zero (the
+    // particles and sparks); for anything already on screen, stagger the RATE.
+    const animation = Animated.timing(anim, {
       toValue: 1,
-      delay: Math.min(ghost.order, GHOST_MAX_STAGGERED) * GHOST_STAGGER_MS,
-      duration: GHOST_DURATION_MS,
+      duration:
+        GHOST_DURATION_MS +
+        Math.min(ghost.order, GHOST_MAX_STAGGERED) * GHOST_STAGGER_MS,
       easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
     });
     return startAnimationWithCleanup(animation);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const borderRadius = cellSize * 0.2;
+  const palette = useColors();
+  const colorblindMode = useColorblindMode();
+  const roundedReady = useRoundedFontReady();
+  const useRoundedFont =
+    getRemoteBoolean('roundedDisplayFontEnabled') && roundedReady;
+
+  const borderRadius = cellSize * TILE_RADIUS_FACTOR;
+  const insetBR = tileInsetRadius(cellSize);
+  // The tile this is standing in for was in its valid-word state, so the ghost
+  // wears the same face — including whatever the colourblind palette had
+  // remapped it to. Anything different here is a pop on the swap frame.
+  const bodyColors = ghost.fromWord
+    ? getColorblindTileRamps(colorblindMode)?.valid ?? TILE_BODY_VALID
+    : GHOST_BODY_COLORS_BOARD;
+  // A selected tile rests at TILE_SELECTED_REST_SCALE, so the ghost starts
+  // there and swells from there. Board-removed cells were never selected.
+  const restScale = ghost.fromWord ? TILE_SELECTED_REST_SCALE : 1;
+
   return (
     <Animated.View
       pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       style={{
         position: 'absolute',
         left: ghost.x + CELL_GAP / 2,
@@ -200,27 +248,87 @@ const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: Gh
         width: cellSize,
         height: cellSize,
         borderRadius,
+        borderWidth: 2,
+        borderColor: ghost.fromWord ? palette.green : 'rgba(140,160,200,0.5)',
         overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [1, 0.95, 0] }),
+        opacity: anim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [1, 0.8, 0] }),
         transform: [
-          { scale: anim.interpolate({ inputRange: [0, 0.35, 1], outputRange: [1, 1.14, 1.22] }) },
+          {
+            scale: anim.interpolate({
+              inputRange: [0, 0.35, 1],
+              outputRange: [restScale, restScale + 0.06, restScale + 0.14],
+            }),
+          },
           { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -cellSize * 0.18] }) },
         ],
       }}
     >
       <LinearGradient
-        colors={ghost.fromWord ? GHOST_BODY_COLORS : GHOST_BODY_COLORS_BOARD}
-        start={GRADIENT_START}
-        end={GRADIENT_END}
-        style={StyleSheet.absoluteFillObject}
+        colors={bodyColors}
+        start={TILE_GRADIENT_START}
+        end={TILE_GRADIENT_END}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: insetBR }]}
+      />
+      {ghost.fromWord && (
+        <LinearGradient
+          colors={TILE_HIGHLIGHT_VALID}
+          start={TILE_HIGHLIGHT_START}
+          end={TILE_HIGHLIGHT_END}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '55%',
+            borderTopLeftRadius: insetBR,
+            borderTopRightRadius: insetBR,
+          }}
+        />
+      )}
+      <View
+        pointerEvents="none"
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          borderRadius: insetBR,
+          borderWidth: TILE_BEVEL.width,
+          borderTopColor: TILE_BEVEL.top,
+          borderLeftColor: TILE_BEVEL.left,
+          borderRightColor: TILE_BEVEL.right,
+          borderBottomColor: TILE_BEVEL.bottom,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: cellSize * TILE_SPECULAR.top,
+          left: cellSize * TILE_SPECULAR.inset,
+          right: cellSize * TILE_SPECULAR.inset,
+          height: cellSize * TILE_SPECULAR.height,
+          borderRadius: cellSize * 0.025,
+          backgroundColor: TILE_SPECULAR.raised,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: cellSize * TILE_BOTTOM_SHADE.height,
+          backgroundColor: TILE_BOTTOM_SHADE.color,
+          borderBottomLeftRadius: insetBR,
+          borderBottomRightRadius: insetBR,
+        }}
       />
       <Text
         style={{
           color: '#ffffff',
-          fontFamily: 'SpaceGrotesk_700Bold',
-          fontSize: cellSize * 0.46,
+          fontFamily: useRoundedFont ? FONTS.displayRounded : 'SpaceGrotesk_700Bold',
+          fontSize: cellSize * TILE_LETTER_SIZE_FACTOR,
+          letterSpacing: TILE_LETTER_SPACING,
+          textAlign: 'center',
           textShadowColor: ghost.fromWord ? 'rgba(0,40,15,1)' : 'rgba(6,10,22,1)',
           textShadowRadius: 8,
         }}

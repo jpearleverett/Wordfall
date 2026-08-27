@@ -24,9 +24,28 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { CoinIcon } from './icons/iconsCore';
 import { useColorblindMode } from '../services/colorblindPreference';
 import { getColorblindTileRamps } from '../services/colorblind';
+import {
+  TILE_BEVEL,
+  TILE_BODY_VALID,
+  TILE_BOTTOM_SHADE,
+  TILE_GRADIENT_END,
+  TILE_GRADIENT_START,
+  TILE_HIGHLIGHT_END,
+  TILE_HIGHLIGHT_START,
+  TILE_HIGHLIGHT_VALID,
+  TILE_LETTER_SIZE_FACTOR,
+  TILE_LETTER_SPACING,
+  TILE_RADIUS_FACTOR,
+  TILE_SELECTED_REST_SCALE,
+  TILE_SPECULAR,
+  tileInsetRadius,
+} from './game/tileFace';
 
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
-const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
+// Shared with the dissolving ghost that replaces a cleared tile — see
+// game/tileFace.ts. If these two drift apart the substitution becomes a
+// visible pop on every letter of the word at once.
+const BODY_COLORS_VALID = TILE_BODY_VALID;
 const BODY_COLORS_SELECTED_HINT: [string, string, string, string, string] = ['#fff0b3', '#ffe580', '#ffd24d', '#ffb800', '#cc9200'];
 // Selected-tile gradient was originally ['#ff8fd0', …] — the top stop was too
 // light against a white letter, so the text washed out on the upper half of
@@ -51,7 +70,7 @@ const IS_ANDROID = Platform.OS === 'android';
  */
 export const TilePaletteContext = createContext<[string, string, string, string, string] | null>(null);
 
-const HIGHLIGHT_VALID: [string, string] = ['rgba(200,255,230,0.65)', 'rgba(0,255,135,0.0)'];
+const HIGHLIGHT_VALID = TILE_HIGHLIGHT_VALID;
 const HIGHLIGHT_SELECTED_HINT: [string, string] = ['rgba(255,245,200,0.65)', 'rgba(255,184,0,0.0)'];
 const HIGHLIGHT_SELECTED: [string, string] = ['rgba(255,210,240,0.60)', 'rgba(255,45,149,0.0)'];
 // Lifted 0.22 → 0.34 (round-2 blind review: "flat gradient tiles lack
@@ -72,10 +91,10 @@ function rampBorderColor(hex: string): string {
   return `rgba(${r}, ${g}, ${b}, 0.55)`;
 }
 
-const GRADIENT_START_02_0 = { x: 0.2, y: 0 };
-const GRADIENT_END_08_1 = { x: 0.8, y: 1 };
-const GRADIENT_START_05_0 = { x: 0.5, y: 0 };
-const GRADIENT_END_05_055 = { x: 0.5, y: 0.55 };
+const GRADIENT_START_02_0 = TILE_GRADIENT_START;
+const GRADIENT_END_08_1 = TILE_GRADIENT_END;
+const GRADIENT_START_05_0 = TILE_HIGHLIGHT_START;
+const GRADIENT_END_05_055 = TILE_HIGHLIGHT_END;
 
 // ── Accessibility helpers ────────────────────────────────────────────────────
 interface A11yArgs {
@@ -231,7 +250,7 @@ export const LetterCell = React.memo(function LetterCell({
       // similarly bouncy pop (Reanimated uses damping+stiffness directly).
       scaleAnim.value = withSequence(
         withTiming(0.86, { duration: 60 }),
-        withSpring(1.08, { damping: 7, stiffness: 260 }),
+        withSpring(TILE_SELECTED_REST_SCALE, { damping: 7, stiffness: 260 }),
       );
     } else {
       scaleAnim.value = withSpring(1, { damping: 12, stiffness: 180 });
@@ -242,8 +261,8 @@ export const LetterCell = React.memo(function LetterCell({
     transform: [{ scale: scaleAnim.value }],
   }));
 
-  const borderRadius = size * 0.20;
-  const insetBR = Math.max(borderRadius - 2, 2);
+  const borderRadius = size * TILE_RADIUS_FACTOR;
+  const insetBR = tileInsetRadius(size);
 
   // Memoize all style tuples/colors — only recompute when the boolean state flags change.
   const {
@@ -421,11 +440,11 @@ export const LetterCell = React.memo(function LetterCell({
           style={{
             ...StyleSheet.absoluteFillObject,
             borderRadius: insetBR,
-            borderWidth: 1.5,
-            borderTopColor: 'rgba(255,255,255,0.40)',
-            borderLeftColor: 'rgba(255,255,255,0.20)',
-            borderRightColor: 'rgba(0,0,0,0.32)',
-            borderBottomColor: 'rgba(0,0,0,0.46)',
+            borderWidth: TILE_BEVEL.width,
+            borderTopColor: TILE_BEVEL.top,
+            borderLeftColor: TILE_BEVEL.left,
+            borderRightColor: TILE_BEVEL.right,
+            borderBottomColor: TILE_BEVEL.bottom,
           }}
         />
 
@@ -433,14 +452,14 @@ export const LetterCell = React.memo(function LetterCell({
         <View
           style={{
             position: 'absolute',
-            top: size * 0.06,
-            left: size * 0.12,
-            right: size * 0.12,
-            height: size * 0.05,
+            top: size * TILE_SPECULAR.top,
+            left: size * TILE_SPECULAR.inset,
+            right: size * TILE_SPECULAR.inset,
+            height: size * TILE_SPECULAR.height,
             borderRadius: size * 0.025,
             backgroundColor: raisedTile
-              ? 'rgba(255,255,255,0.45)'
-              : 'rgba(255,255,255,0.26)',
+              ? TILE_SPECULAR.raised
+              : TILE_SPECULAR.resting,
           }}
         />
 
@@ -454,8 +473,8 @@ export const LetterCell = React.memo(function LetterCell({
             bottom: 0,
             left: 0,
             right: 0,
-            height: size * 0.15,
-            backgroundColor: 'rgba(0,0,0,0.35)',
+            height: size * TILE_BOTTOM_SHADE.height,
+            backgroundColor: TILE_BOTTOM_SHADE.color,
             borderBottomLeftRadius: insetBR,
             borderBottomRightRadius: insetBR,
           }}
@@ -493,7 +512,7 @@ export const LetterCell = React.memo(function LetterCell({
         <Text
           style={[
             styles.letter,
-            { fontSize: size * 0.5 },
+            { fontSize: size * TILE_LETTER_SIZE_FACTOR },
             isSelected && styles.letterSelected,
             isValidWord && styles.letterValid,
             !isSelected && !isValidWord && styles.letterDefault,
@@ -582,7 +601,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontFamily: 'SpaceGrotesk_700Bold',
     textAlign: 'center',
-    letterSpacing: 0.4,
+    letterSpacing: TILE_LETTER_SPACING,
   },
   letterDefault: {
     textShadowColor: 'rgba(0,0,0,0.95)',
