@@ -322,20 +322,35 @@ function applyProceduralTexture(config: BoardConfig, proceduralIndex: number): B
   // Seven silhouettes against the 5-chapter breather rhythm: the combined
   // cycle repeats every LCM(7,5)=35 chapters (525 levels), where the old
   // %4 cycle locked the capped tail into an exact 300-level loop from L901.
+  //
+  // Coprime cycles mean every (silhouette, tier) pairing eventually occurs —
+  // including a word-SUBTRACTING silhouette landing on a chapter whose tier
+  // getProceduralDifficulty has ALREADY eased a step (isBreatherChapter).
+  // That double dip is what served chapter 46 (proceduralIndex 5: breather
+  // AND 'sparse', levels 676-690) a 5-word board — 4 on its own breather
+  // levels — sandwiched between an 8-word chapter and a 10-word one, and
+  // below anything the curated range serves past L116. Sweeping L601-5000,
+  // wordCount 4 occurs at exactly three levels, all inside that chapter.
+  //
+  // A breather chapter's relief IS the tier drop. The silhouette may still
+  // reshape the grid and the length window, but it must not subtract from the
+  // word count a second time. Recurs at proceduralIndex = 5, 15, 30 (mod 35)
+  // — L676, L826, L1051, L1201, ... — so this is not a one-chapter patch.
+  const wordFloor = isBreatherChapter(proceduralIndex) ? config.wordCount : 0;
   switch (proceduralIndex % 7) {
     case 1: // tall + narrow — many shorter words, long gravity columns
       return {
         ...config,
         rows: Math.min(10, config.rows + 1),
         cols: Math.max(6, config.cols - 1),
-        wordCount: Math.max(4, config.wordCount - 1),
+        wordCount: Math.max(wordFloor, 4, config.wordCount - 1),
         maxWordLength: Math.max(config.minWordLength + 1, 5),
       };
     case 2: // compact — fewer but longer words, tight board
       return {
         ...config,
         rows: Math.max(config.cols, config.rows - 1),
-        wordCount: Math.max(4, config.wordCount - 1),
+        wordCount: Math.max(wordFloor, 4, config.wordCount - 1),
         maxWordLength: 6,
       };
     case 3: // large — the roomiest silhouette of the cycle
@@ -353,7 +368,7 @@ function applyProceduralTexture(config: BoardConfig, proceduralIndex: number): B
     case 5: // sparse — fewer words rattling around the full grid
       return {
         ...config,
-        wordCount: Math.max(5, config.wordCount - 2),
+        wordCount: Math.max(wordFloor, 5, config.wordCount - 2),
         maxWordLength: 6,
       };
     case 6: // swarm — one extra short word, tighter length window
