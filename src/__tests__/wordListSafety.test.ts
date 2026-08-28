@@ -43,6 +43,52 @@ const BLOCKED = [
   'ORGY', 'HORNY', 'SEMEN', 'PENIS', 'VAGINA', 'ANUS', 'RECTUM', 'BOOB', 'BOOBS',
 ];
 
+/**
+ * Malformations found by cross-referencing all 8,287 entries against four
+ * reference wordlists (ENABLE1, dwyl words_alpha, SOWPODS/Collins, TWL/OWL).
+ * Each of these appears in NONE of them — they are truncations (CASIN for
+ * CASINO, IRCHES for BIRCHES, RESOLV, RUTHLE), impossible inflections (HOAXS
+ * and LASHS where the stem takes -ES, BULLYS/NANNYS/PENNYS where consonant+Y
+ * takes -IES, PURED for PUREED, UNGREW), or corruptions of a neighbouring
+ * entry (MIXERY, THINDS, GLOSSS).
+ *
+ * They matter because the word bank renders one as a chip and instructs the
+ * player to trace it. Nothing softlocks — the word IS placed and traceable —
+ * but a word game telling you to find CASIN spends credibility it cannot get
+ * back.
+ *
+ * Obscure-but-attested words are deliberately NOT here: SIXER, TOCK, ACER and
+ * friends are real, and a real word wrongly removed is a worse outcome than an
+ * obscure one kept.
+ */
+const NOT_WORDS = [
+  'VERM', 'ZEBS', 'ZENS', 'CASIN', 'FUSER', 'GRIMS', 'HOAXS', 'LASHS', 'PURED',
+  'TYPER', 'UNDOS', 'BULLYS', 'GLOSSS', 'GNASHS', 'HANDLY', 'IRCHES', 'MIXERY',
+  'MUNCHY', 'NANNYS', 'OUGHTA', 'PENNYS', 'RESOLV', 'RUTHLE', 'THINDS',
+  'TRAWLY', 'UNGREW',
+];
+
+describe('find-list dictionary contains only real words', () => {
+  it('none of the audited malformations are back', () => {
+    const all = getAllWords();
+    expect(NOT_WORDS.filter((w) => all.has(w))).toEqual([]);
+  });
+
+  it('every entry sits in the bucket matching its length', () => {
+    // A word in the wrong bucket is served for a length window it does not
+    // fit, which breaks placement rather than just taste.
+    for (const [len, words] of Object.entries(WORD_LISTS)) {
+      const wrong = words.filter((w) => w.length !== Number(len));
+      expect(wrong).toEqual([]);
+    }
+  });
+
+  it('has no duplicate entries', () => {
+    const all = Object.values(WORD_LISTS).flat();
+    expect(all.length - new Set(all).size).toBe(0);
+  });
+});
+
 describe('find-list dictionary is safe for a family audience', () => {
   it('contains no blocked term in any length bucket', () => {
     const all = getAllWords();
