@@ -1045,6 +1045,13 @@ function gameReducer(state: GameState, action: GameActionWithExtensions): GameSt
 
     case 'USE_PREMIUM_HINT': {
       if (state.status !== 'playing') return state;
+      // Expert and Perfect Solve are defined by having no assists — it is
+      // their whole identity and the justification for their 2x score
+      // multiplier — so a paid reveal must be refused here exactly as a free
+      // one is. This gate is defence in depth: GameScreen must also never
+      // OFFER the escalation in these modes, because a reducer that no-ops
+      // after the gems are taken is a charge that delivers nothing.
+      if (!MODE_CONFIGS[state.mode].rules.allowHints) return state;
 
       const remainingWords = state.board.words
         .filter(w => !w.found)

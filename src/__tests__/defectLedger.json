@@ -2510,9 +2510,15 @@
       {
         "type": "pattern-present",
         "file": "src/screens/GameScreen.tsx",
-        "pattern": "if \\(canProduceHint\\(store\\.getState\\(\\)\\)\\) \\{\\s*if \\(spendGems\\(price\\.amount\\)\\)"
+        "pattern": "if \\(hintsAllowed && canProduceHint\\(store\\.getState\\(\\)\\)\\) \\{\\s*if \\(spendGems\\(price\\.amount\\)\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "trackTimeout\\(\\(\\) => \\{\\s*store\\.dispatch\\(\\{ type: 'SUBMIT_WORD' \\}\\);\\s*\\}, 400\\);"
       }
-    ]
+    ],
+    "note": "The guard is now hintsAllowed && canProduceHint \u2014 strictly stronger: it still refuses to take gems when the reveal would no-op on a dead board, and additionally refuses in Expert and Perfect Solve, where USE_PREMIUM_HINT is disallowed outright. The second check pins the companion fix: the 400ms auto-submit must re-assert the hint first."
   },
   {
     "id": "smart-shuffle-refund-never-reaches-economy",

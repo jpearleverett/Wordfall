@@ -1271,13 +1271,27 @@ function GameScreenImpl({
         // board USE_PREMIUM_HINT no-ops and the queued SUBMIT_WORD fires on
         // an empty selection — the exact spot this offer targets (1 word
         // left) is also where dead boards are guaranteed possible.
-        if (canProduceHint(store.getState())) {
+        // hintsAllowed first: Expert and Perfect Solve sell no assists, and
+        // USE_PREMIUM_HINT now refuses in those modes — charging gems for a
+        // reducer that no-ops would be a purchase that delivers nothing.
+        if (hintsAllowed && canProduceHint(store.getState())) {
           if (spendGems(price.amount)) {
             // Select the current positions of the last word (post-gravity) via
             // USE_PREMIUM_HINT, then submit on the next tick so the player
             // sees the trace briefly before it resolves.
             store.dispatch({ type: 'USE_PREMIUM_HINT' });
             trackTimeout(() => {
+              const current = store.getState();
+              // The board is live during the reveal window, so the player can
+              // tap it. A bare SUBMIT_WORD here submits whatever they touched
+              // — a non-list selection — and in Perfect Solve submitting a
+              // non-list word is an instant status='failed' with zero undos
+              // granted: they pay 9 gems one word from victory and lose
+              // unrecoverably. Re-assert the hint before submitting so this
+              // always resolves the word that was bought. USE_PREMIUM_HINT is
+              // idempotent — it spends no token and does not touch hintsUsed.
+              if (current.status !== 'playing') return;
+              store.dispatch({ type: 'USE_PREMIUM_HINT' });
               store.dispatch({ type: 'SUBMIT_WORD' });
             }, 400);
             accepted = true;
