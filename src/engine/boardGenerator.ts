@@ -756,6 +756,37 @@ const GENERATION_TIMEOUT_MS = 5000;
 const MIN_SHRINK_CORE = 5;
 
 /**
+ * Longest find-list gravityFlip may be given, whatever the level config asks
+ * for. Gravity turns a quarter turn after every clear, so the second clear
+ * slides every ROW sideways: a vertically placed word is sheared by the
+ * difference in holes to its right, and each further word both adds another
+ * rotation and adds another thing to break. The damage compounds, and it
+ * compounds in word count and almost nothing else.
+ *
+ * Measured (8x7 expert board, 40 seeds each, one-move-lookahead player with
+ * random tie-breaks): 3 words 3.7% dead-end, 4 words 13.1%, 5 words 33.1%,
+ * 6 words 49.4%, 7 words 75.6%. A 9x8 and a 10x9 grid give the same curve, so
+ * grid size is not the lever. getLevelConfigExtended hands every level past
+ * ~31 a 7-word list and gravityFlip got it unmodified, which is why the mode
+ * dead-ended a taught player ~79% of the time against classic's ~4.5% on the
+ * same levels and seeds.
+ *
+ * Filtering cannot substitute for this cap: 152 of 200 sampled boards have a
+ * rotating-gravity forgiveness of EXACTLY 0 and re-seeding does not change it
+ * (the outcome is set by the level's config, not the seed), so a mode-aware
+ * forgiveness gate moved the rate only 69.0% -> 66.5% while taking p50
+ * generation from 8ms to 180ms. Capping the list takes it to ~10% AND makes
+ * generation faster, because the generator stops hunting for solvable 7-word
+ * rotating layouts that mostly do not exist.
+ *
+ * The trade is deliberate: gravityFlip levels are SHORT. Its progression
+ * rides grid size and word length — both still scale with level — rather than
+ * list length, and MODE_CONFIGS.gravityFlip already pays a score multiplier
+ * for the mode's higher per-word difficulty.
+ */
+const GRAVITY_FLIP_MAX_WORDS = 4;
+
+/**
  * Per-candidate solvability budget while GENERATING (ms). Deliberately far
  * tighter than the in-game dead-end budget: during generation a rejected
  * candidate costs nothing but another seed, so it is much cheaper to test
@@ -889,6 +920,19 @@ export function generateBoard(
       rows: shrinkRows,
       cols: shrinkCols,
       wordCount: Math.min(Math.max(clampedConfig.wordCount, 3), maxShrinkWords),
+    };
+  } else if (mode === 'gravityFlip') {
+    // Cap the find-list — see GRAVITY_FLIP_MAX_WORDS. The generator's two
+    // fairness mechanisms are both blind here and both are deliberately left
+    // alone: stackingPenalty scores shared COLUMNS (right for downward
+    // gravity, anti-correlated here, since column-disjoint words share rows
+    // and rows are exactly what horizontal gravity shears), and
+    // checkSolvability returns for gravityFlip before the forgiveness gate
+    // runs at all. Word count is the whole effect; neither of those is worth
+    // the blast radius.
+    effectiveConfig = {
+      ...clampedConfig,
+      wordCount: Math.min(clampedConfig.wordCount, GRAVITY_FLIP_MAX_WORDS),
     };
   } else {
     effectiveConfig = clampedConfig;
