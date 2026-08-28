@@ -1,4 +1,4 @@
-import { Grid, CellPosition, GravityDirection } from '../types';
+import { Grid, CellPosition, GravityDirection, GameMode } from '../types';
 import { removeCellsAndApplyGravity, removeCellsAndApplyGravityInDirection, cloneGrid, removeCells } from './gravity';
 
 // 8-directional deltas: right, left, down, up, and 4 diagonals
@@ -485,6 +485,22 @@ export function isDeadEnd(
 // ============ GRAVITY FLIP MODE ============
 
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
+
+/**
+ * The gravity direction one quarter-turn BACK in the cycle.
+ *
+ * `state.gravityDirection` is always the direction that will pull the NEXT
+ * clear — the reducer advances it immediately after each one. Anything
+ * reasoning about the clear that JUST happened (or a counterfactual clear on
+ * a history grid) needs the step before it. Exported so callers don't
+ * hand-roll the modulo and land a quarter-turn out of phase, which is exactly
+ * the bug isDeadEndGravityFlip carried for a while.
+ */
+export function previousGravityDirection(
+  direction: GravityDirection,
+): GravityDirection {
+  return GRAVITY_CYCLE[(GRAVITY_CYCLE.indexOf(direction) + 3) % 4];
+}
 
 /**
  * Try to solve with a specific ordering using rotating gravity directions.
@@ -1131,6 +1147,26 @@ export function isDeadEndShrinkingBoard(
 // ============ KEPT-IT-OPEN DETECTION (J11) ============
 
 /**
+ * The clear rule to simulate, as it stands on the grid being reasoned about.
+ *
+ * Classic downward gravity is NOT universal, and assuming it is the mistake
+ * this codebase keeps re-fixing: noGravity leaves permanent holes and nothing
+ * falls, gravityFlip rotates the pull a quarter turn per clear,
+ * shrinkingBoard eats the outer ring every few words. Omit the rule and the
+ * classic simulation is used, which is correct for classic / timePressure /
+ * expert / relax / perfectSolve / daily / weekly.
+ *
+ * `gravityDirection` is the direction that pulls the NEXT clear on that grid
+ * (same convention as isDeadEndGravityFlip); `wordsUntilShrink` is the
+ * countdown standing on that grid.
+ */
+export interface ClearRule {
+  mode: GameMode;
+  gravityDirection: GravityDirection;
+  wordsUntilShrink: number;
+}
+
+/**
  * Did the player's clearing choice avoid a dead end that an ALTERNATIVE
  * choice would have caused?
  *
@@ -1155,7 +1191,23 @@ export function choiceAvoidedDeadEnd(
   foundWord: string,
   remainingWordsBeforeClear: string[],
   budgetMs: number = 80,
+  /**
+   * The rule as it stood ON `prevGrid` — i.e. BEFORE the player's clear.
+   * `gravityDirection` is the direction that would have pulled the
+   * counterfactual clear; `wordsUntilShrink` the countdown that clear would
+   * have decremented. Omit for the classic downward rule.
+   */
+  rule?: ClearRule,
 ): boolean {
+  const mode = rule?.mode ?? 'classic';
+  const dirAtClear = rule?.gravityDirection ?? 'down';
+  // The direction the REST of the board is then solved under. Every clear
+  // advances the cycle exactly once whichever word it was, so this is the
+  // same phase the real board is in now. DERIVED, not passed, so the
+  // double-offset bug isDeadEndGravityFlip once carried cannot come back
+  // through a caller.
+  const dirAfterClear = GRAVITY_CYCLE[(GRAVITY_CYCLE.indexOf(dirAtClear) + 1) % 4];
+
   const deadline = Date.now() + budgetMs;
   const alternatives = remainingWordsBeforeClear.filter((w) => w !== foundWord);
   // Cap the scan — on an 8-word board checking every alternative would
@@ -1165,15 +1217,63 @@ export function choiceAvoidedDeadEnd(
     if (remainingMs <= 5) return false;
     const occurrences = findWordInGrid(prevGrid, alt, 1);
     if (occurrences.length === 0) continue;
-    const afterAlt = removeCellsAndApplyGravity(cloneGrid(prevGrid), occurrences[0]);
     const rest = remainingWordsBeforeClear.filter((w) => w !== alt);
+
+    // Simulate the counterfactual clear under the MODE'S OWN rule. Using
+    // downward gravity everywhere produced a post-clear grid with no relation
+    // to the real board — measured over 400 generated boards per mode, 73% of
+    // noGravity firings and 72% of shrinkingBoard firings were unearned, and
+    // gravityFlip fired on an ALREADY DEAD board 38 times.
+    let afterAlt: Grid;
+    let wusAfter = rule?.wordsUntilShrink ?? 2;
+    if (mode === 'noGravity') {
+      afterAlt = removeCells(cloneGrid(prevGrid), occurrences[0]);
+    } else if (mode === 'gravityFlip') {
+      afterAlt = removeCellsAndApplyGravityInDirection(
+        cloneGrid(prevGrid),
+        occurrences[0],
+        dirAtClear,
+      );
+    } else if (mode === 'shrinkingBoard') {
+      const shrunk = simulateShrinkingMove(
+        cloneGrid(prevGrid),
+        occurrences[0],
+        wusAfter,
+        rest.length === 0,
+      );
+      afterAlt = shrunk.grid;
+      wusAfter = shrunk.wordsUntilShrink;
+    } else {
+      afterAlt = removeCellsAndApplyGravity(cloneGrid(prevGrid), occurrences[0]);
+    }
+
+    // noGravity has no orderings to search: nothing ever moves, so the board
+    // survives iff every remaining word still has its own non-overlapping
+    // path. Same conclusive-only rule as isDeadEndNoGravity — an exhausted
+    // assignment search proves nothing and must stay silent.
+    if (mode === 'noGravity') {
+      const assignBudget: SolveBudget = { remaining: 10000 };
+      if (
+        !areAllWordsIndependentlyFindable(afterAlt, rest, assignBudget) &&
+        !solveBudgetExhausted(assignBudget)
+      ) {
+        return true; // confirmed: clearing `alt` would have stranded a word
+      }
+      continue;
+    }
 
     // Fast path: any heuristic ordering that completes proves NOT a dead end.
     const shortFirst = [...rest].sort((a, b) => a.length - b.length);
     const orderings = [rest, shortFirst, [...shortFirst].reverse()];
     let solvedByHeuristic = false;
     for (const ordering of orderings) {
-      if (trySolveWithOrder(cloneGrid(afterAlt), ordering) !== null) {
+      const completed =
+        mode === 'gravityFlip'
+          ? trySolveWithOrderRotating(cloneGrid(afterAlt), ordering, dirAfterClear) !== null
+          : mode === 'shrinkingBoard'
+            ? trySolveWithOrderShrinking(cloneGrid(afterAlt), ordering, wusAfter) !== null
+            : trySolveWithOrder(cloneGrid(afterAlt), ordering) !== null;
+      if (completed) {
         solvedByHeuristic = true;
         break;
       }
@@ -1191,7 +1291,12 @@ export function choiceAvoidedDeadEnd(
       startTime: started,
       timeoutMs: solveTimeout,
     };
-    const solution = solve(cloneGrid(afterAlt), rest, budget);
+    const solution =
+      mode === 'gravityFlip'
+        ? solveWithRotatingGravity(cloneGrid(afterAlt), rest, dirAfterClear, 0, budget)
+        : mode === 'shrinkingBoard'
+          ? solveShrinkingBoard(cloneGrid(afterAlt), rest, wusAfter, budget)
+          : solve(cloneGrid(afterAlt), rest, budget);
     const ranOut =
       Date.now() - started >= solveTimeout || budget.remaining <= 0;
     if (solution === null && !ranOut) {
@@ -1211,12 +1316,29 @@ export function choiceAvoidedDeadEnd(
 export function isProvablyCompletable(
   grid: Grid,
   remainingWords: string[],
+  /** The rule as it stands on `grid` right now. Omit for classic gravity. */
+  rule?: ClearRule,
 ): boolean {
   if (remainingWords.length === 0) return true;
+  // noGravity: nothing falls, so completability IS "a non-overlapping path
+  // still exists for every remaining word" — there is no ordering to try.
+  // Simulating a fall here refilled the permanent holes and handed back a
+  // positive proof for boards that were already dead (24 times in 600
+  // generated boards), defeating the one guard that is supposed to keep this
+  // badge off an unwinnable board.
+  if (rule?.mode === 'noGravity') {
+    return areAllWordsIndependentlyFindable(grid, remainingWords);
+  }
   const shortFirst = [...remainingWords].sort((a, b) => a.length - b.length);
   const orderings = [remainingWords, shortFirst, [...shortFirst].reverse()];
   for (const ordering of orderings) {
-    if (trySolveWithOrder(cloneGrid(grid), ordering) !== null) return true;
+    const completed =
+      rule?.mode === 'gravityFlip'
+        ? trySolveWithOrderRotating(cloneGrid(grid), ordering, rule.gravityDirection) !== null
+        : rule?.mode === 'shrinkingBoard'
+          ? trySolveWithOrderShrinking(cloneGrid(grid), ordering, rule.wordsUntilShrink) !== null
+          : trySolveWithOrder(cloneGrid(grid), ordering) !== null;
+    if (completed) return true;
   }
   return false;
 }

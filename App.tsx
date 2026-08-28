@@ -992,7 +992,12 @@ function GameScreenWrapper({ route, navigation }: any) {
         isDaily: false,
         sameRouteTransition: true,
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
-        timeLimit: modeConfig.rules.timerSeconds || 0,
+        // Carry the current puzzle's clock forward. An event's authored limit
+        // (Speed Blitz 60s) must survive Next rather than silently reverting to
+        // the mode default from puzzle 2 onward. computeNextTarget keeps
+        // `mode = params.mode`, so the carried value always belongs to the same
+        // mode; classic/daily/weekly pass 0 or undefined and fall through.
+        timeLimit: params.timeLimit || modeConfig.rules.timerSeconds || 0,
       });
     } catch (e: any) {
       const fallbackMode = (params.mode || 'classic') as GameMode;

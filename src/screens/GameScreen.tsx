@@ -23,7 +23,7 @@ import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import { crashReporter } from '../services/crashReporting';
-import { findWordInGrid, choiceAvoidedDeadEnd, isProvablyCompletable } from '../engine/solver';
+import { findWordInGrid, choiceAvoidedDeadEnd, isProvablyCompletable, previousGravityDirection, type ClearRule } from '../engine/solver';
 import { resolveUndoSource } from '../utils/undoGate';
 import { startAnimationWithCleanup } from '../utils/animationLifecycle';
 import { delayedTiming } from '../utils/motionTiming';
@@ -722,8 +722,21 @@ function GameScreenImpl({
   const isSpike = useMemo(() => isSpikeLevel(level) || isPinchLevel(level), [level]);
 
   const modeConfig = MODE_CONFIGS[mode];
+  // Caller-supplied limit WINS over the mode default. Events author their own
+  // clock — Speed Blitz is 60s (events.ts rules.timeLimit -> getEventPlayConfig
+  // -> App.tsx's nav param -> this `timeLimit` prop) — and the shorter clock is
+  // that event's whole identity. With the operands the other way round,
+  // timerSeconds (120 for timePressure) short-circuited the `||` and the prop
+  // was dead for every timer mode: the store's initial timeRemaining, the
+  // mode-intro banner ("Beat the clock! 2:00") and TimerMovesBars' 30s/10s
+  // thresholds all read 120, so the warnings landed 90s and 110s into a puzzle
+  // the player had been told lasts 60.
+  //
+  // Ordinary Time Pressure is unaffected: every non-event nav site passes
+  // `timeLimit: modeConfig.rules.timerSeconds || 0` (= 120), and a missing or
+  // zero prop still falls through to timerSeconds and then the literal.
   const effectiveTimeLimit = modeConfig.rules.hasTimer
-    ? (modeConfig.rules.timerSeconds || timeLimit || 120)
+    ? (timeLimit || modeConfig.rules.timerSeconds || 120)
     : 0;
   const effectiveMaxMoves = modeConfig.rules.hasMoveLimit
     ? (maxMoves || board.words.length)
@@ -2357,8 +2370,28 @@ function GameScreenImpl({
         .filter((w) => !w.found)
         .map((w) => w.word);
       if (remainingNow.length === 0) return;
-      if (!isProvablyCompletable(s.board.grid, remainingNow)) return;
-      if (choiceAvoidedDeadEnd(prevEntry.grid, found, remainingBefore, 80)) {
+      // Both gates must simulate THIS MODE'S clear rule. Running classic
+      // downward gravity everywhere made the badge reason about a board that
+      // bore no relation to the real one: over 400 generated boards per mode,
+      // 73% of noGravity firings and 72% of shrinkingBoard firings were
+      // unearned, and gravityFlip fired on an already-dead board 38 times —
+      // the one thing the isProvablyCompletable guard exists to prevent.
+      const clearRuleNow: ClearRule = {
+        mode: s.mode,
+        gravityDirection: s.gravityDirection,
+        wordsUntilShrink: s.wordsUntilShrink,
+      };
+      if (!isProvablyCompletable(s.board.grid, remainingNow, clearRuleNow)) return;
+      // The counterfactual clear happens on `prevEntry.grid`, so it is pulled
+      // by the direction one quarter-turn BACK — the reducer already advanced
+      // the cycle for the clear the player actually made — and decrements the
+      // shrink countdown that stood before that clear.
+      const clearRuleBefore: ClearRule = {
+        mode: s.mode,
+        gravityDirection: previousGravityDirection(s.gravityDirection),
+        wordsUntilShrink: prevEntry.wordsUntilShrink ?? s.wordsUntilShrink,
+      };
+      if (choiceAvoidedDeadEnd(prevEntry.grid, found, remainingBefore, 80, clearRuleBefore)) {
         keptOpenFiredRef.current = true;
         setKeptOpenVisible(true);
         void analytics.logEvent('kept_open_shown', { level, mode });
