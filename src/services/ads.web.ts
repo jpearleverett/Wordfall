@@ -45,6 +45,21 @@ export const AD_REWARD_VALUES: Record<AdRewardType, { currency: string; amount: 
   time_continue: { currency: 'time', amount: 30 },
 };
 
+/**
+ * Whether the next-level interstitial may fire on the zero-tap auto-advance.
+ * Always false here: web shows no interstitials at all, so the auto-advance
+ * path has nothing to await.
+ *
+ * This is a free function rather than an adManager method, which is exactly
+ * how it went missing — GameScreen imports it by name from '../services/ads'
+ * and calls it at the auto-advance branch, where an undefined import throws a
+ * TypeError inside a setTimeout, past the ErrorBoundary, after the victory
+ * overlay has already been dismissed.
+ */
+export function isInterstitialOnAutoAdvanceEnabled(): boolean {
+  return false;
+}
+
 type MockAdHandler = (
   rewardType: AdRewardType,
   resolve: (watched: boolean) => void,

@@ -109,6 +109,29 @@ describe('ads.web.ts covers the native ad surface', () => {
     expect(missing).toEqual([]);
   });
 
+  it('re-exports every module-level export the native module has', () => {
+    // The adManager scan above only sees `adManager.<method>` call sites, so
+    // FREE FUNCTIONS are invisible to it — which is how
+    // `isInterstitialOnAutoAdvanceEnabled` went missing after
+    // `canClaimAdReward` was fixed. GameScreen imports it by name and calls it
+    // on the zero-tap auto-advance branch, where an undefined import throws
+    // inside a setTimeout, past the ErrorBoundary, after the victory overlay
+    // has been dismissed. Diff the module surfaces directly.
+    const nativeSrc = fs.readFileSync(path.join(SRC_ROOT, 'services/ads.ts'), 'utf8');
+    const webSrc = fs.readFileSync(path.join(SRC_ROOT, 'services/ads.web.ts'), 'utf8');
+    const names = (src: string) => new Set(
+      [...src.matchAll(/^export\s+(?:async\s+)?(?:function|const|class|type|interface)\s+([A-Za-z0-9_]+)/gm)]
+        .map((m) => m[1]),
+    );
+
+    const native = names(nativeSrc);
+    const web = names(webSrc);
+    expect(native.size).toBeGreaterThan(3);   // guard the guard
+
+    const missing = [...native].filter((n) => !web.has(n)).sort();
+    expect(missing).toEqual([]);
+  });
+
   it('exports the same reward-value table', () => {
     // EconomyContext.processAdReward reads AD_REWARD_VALUES from whichever
     // module resolved, so a drift here mispays web players.

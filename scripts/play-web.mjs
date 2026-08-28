@@ -12,16 +12,18 @@
  * For the engine WITHOUT the UI, use the much faster
  * `PLAY_VERBOSE=1 npx jest playthrough` instead.
  *
- * KNOWN LIMIT — diagonal steps are unreliable. To move a pointer from a cell
- * to its diagonal neighbour you must cross the corner they share, and the
- * pan's hit-test is a plain stride box, so the drag often picks up one of the
- * two orthogonal cells in between: SUN comes out as SURN and no word
- * resolves. The search below prefers straight paths and retries alternatives,
- * which clears most level-1 boards outright, but a word with no straight
- * occurrence can stall the run. That is a limitation of driving the gesture
- * synthetically, NOT a reproduction of what a finger does — a real touch
- * stream samples differently. Treat a stall as "this harness could not trace
- * it", not as a game bug.
+ * KNOWN LIMIT — diagonal steps are unreliable, so a run may stall short of a
+ * win. To move a pointer from a cell to its diagonal neighbour you must cross
+ * the corner they share, and the pan's hit-test is a plain stride box, so the
+ * drag can pick up one of the two orthogonal cells in between: SUN traces as
+ * SURN and nothing resolves. The search below prefers straight paths and
+ * retries alternatives, and diagonals often do land — measured over five
+ * level-1 runs: 2 outright wins (2/2, PERFECT CLEAR), 2 partial (1/2), 1
+ * stalled (0/2). A stall means THIS HARNESS could not trace the word, not
+ * that the game is broken; a real touch stream samples differently from
+ * synthetic pointer moves. The failure line prints what actually got lit, so
+ * a corner-clipped diagonal is visible as the intended word with an extra
+ * letter wedged into it.
  *
  * Usage:
  *   bash scripts/build-web.sh 8080          # in one shell (leaves it serving)
@@ -101,34 +103,49 @@ async function tapText(label) {
 }
 
 /**
- * Read the rendered board.
+ * Read the rendered board from the cells' accessibility labels.
  *
- * Aims at the CELL box, not the glyph box: a letter's own ink box is as wide
- * as the letter ("I" is a sliver next to "W"), so its centre is not the cell
- * centre and a pointer aimed there lands in the neighbouring cell.
+ * LetterCell publishes `Letter S, row 3 column 1[, selected, position 2]`
+ * (buildA11yLabel, 1-INDEXED for screen readers), which react-native-web
+ * emits as aria-label. That gives exact coordinates and live selection state,
+ * so none of this has to be inferred from pixel clustering. The element's
+ * rect is still used for aiming; LetterCell is pointerEvents="none", so a
+ * pointer at those coordinates falls through to the grid's gesture handler,
+ * which is what we want.
  */
 const readCells = () =>
   page.evaluate(() => {
     const out = [];
-    for (const el of document.querySelectorAll('div,span')) {
-      const txt = (el.textContent || '').trim();
-      if (!/^[A-Z]$/.test(txt)) continue;
-      if (el.querySelector('div,span')) continue;
+    for (const el of document.querySelectorAll('[aria-label]')) {
+      const label = el.getAttribute('aria-label') || '';
+      const m = label.match(/^Letter ([A-Z]), row (\d+) column (\d+)(.*)$/);
+      if (!m) continue;
       const r = el.getBoundingClientRect();
-      if (r.height < 18) continue;
-      let box = el;
-      let br = r;
-      for (let up = 0; up < 6 && box.parentElement; up++) {
-        box = box.parentElement;
-        const pr = box.getBoundingClientRect();
-        if (pr.width >= 40 && pr.height >= 40) {
-          br = pr;
-          break;
-        }
-      }
-      out.push({ letter: txt, x: br.x + br.width / 2, y: br.y + br.height / 2 });
+      if (r.width < 10 || r.height < 10) continue;
+      out.push({
+        letter: m[1],
+        row: Number(m[2]) - 1,
+        col: Number(m[3]) - 1,
+        selected: /\bselected\b/.test(m[4]),
+        x: r.x + r.width / 2,
+        y: r.y + r.height / 2,
+        size: r.width,
+      });
     }
     return out;
+  });
+
+/** What the player currently has lit, in trace order. */
+const readSelection = () =>
+  page.evaluate(() => {
+    const picks = [];
+    for (const el of document.querySelectorAll('[aria-label]')) {
+      const m = (el.getAttribute('aria-label') || '').match(
+        /^Letter ([A-Z]), row (\d+) column (\d+).*?\bposition (\d+)/,
+      );
+      if (m) picks.push({ letter: m[1], pos: Number(m[4]) });
+    }
+    return picks.sort((a, b) => a.pos - b.pos).map((p) => p.letter).join('');
   });
 
 /** The find-list chips. */
@@ -138,6 +155,9 @@ const readWords = () =>
     for (const el of document.querySelectorAll('div,span')) {
       const txt = (el.textContent || '').trim();
       if (!/^[A-Z]{3,8}$/.test(txt)) continue;
+      // True leaves only. A chip's parent View concatenates its siblings'
+      // text, so "SUN" + "ORC" reads back as the nonexistent word "SUNORC".
+      if (el.children.length) continue;
       const r = el.getBoundingClientRect();
       if (r.height > 60 || r.height < 10) continue;
       if (!out.some((o) => o.word === txt)) out.push({ word: txt });
@@ -145,36 +165,20 @@ const readWords = () =>
     return out.map((o) => o.word);
   });
 
-/** Cluster cell centres onto a row/col lattice. */
+/** Place cells straight into a lattice using their reported row/col. */
 function toGrid(cells) {
-  const band = (vals) =>
-    [...vals]
-      .sort((a, b) => a - b)
-      .reduce((acc, v) => {
-        const last = acc[acc.length - 1];
-        if (!last || v - last[last.length - 1] > 20) acc.push([v]);
-        else last.push(v);
-        return acc;
-      }, [])
-      .map((g) => g.reduce((a, b) => a + b, 0) / g.length);
-  const rows = band(cells.map((c) => c.y));
-  const cols = band(cells.map((c) => c.x));
-  const near = (v, arr) =>
-    arr.reduce((best, t, i) => (Math.abs(t - v) < Math.abs(arr[best] - v) ? i : best), 0);
-  const grid = rows.map(() => cols.map(() => null));
-  for (const c of cells) grid[near(c.y, rows)][near(c.x, cols)] = c;
+  const rows = Math.max(...cells.map((c) => c.row)) + 1;
+  const cols = Math.max(...cells.map((c) => c.col)) + 1;
+  const grid = Array.from({ length: rows }, () => Array(cols).fill(null));
+  for (const c of cells) grid[c.row][c.col] = c;
   return grid;
 }
 
 const render = (g) => g.map((r) => r.map((c) => (c ? ` ${c.letter} ` : ' . ')).join('')).join('\n');
 
 const strideOf = (grid) => {
-  const xs = grid[0]
-    .map((_, i) => grid.map((r) => r[i]).find(Boolean))
-    .filter(Boolean)
-    .map((c) => c.x);
-  const gaps = xs.slice(1).map((x, i) => x - xs[i]);
-  return gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 90;
+  const any = grid.flat().find(Boolean);
+  return any ? any.size : 90;
 };
 
 // 8-directional adjacency, matching src/engine/solver.ts DIRS.
@@ -292,7 +296,9 @@ for (let move = 0; move < 12 && words.length; move++) {
         played = w;
         break outer;
       }
-      console.log(`  ...${w} did not resolve on that path`);
+      // Reading back what got lit says WHY: a corner-clipped diagonal shows
+      // up as the intended word with an extra letter wedged into it.
+      console.log(`  ...${w} did not resolve — traced "${await readSelection()}"`);
     }
   }
 
