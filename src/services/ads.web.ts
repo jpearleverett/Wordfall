@@ -52,6 +52,7 @@ type MockAdHandler = (
 
 class WebAdManager {
   private mockHandler: MockAdHandler | null = null;
+  private adsRemoved = false;
 
   async init(): Promise<void> {
     logger.log('[Ads] Web build — ad SDK not available, ads disabled');
@@ -59,7 +60,19 @@ class WebAdManager {
 
   setAdConsent(_opts: Record<string, unknown>): void {}
 
-  setAdsRemoved(_removed: boolean): void {}
+  /**
+   * Tracked rather than discarded: `getAdsRemoved()` feeds MiniPackSheet's
+   * `isAdFree`, which decides whether to offer an ad-free player the
+   * remove-ads upsell. Dropping it would pitch the purchase to someone who
+   * already owns it.
+   */
+  setAdsRemoved(removed: boolean): void {
+    this.adsRemoved = removed;
+  }
+
+  getAdsRemoved(): boolean {
+    return this.adsRemoved;
+  }
 
   canWatchCoinAd(): boolean {
     return false;
@@ -71,6 +84,45 @@ class WebAdManager {
 
   canShowAd(_rewardType?: AdRewardType): boolean {
     return false;
+  }
+
+  /**
+   * False even for ad-free players. On native this is the auto-grant path —
+   * buyers get the reward without watching — but nothing on web can grant
+   * one (`showRewardedAd` never resolves `rewarded: true`), so reporting
+   * `true` would render reward buttons that silently do nothing when tapped.
+   */
+  canClaimAdReward(_rewardType?: AdRewardType): boolean {
+    return false;
+  }
+
+  isRewardedAdReady(): boolean {
+    return false;
+  }
+
+  adsRemaining(): number {
+    return 0;
+  }
+
+  canShowInterstitial(): boolean {
+    return false;
+  }
+
+  async showInterstitialAd(): Promise<boolean> {
+    return false;
+  }
+
+  interstitialsRemaining(): number {
+    return 0;
+  }
+
+  /**
+   * Readiness never changes on web, so the listener is never called. The
+   * unsubscribe is still real, because callers store it and invoke it on
+   * unmount.
+   */
+  onAdReadyChange(_listener: (ready: boolean) => void): () => void {
+    return () => {};
   }
 
   /**

@@ -22,3 +22,6 @@ web-build/
 
 # Scratch files written by audit subagents — never deliverables.
 **/zz_*_tmp*.test.ts
+
+# scripts/play-web.mjs screenshots
+web-play-shots/
