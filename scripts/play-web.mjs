@@ -277,13 +277,41 @@ async function playLevel(tag) {
   return report;
 }
 
-/** Dismiss whatever celebration/offer is covering the screen, if anything. */
+/** Tap the first element whose aria-label matches, if any is on screen. */
+async function tapAriaPrefix(re) {
+  const els = page.locator('[aria-label]');
+  const n = Math.min(await els.count(), 200);
+  for (let i = 0; i < n; i++) {
+    const el = els.nth(i);
+    const label = await el.getAttribute('aria-label').catch(() => null);
+    if (!label || !re.test(label)) continue;
+    const b = await el.boundingBox().catch(() => null);
+    if (!b) continue;
+    await touch('touchStart', b.x + b.width / 2, b.y + b.height / 2);
+    await page.waitForTimeout(60);
+    await touch('touchEnd');
+    await page.waitForTimeout(1400);
+    return label;
+  }
+  return null;
+}
+
+/**
+ * Dismiss whatever celebration, reward sheet or offer is covering the screen.
+ *
+ * The home screen between levels is a gauntlet: the victory ceremony, the
+ * login calendar (which opens by itself — a new player lands on day 6 by
+ * design, see loginCalendarOffsetDays), daily-quest and streak popups, and
+ * contextual offers. Text buttons alone are not enough; several of these
+ * only offer an X, so close buttons are matched by aria-label too.
+ */
 async function clearOverlays() {
-  const LABELS = ['AMAZING', 'CONTINUE', 'NEXT', 'CLAIM', 'COLLECT', 'GOT IT', 'NICE', 'AWESOME', 'OK', 'CLOSE', 'NO THANKS', 'MAYBE LATER', 'SKIP'];
-  for (let i = 0; i < 12; i++) {
+  const LABELS = ['AMAZING', 'CONTINUE', 'NEXT', 'CLAIM', 'COLLECT', 'GOT IT', 'NICE', 'AWESOME', 'NO THANKS', 'MAYBE LATER', 'SKIP'];
+  for (let i = 0; i < 14; i++) {
+    if (await tapAriaPrefix(/^(Close|Dismiss)/i)) continue;
     let hit = false;
     for (const l of LABELS) {
-      if (await tapText(l, 1200)) {
+      if (await tapText(l, 900)) {
         hit = true;
         break;
       }
@@ -313,18 +341,33 @@ for (let n = 0; n < LEVELS; n++) {
   reports.push(await playLevel(`L${st.level}`));
 
   if (n < LEVELS - 1) {
+    // Reload rather than fight the victory overlay for its Next button, then
+    // re-enter from the home screen's play card.
+    //
+    // Re-entry RETRIES, because the home screen between levels is a gauntlet
+    // of queued ceremonies that appear on their own timers — the win-streak
+    // "Hat Trick" after three wins, the login calendar, daily-quest and
+    // streak popups. Clearing once and tapping immediately loses the race
+    // against whichever one is still arriving, which reads as "the game
+    // stopped letting me play" when the game is fine.
     await page.waitForTimeout(2500);
     await clearOverlays();
-    // Reload rather than fight the victory overlay for the Next button, then
-    // re-enter from the home screen's play card.
     await page.goto(`${URL_BASE}/?e2e=1`, { waitUntil: 'load', timeout: 60_000 });
     await page.waitForTimeout(11_000);
-    await clearOverlays();
-    if (!(await tapText('PLAY NOW')) && !(await tapText('Play Level'))) {
+
+    let entered = false;
+    for (let attempt = 0; attempt < 4 && !entered; attempt++) {
+      await clearOverlays();
+      if (!(await tapText('PLAY NOW', 4000))) await tapText('Play Level', 3000);
+      await page.waitForTimeout(4000);
+      entered = (await gameState()) !== null;
+      if (!entered) console.log(`  (re-entry attempt ${attempt + 1} blocked by an overlay, retrying)`);
+    }
+    if (!entered) {
+      await shot(`stuck-after-L${reports[reports.length - 1]?.level}`);
       console.log('\ncould not re-enter a level — stopping');
       break;
     }
-    await page.waitForTimeout(4000);
   }
 }
 

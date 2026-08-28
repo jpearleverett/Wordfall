@@ -61,13 +61,22 @@ describe('generateBoard — GenerationProfile honor', () => {
     }
   });
 
-  it('chapter 5 profile (len 4-6) produces valid board with expected length bounds', () => {
+  it('chapter 5 profile produces a board inside the profile it declares', () => {
+    // Asserted against the profile's OWN bounds rather than hardcoded ones.
+    // This previously read "(len 4-6)" and required length >= 4, but
+    // CHAPTERS[4] ("Mountain Peak") declares minWordLength 3 — the assertion
+    // only ever held because seed 54321 happened not to draw a 3-letter word,
+    // so any edit to the dictionary that shifted word selection broke it
+    // while the generator was behaving correctly.
     const ch5 = CHAPTERS[4];
     expect(ch5.profile).toBeDefined();
+    const min = ch5.profile!.minWordLength ?? BASE_CONFIG.minWordLength;
+    const max = ch5.profile!.maxWordLength ?? BASE_CONFIG.maxWordLength;
     const board = generateBoard(BASE_CONFIG, 54321, 'classic', ch5.profile);
+    expect(board.words.length).toBeGreaterThanOrEqual(2);
     for (const wp of board.words) {
-      expect(wp.word.length).toBeGreaterThanOrEqual(4);
-      expect(wp.word.length).toBeLessThanOrEqual(6);
+      expect(wp.word.length).toBeGreaterThanOrEqual(min);
+      expect(wp.word.length).toBeLessThanOrEqual(max);
     }
   });
 
