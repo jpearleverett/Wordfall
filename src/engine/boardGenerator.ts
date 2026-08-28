@@ -195,7 +195,7 @@ function selectWords(
   let pool = getWordsByLength(config.minWordLength, config.maxWordLength);
 
   // Profile-driven dictionary tiering (applied before mode filters so mode
-  // can still tighten further for timePressure/expert).
+  // can still tighten further for timePressure).
   if (profile?.dictionaryTier === 'common') {
     // "Common" tutorial tier: bias to 3-5 letter words — our dictionary's
     // shorter buckets skew toward everyday vocabulary.
@@ -208,20 +208,33 @@ function selectWords(
   // the longWords mechanic) rather than a hard pool filter — an all-5/6
   // letter find-list at 8 words is the slowest placement config the
   // generator faces (~10× generation cost) and reads monotonous anyway.
-  const expertBias = profile?.dictionaryTier === 'expert';
+  //
+  // GameMode 'expert' takes the same route, for the same reason. It used to
+  // hard-filter the pool to length >= 5 right here, and that one filter WAS
+  // the mode's level-load stall. Measured over 280 loads (levels 22-300, two
+  // seeds each, identical configs and seeds either way):
+  //
+  //             p50    p95    p99    max     >=900ms
+  //   filter    148    826   1146   2366      3.2%
+  //   bias       76    598    828    909      0.4%
+  //
+  // At the heaviest procedural tail config (10x8, 10 words, decoyRichness
+  // 0.25) the filter put 4% of seeds past the 1500ms ceiling boardGen.perf
+  // pins. Fairness is untouched — the one-ply dead-end rate on expert boards
+  // is 7.1% before and after — because the bias changes which words are
+  // OFFERED, not how the board is validated. And per game_mechanics.md word
+  // length is not a difficulty signal when every word is already on the
+  // visible find-list: expert's difficulty is MODE_CONFIGS.expert (no hints,
+  // no undo) and the level config, not the letter count.
+  const expertBias = profile?.dictionaryTier === 'expert' || mode === 'expert';
 
-  // Mode-specific word pool filtering
+  // Mode-specific word pool filtering. Only timePressure narrows the pool,
+  // and it narrows toward SHORT words — the cheap direction for the placer.
   if (mode === 'timePressure') {
     // Prefer shorter words (3-4 letters) for faster spotting under time pressure
     const shortPool = pool.filter(w => w.length <= 4);
     if (shortPool.length >= config.wordCount * 3) {
       pool = shortPool;
-    }
-  } else if (mode === 'expert') {
-    // Prefer longer words (5+) for harder challenge
-    const longPool = pool.filter(w => w.length >= 5);
-    if (longPool.length >= config.wordCount * 3) {
-      pool = longPool;
     }
   }
 
@@ -750,10 +763,50 @@ function attemptGenerate(
 const GENERATION_TIMEOUT_MS = 5000;
 
 /**
- * Smallest board side the shrink schedule must leave intact for the final
- * word. Drives the shrinkingBoard word-count cap — see generateBoard.
+ * Smallest board side the shrink schedule must leave intact for the last
+ * words cleared. Drives the shrinkingBoard word-count cap — see generateBoard.
+ *
+ * 4, not 5. The name promises "the final word still fits", and 4 is already
+ * generous for that: no config asks for a word longer than 6 and a trace is
+ * 8-directional, so a 6-cell snake fits inside a 2x3 box. What the number
+ * actually bought was a whole SHRINK PHASE, because maxShrinks FLOORS
+ * (smallestSide - MIN_SHRINK_CORE) / 2 — and at 5, every board whose SHORT
+ * side pads to 8 got floor(3/2) = 1 phase instead of 2, i.e. a 4-word find
+ * list instead of 6.
+ *
+ * The short side pads to 8 exactly when the level config asks for 6 columns:
+ * the curated endgame's tall-narrow chapter (getPhaseConfig, chapterIdx % 4
+ * === 1 — L76-90, L136-150, L196-210, forever) and the procedural tail's
+ * proceduralIndex % 7 === 1 silhouette. So one chapter in four served 4 words
+ * where its neighbours served 6, and the shipped count tracked the grid's
+ * column count instead of the difficulty curve.
+ *
+ * Measured, one board per level over L1-201: count-4 boards 48 -> 6, with
+ * generation unchanged (p50 14 -> 25ms, p95 152 -> 152ms, max 525 -> 499ms)
+ * and every board still solvable under isSolvableShrinkingBoard.
+ *
+ * Do NOT take it to 3. That unlocks a third phase and 7-8 word lists that
+ * placement almost never satisfies: same levels, p50 14 -> 307ms and p95
+ * 152 -> 3034ms. Level generation is synchronous on the JS thread, so that
+ * is a multi-second frozen screen.
  */
-const MIN_SHRINK_CORE = 5;
+const MIN_SHRINK_CORE = 4;
+
+/**
+ * Longest find-list shrinkingBoard may be given, whatever its geometry would
+ * allow. Same shape of cap as GRAVITY_FLIP_MAX_WORDS below and for the same
+ * reason: past a point it is the mode's own clear rule, not the grid, that
+ * makes the board unsatisfiable.
+ *
+ * With MIN_SHRINK_CORE = 4 a board whose short side pads to 10 (cols 8, only
+ * reachable from the procedural tail's 'wide' silhouette) clears a THIRD
+ * shrink phase and would be asked for 8 words. Measured over L601-1500 step
+ * 7: p50 16 -> 99ms, p95 99 -> 3248ms, max 194 -> 3749ms — past the 2500ms
+ * ceiling boardGen.perf holds this mode to — and a third of those boards fell
+ * back to a shorter list anyway. Capped at 6, the same sweep is a flat 6
+ * words at p50 17ms / p95 108ms / max 207ms.
+ */
+const SHRINK_MAX_WORDS = 6;
 
 /**
  * Longest find-list gravityFlip may be given, whatever the level config asks
@@ -914,7 +967,7 @@ export function generateBoard(
     // the timeout) on hardware faster than the low-end Android target.
     const smallestSide = Math.min(shrinkRows, shrinkCols);
     const maxShrinks = Math.max(0, Math.floor((smallestSide - MIN_SHRINK_CORE) / 2));
-    const maxShrinkWords = 2 * maxShrinks + 2;
+    const maxShrinkWords = Math.min(SHRINK_MAX_WORDS, 2 * maxShrinks + 2);
     effectiveConfig = {
       ...clampedConfig,
       rows: shrinkRows,
