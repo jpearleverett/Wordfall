@@ -4728,7 +4728,19 @@
         "type": "pattern-present",
         "file": "src/engine/solver.ts",
         "pattern": "proven && !solveBudgetExhausted\\(solveBudget\\)",
-        "count": 3
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/solver.ts",
+        "pattern": "if \\(!proven \\|\\| solveBudgetExhausted\\(solveBudget\\)\\) return false;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/solver.ts",
+        "pattern": "return stillProven && !solveBudgetExhausted\\(wideBudget\\);",
+        "count": 1
       },
       {
         "type": "pattern-absent",
@@ -4766,7 +4778,8 @@
         "suite": "src/engine/__tests__/gravityFlipPhase.test.ts"
       }
     ],
-    "status": "fixed"
+    "status": "fixed",
+    "note": "isDeadEnd gained a second, wider confirmation pass (multiple occurrences per word) before it may return true, so its budget guard is now split across two expressions: an early bail when the first pass is inconclusive, and the confirmation pass's own exhaustion check. Both are pinned above; the other two dead-end checks still use the original single-expression form."
   },
   {
     "id": "procedural-chapter-boundary-off-by-one",

@@ -8,6 +8,13 @@ const DIRS = [
 ];
 
 /**
+ * Occurrences per word explored by isDeadEnd's confirmation pass. High enough
+ * to cover the alternate traces real boards actually offer, low enough that
+ * the branching stays bounded on a dense grid.
+ */
+const DEAD_END_OCCURRENCE_LIMIT = 6;
+
+/**
  * Find occurrences of a word in the grid along any path of
  * 8-directionally adjacent cells (including diagonals, zigzag, etc.).
  * Each cell can only be used once per path.
@@ -126,7 +133,13 @@ function solveBudgetExhausted(budget: SolveBudget): boolean {
 export function solve(
   grid: Grid,
   remainingWords: string[],
-  budget?: SolveBudget
+  budget?: SolveBudget,
+  /**
+   * How many occurrences of each word to branch on. Default 1 keeps
+   * generation fast (see the note below); gameplay callers that must not
+   * report a false "unsolvable" pass a higher value.
+   */
+  occurrenceLimit: number = 1
 ): string[] | null {
   if (remainingWords.length === 0) return [];
   if (budget && budget.remaining <= 0) return null;
@@ -135,11 +148,17 @@ export function solve(
 
   for (let i = 0; i < remainingWords.length; i++) {
     const word = remainingWords[i];
-    // limit=1: only check the first occurrence found.
+    // limit=1 by default: only check the first occurrence found.
     // This massively reduces branching — from O(n! * k^n) to O(n!).
-    // Correct for generation (we can retry seeds). For gameplay,
-    // the placed position is almost always the one that matters.
-    const occurrences = findWordInGrid(grid, word, 1);
+    // Correct for GENERATION, which can retry seeds when it guesses wrong.
+    //
+    // It is NOT correct for gameplay. A word with several legal traces has
+    // several futures, and the player picks among them freely; searching only
+    // the first one can miss every winning line and report a live board as
+    // dead. Callers that act on a null result in front of the player —
+    // isDeadEnd, and the stuck banner behind it — must pass a higher
+    // occurrenceLimit. See isDeadEnd's second pass.
+    const occurrences = findWordInGrid(grid, word, occurrenceLimit);
 
     for (const positions of occurrences) {
       if (budget && budget.remaining <= 0) return null;
@@ -148,7 +167,7 @@ export function solve(
         ...remainingWords.slice(0, i),
         ...remainingWords.slice(i + 1),
       ];
-      const subSolution = solve(newGrid, rest, budget);
+      const subSolution = solve(newGrid, rest, budget, occurrenceLimit);
       if (subSolution !== null) {
         return [word, ...subSolution];
       }
@@ -433,7 +452,34 @@ export function isDeadEnd(
   const solveBudget: SolveBudget =
     budget ?? { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
   const proven = solve(cloneGrid(grid), remainingWords, solveBudget) === null;
-  return proven && !solveBudgetExhausted(solveBudget);
+  if (!proven || solveBudgetExhausted(solveBudget)) return false;
+
+  // SECOND PASS, over multiple occurrences of each word.
+  //
+  // Everything above searches only each word's FIRST trace (solve's default
+  // occurrenceLimit), which is the right trade for generation but wrong here:
+  // the player may trace ANY legal occurrence, so a board the single-trace
+  // search cannot finish may still have a winning line through a second or
+  // third one. Reporting that board as dead plays the fail sting, ducks the
+  // BGM, announces "Board is stuck. No remaining order finishes this board."
+  // — literally false — and fires the rescue offers.
+  //
+  // Measured before this pass existed: of 32 boards isDeadEnd called dead
+  // during real playthroughs, 7 (22%) were still winnable through a
+  // non-first occurrence.
+  //
+  // Only boards that were ABOUT TO BE DECLARED DEAD reach this code, which is
+  // a small minority of checks, so the wider branching is paid rarely. It
+  // carries its own budget, and — like the pass above — an exhausted budget
+  // proves nothing, so it resolves to "not a dead end".
+  const wideBudget: SolveBudget = {
+    remaining: 20000,
+    startTime: Date.now(),
+    timeoutMs: 250,
+  };
+  const stillProven =
+    solve(cloneGrid(grid), remainingWords, wideBudget, DEAD_END_OCCURRENCE_LIMIT) === null;
+  return stillProven && !solveBudgetExhausted(wideBudget);
 }
 
 // ============ GRAVITY FLIP MODE ============

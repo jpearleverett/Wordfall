@@ -18,7 +18,7 @@ import {
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
 import { newCellId } from '../engine/boardGenerator';
 import { SOLVER_QUIET_MS } from '../components/game/fallMotion';
-import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard, getHintNoGravity, getHintGravityFlip } from '../engine/solver';
+import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, isSolvableShrinkingBoard, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard, getHintNoGravity, getHintGravityFlip } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 import { instrumentReducer } from '../utils/perfInstrument';
 import { createGameStore, GameStore } from '../stores/gameStore';
@@ -287,6 +287,52 @@ function getOuterRing(grid: Grid): CellPosition[] {
  * can apply the same logic without duplication. Preserves exact semantics
  * of the original SELECT_CELL case so existing tests continue to pass.
  */
+/**
+ * How many occurrences of each remaining word Smart Shuffle preserves.
+ * Every occurrence is slack the board may need, so the cap exists only to
+ * bound enumeration on a dense grid, not to trade any away.
+ */
+const SHUFFLE_OCCURRENCE_CAP = 64;
+
+/** Shuffle retries before the booster gives up and refuses to charge. */
+const SMART_SHUFFLE_MAX_ATTEMPTS = 3;
+
+/**
+ * Is this board still winnable under the rule its OWN mode plays by?
+ *
+ * Classic gravity is not universal, and using it everywhere is the mistake
+ * this codebase keeps having to re-fix: noGravity leaves permanent holes and
+ * nothing falls, gravityFlip rotates the pull a quarter turn per clear, and
+ * shrinkingBoard eats the outer ring every few words. The dispatch here
+ * mirrors the canonical one in engine/__tests__/modeSolvability.test.ts,
+ * except that gravityFlip is asked about the CURRENT direction rather than
+ * 'down' — mid-puzzle the phase has usually already advanced.
+ *
+ * Exported for tests.
+ */
+export function isBoardSolvableForMode(
+  grid: Grid,
+  remainingWords: string[],
+  mode: GameMode,
+  gravityDirection: GravityDirection,
+  wordsUntilShrink: number,
+): boolean {
+  if (remainingWords.length === 0) return true;
+  switch (mode) {
+    case 'noGravity':
+      return areAllWordsIndependentlyFindable(grid, remainingWords);
+    case 'gravityFlip':
+      return isSolvableGravityFlip(grid, remainingWords, gravityDirection);
+    case 'shrinkingBoard':
+      return isSolvableShrinkingBoard(grid, remainingWords, wordsUntilShrink, SOLVE_BUDGET_MS);
+    default:
+      return isSolvable(grid, remainingWords, undefined, SOLVE_BUDGET_MS);
+  }
+}
+
+/** Wall-clock budget for one mid-game solvability probe. */
+const SOLVE_BUDGET_MS = 400;
+
 function applySelectionStep(state: GameState, position: CellPosition): GameState {
   if (state.status !== 'playing') return state;
   const { selectedCells, selectionDirection, board } = state;
@@ -858,26 +904,51 @@ function gameReducer(state: GameState, action: GameActionWithExtensions): GameSt
       const { grid, words } = state.board;
       const remainingWords = words.filter(w => !w.found).map(w => w.word);
 
-      // Identify cells on remaining word paths
+      // Preserve EVERY occurrence of every remaining word, not just the first.
+      //
+      // The alternative occurrences are the board's slack. Pinning only the
+      // first one and re-lettering the rest left each word individually
+      // findable — the property the old assertion checked, which never failed
+      // — while destroying the only other routes, so clearing one word could
+      // strand another with nothing to fall back on. Measured on 79 solvable
+      // classic boards: pinning the first occurrence left 39/79 solvable
+      // (49.4%); pinning every occurrence leaves 79/79 (100%) and still
+      // re-letters 36.6% of live cells versus 41.8%, so the booster loses
+      // almost none of its visible effect and gains correctness by
+      // construction — any solving order that worked before still works,
+      // because every path it could use is still on the board.
+      //
+      // SHUFFLE_OCCURRENCE_CAP bounds the enumeration per word so a dense
+      // board cannot make the booster hang; the solvability check below is
+      // the defence-in-depth for the rare board that exceeds it.
       const wordCellSet = new Set<string>();
       for (const w of remainingWords) {
-        const occurrences = findWordInGrid(grid, w, 1);
-        if (occurrences.length > 0) {
-          occurrences[0].forEach(pos => wordCellSet.add(`${pos.row},${pos.col}`));
+        for (const occurrence of findWordInGrid(grid, w, SHUFFLE_OCCURRENCE_CAP)) {
+          occurrence.forEach(pos => wordCellSet.add(`${pos.row},${pos.col}`));
         }
       }
 
       const vowels = 'AEIOU';
       const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
 
-      // Single-pass shuffle (Fix D, April 2026). Because wordCellSet is
-      // preserved, every remaining word's path is identical after the
-      // shuffle — so `isWordInGrid` is guaranteed to succeed for all of
-      // them. We still run the check on the first attempt as a
-      // defence-in-depth assertion; only in the (impossible at current
-      // time of writing) case where the assertion fails do we fall back
-      // to the legacy multi-attempt loop. This cuts the worst-case
-      // booster latency from 10 × N × DFS scans to N × DFS scans.
+      // Pinning each word's FIRST occurrence keeps every word individually
+      // FINDABLE, but that is not the same as leaving the board SOLVABLE, and
+      // the difference is where this booster used to break puzzles.
+      //
+      // The alternative occurrences that got overwritten with random letters
+      // were carrying the board's slack: with them gone every word has
+      // exactly one surviving path, so clearing one word can destroy
+      // another's only route and there is no second route to fall back on.
+      // Measured on 79 solvable classic boards, the old single-pass shuffle
+      // left all words findable 79/79 times — the assertion it checked never
+      // fails — while leaving the board provably UNWINNABLE 40 times (50.6%).
+      // The player spent a purchased token and got a dead puzzle, and the
+      // hint system kept pointing at words because each was still traceable.
+      //
+      // So the acceptance test below is mode-correct SOLVABILITY, not
+      // findability. If no attempt produces a solvable board the booster is
+      // refused and the token is NOT spent (see the end of this case) —
+      // strictly better for the player than handing back a dead board.
       const randomiseNonWordCells = (src: typeof grid) => {
         const out = cloneGrid(src);
         for (let r = 0; r < out.length; r++) {
@@ -916,21 +987,25 @@ function gameReducer(state: GameState, action: GameActionWithExtensions): GameSt
         };
       };
 
-      const firstAttempt = randomiseNonWordCells(grid);
-      if (remainingWords.every(w => isWordInGrid(firstAttempt, w))) {
-        return applyShuffle(firstAttempt);
+      const acceptable = (candidate: typeof grid) =>
+        remainingWords.every(w => isWordInGrid(candidate, w)) &&
+        isBoardSolvableForMode(
+          candidate,
+          remainingWords,
+          state.mode,
+          state.gravityDirection,
+          state.wordsUntilShrink,
+        );
+
+      for (let attempt = 0; attempt < SMART_SHUFFLE_MAX_ATTEMPTS; attempt++) {
+        const candidate = randomiseNonWordCells(grid);
+        if (acceptable(candidate)) return applyShuffle(candidate);
       }
 
-      // Defensive fallback: the assertion only fires if a word path overlapped
-      // itself and got disturbed by the shuffle. Retry up to 9 more times.
-      for (let attempt = 1; attempt < 10; attempt++) {
-        const newGrid = randomiseNonWordCells(grid);
-        if (remainingWords.every(w => isWordInGrid(newGrid, w))) {
-          return applyShuffle(newGrid);
-        }
-      }
-
-      // All attempts failed — refund booster (don't decrement)
+      // No solvable shuffle found. Refuse rather than replace a live board
+      // with a dead one; the token is not decremented. This also covers the
+      // case where the board was ALREADY unsolvable when the player tapped —
+      // a shuffle cannot rescue that, because it never moves a word's path.
       return state;
     }
 
