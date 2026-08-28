@@ -182,8 +182,9 @@ function fillEmptyCells(grid: Grid, rng: () => number, decoyRichness: number = 0
  * words are placed at the head of the pool — the generator still applies its
  * variety + substring + overlap guards, but chapter-themed words get first
  * crack at the slots so Garden Bloom shows ROSE/TULIP/PETAL instead of
- * BABBLE/MOTTO. Theme words are validated against the dictionary pool first
- * so we never ship a word players can't actually find.
+ * BABBLE/MOTTO. Theme words are held to the pool's LENGTH WINDOW rather than
+ * to dictionary membership — see the note in `selectWords` for why the
+ * membership check was deleting authored content.
  */
 function selectWords(
   config: BoardConfig,
@@ -238,20 +239,41 @@ function selectWords(
     }
   }
 
-  // Theme words that actually exist in the pool (same length bounds + passed
-  // the dictionary-tier / mode filters). Missing entries are silently dropped
-  // — the chapter author can't assume every garden word survives every
-  // generation profile (e.g. profile.dictionaryTier='expert' strips common
-  // 3-4 letter words). The shuffled general pool still fills the remaining
-  // slots so the list has some variety even when a chapter ships few theme
-  // words that fit the current profile.
+  // Theme words eligible for THIS board.
+  //
+  // The gate is the LENGTH WINDOW, not dictionary membership. Membership used
+  // to be the gate, and it quietly deleted content: 44 of the 480 authored
+  // theme words are simply absent from the dictionary buckets, so they could
+  // never reach a board. Chapter 26 "Stargazer" could not draw STAR, chapter
+  // 20 "Kraken's Lair" could not draw KRAKEN, and chapter 29 "Deep Space"
+  // lost NOVA, NEBULA, QUASAR, PULSAR and GAMMA — five of its twelve, which
+  // is most of the chapter's identity. Nothing was logged; the list just came
+  // back short and the generic pool filled in behind it.
+  //
+  // Membership was never the right gate. The dictionary exists to pick
+  // FILLER words the author never saw; a theme word is authored deliberately,
+  // and the find-list is what the game validates a trace against (nothing
+  // outside these two generators reads the dictionary at all), so a placed
+  // theme word is findable by construction. What genuinely constrains it is
+  // geometry: a 7-letter word cannot go on a board whose longest slot is 6.
+  // So hold theme words to the window the pool actually spans — which also
+  // keeps them subject to the tier / mode narrowing applied above — and let
+  // membership only be one way of satisfying it.
+  //
   // NOTE: the dictionary pool is UPPERCASE — theme words from chapters.ts are
-  // authored lowercase, so they must be uppercased before the membership
-  // check. (A historic lowercase normalization here meant theme words never
-  // matched the pool at all and every chapter drew from the generic pool.)
+  // authored lowercase, so they must be uppercased first. (A historic
+  // lowercase normalization here meant theme words never matched the pool at
+  // all and every chapter drew from the generic pool.)
   const poolSet = new Set(pool);
+  let windowMin = Infinity;
+  let windowMax = 0;
+  for (const w of pool) {
+    if (w.length < windowMin) windowMin = w.length;
+    if (w.length > windowMax) windowMax = w.length;
+  }
   const preferred = themeWords
-    ? Array.from(new Set(themeWords.map(w => w.toUpperCase()))).filter(w => poolSet.has(w))
+    ? Array.from(new Set(themeWords.map(w => w.toUpperCase())))
+        .filter(w => poolSet.has(w) || (w.length >= windowMin && w.length <= windowMax))
     : [];
   const shuffledPreferred = shuffleArray(preferred, rng);
   let shuffledRest = shuffleArray(pool, rng);

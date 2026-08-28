@@ -97,7 +97,19 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 0,
     difficulty: 'easy',
-    themeWords: ['tree', 'leaf', 'sun', 'rain', 'seed', 'root', 'stem', 'bark', 'soil', 'vine', 'fern', 'moss'],
+    // Levels 1-2 ask for exactly TWO THREE-letter words, and this list used
+    // to contain exactly one word of that length. So the first two boards of
+    // the game — the two most important boards there are — were always SUN
+    // plus whatever the generic 3-letter bucket handed over: PHI, TUX, RAH,
+    // EKE, CUD, AMI, GIG, BIZ, VEE. A player's first impression of a nature
+    // chapter was a Greek letter and a formalwear noun. Every off-theme word
+    // chapter 1 served across levels 1-15 came from those two boards.
+    // The ten short entries below are all in WORDS_3, so the opening levels
+    // now read as nature at the same difficulty.
+    themeWords: [
+      'tree', 'leaf', 'sun', 'rain', 'seed', 'root', 'stem', 'bark', 'soil', 'vine', 'fern', 'moss',
+      'bud', 'sap', 'pod', 'log', 'mud', 'fog', 'dew', 'bee', 'bug', 'ant',
+    ],
     wingId: 'nature',
     icon: '🌱',
     profile: {
@@ -364,7 +376,7 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 84,
     difficulty: 'hard',
-    themeWords: ['drake', 'gryphon', 'pixie', 'troll', 'imp', 'ogre', 'elf', 'sprite', 'golem', 'wraith', 'fiend', 'beast'],
+    themeWords: ['drake', 'harpy', 'pixie', 'troll', 'ghoul', 'ogre', 'dwarf', 'sprite', 'golem', 'wraith', 'fiend', 'beast'],
     wingId: 'mythology',
     icon: '🦄',
     profile: {
@@ -421,7 +433,7 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 102,
     difficulty: 'hard',
-    themeWords: ['depth', 'abyss', 'coral', 'squid', 'shark', 'whale', 'eel', 'drift', 'trench', 'murky', 'plunge', 'dive'],
+    themeWords: ['depth', 'abyss', 'coral', 'squid', 'shark', 'whale', 'eel', 'drift', 'chasm', 'murky', 'brine', 'dive'],
     wingId: 'ocean',
     icon: '🐋',
     profile: {
@@ -439,7 +451,7 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 108,
     difficulty: 'hard',
-    themeWords: ['coral', 'fish', 'ray', 'seal', 'otter', 'pearl', 'bloom', 'reef', 'prawn', 'gull', 'heron', 'shore'],
+    themeWords: ['coral', 'fish', 'sponge', 'seal', 'otter', 'pearl', 'bloom', 'reef', 'prawn', 'gull', 'heron', 'shore'],
     wingId: 'ocean',
     icon: '🐠',
     profile: {
@@ -458,7 +470,7 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 114,
     difficulty: 'expert',
-    themeWords: ['kraken', 'siren', 'trident', 'anchor', 'tempest', 'voyage', 'pirate', 'plank', 'fleet', 'harbor', 'storm', 'wreck'],
+    themeWords: ['kraken', 'siren', 'spear', 'anchor', 'squall', 'voyage', 'pirate', 'plank', 'fleet', 'harbor', 'storm', 'wreck'],
     wingId: 'ocean',
     icon: '🦑',
     profile: {
@@ -498,7 +510,7 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 126,
     difficulty: 'medium',
-    themeWords: ['paint', 'color', 'blend', 'style', 'mural', 'easel', 'pastel', 'vivid', 'bold', 'canvas', 'oil', 'wash'],
+    themeWords: ['paint', 'color', 'blend', 'style', 'mural', 'easel', 'sepia', 'vivid', 'bold', 'tint', 'oil', 'wash'],
     wingId: 'arts',
     icon: '🎨',
     profile: {
@@ -646,7 +658,7 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 174,
     difficulty: 'expert',
-    themeWords: ['rocket', 'launch', 'thrust', 'fuel', 'dock', 'relay', 'signal', 'array', 'mission', 'crew', 'cargo', 'titan'],
+    themeWords: ['rocket', 'launch', 'thrust', 'fuel', 'dock', 'relay', 'signal', 'array', 'escape', 'crew', 'cargo', 'titan'],
     wingId: 'space',
     icon: '🚀',
     profile: {
@@ -722,7 +734,7 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 198,
     difficulty: 'expert',
-    themeWords: ['revolt', 'reform', 'liberty', 'rights', 'vote', 'press', 'union', 'treaty', 'peace', 'law', 'code', 'pact'],
+    themeWords: ['revolt', 'reform', 'rebel', 'rights', 'vote', 'press', 'union', 'treaty', 'peace', 'law', 'code', 'pact'],
     wingId: 'history',
     icon: '⚖️',
     profile: {
@@ -816,7 +828,7 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 228,
     difficulty: 'expert',
-    themeWords: ['stone', 'rock', 'sand', 'clay', 'iron', 'ore', 'gem', 'quartz', 'slate', 'flint', 'dust', 'soil'],
+    themeWords: ['stone', 'rock', 'sand', 'clay', 'iron', 'mineral', 'geode', 'quartz', 'slate', 'flint', 'dust', 'soil'],
     wingId: 'elements',
     icon: '⛰️',
     profile: {
