@@ -911,7 +911,15 @@ export function generateBoard(
       mode,
       profile,
       themeWords,
-      attempt < FORGIVENESS_ATTEMPT_BUDGET,
+      // Shared boards (deterministic) skip the inner forgiveness tranche:
+      // shopFairestBoard is ALREADY shopping for forgiveness and SCORES every
+      // candidate it receives. Hunting for a forgiving board in here as well
+      // meant up to FORGIVENESS_ATTEMPT_BUDGET boards were generated, measured
+      // against MIN_FORGIVENESS_BY_DIFFICULTY and THROWN AWAY for each single
+      // candidate the shop got to look at — 16x13 = 208 generations to choose
+      // among 16, which is where the daily's multi-second worst case came
+      // from. Level loads keep the tranche: they have no outer shop.
+      deterministic ? false : attempt < FORGIVENESS_ATTEMPT_BUDGET,
       deterministic,
     );
     if (board) return board;
@@ -1113,8 +1121,16 @@ export function getDailyVariant(dateString: string): { name: string; config: Boa
  * score good enough to stop early. The daily is generated once per day and
  * cached, so it can afford effort a per-level load cannot.
  */
-const DAILY_FAIRNESS_ATTEMPTS = 16;
-const DAILY_FAIRNESS_TARGET = 0.6;
+/*
+ * 16 -> 24 and 0.6 -> 0.85 came with removing generateBoard's inner
+ * forgiveness tranche on the deterministic path. A candidate now costs ONE
+ * board generation instead of up to thirteen, so the same wall clock buys far
+ * more independently-scored seeds; and 0.85 is the bar the discarded inner
+ * search was already applying to medium boards, just enforced where the
+ * result is KEPT instead of thrown away.
+ */
+const DAILY_FAIRNESS_ATTEMPTS = 24;
+const DAILY_FAIRNESS_TARGET = 0.85;
 const DAILY_FAIRNESS_SAMPLES = 12;
 /**
  * Wall-clock ceiling on the search. Shopping runs on the JS thread the moment
@@ -1245,12 +1261,12 @@ const weeklyBoardCache = new Map<string, Board>();
  * the column-disjoint placement that keeps a board forgiving.
  */
 const WEEKLY_FAIRNESS: FairnessBudget = {
-  // 64 → 24 alongside the deterministic flag: without a wall-clock cut the
-  // attempt count IS the time bound, and a full 64-attempt search with
-  // theme words measured up to ~2.5s on a fast machine. 24 attempts caps
-  // the once-a-week worst case near ~1s while most weeks still early-stop
-  // on the 0.85 target within a handful of candidates.
-  attempts: 24,
+  // 64 → 24 alongside the deterministic flag, then 24 → 40 once a candidate
+  // stopped costing up to thirteen board generations (generateBoard skips its
+  // inner forgiveness tranche when deterministic — the shop does that job).
+  // The weekly runs the `hard` config and rarely early-stops on the 0.85
+  // target, so its cost really is attempts x one generation.
+  attempts: 40,
   target: 0.85,
   // More samples per candidate than the daily. With 12 samples the estimator
   // is noisy enough to crown a board that a play simulation then finds
