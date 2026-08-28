@@ -20,6 +20,9 @@
  * independently-scored seeds.
  */
 import { generateDailyBoard, generateWeeklyBoard } from '../boardGenerator';
+import { findWordInGrid, isDeadEnd } from '../solver';
+import { removeCellsAndApplyGravity } from '../gravity';
+import type { Grid } from '../../types';
 
 /** Dates across a full year, including 2026-11-02 (the measured worst case). */
 function datesAcrossAYear(): string[] {
@@ -80,4 +83,78 @@ describe('shared board generation stays inside a synchronous budget', () => {
       );
     }
   }, 300_000);
+});
+
+/**
+ * A POISONED OPENING ON A SHARED BOARD IS EVERYONE'S PROBLEM.
+ *
+ * shopFairestBoard optimises one number — estimateForgiveness — and never
+ * asked whether the move a thoughtful player is most likely to make first is
+ * fatal. On a daily that matters more than anywhere else: every player in the
+ * world gets the same board, nobody can reroll it, and the leaderboard is
+ * per-date.
+ *
+ * "Poisoned" here means the strictest version: an opening that ties for the
+ * BEST one-ply score — the most other words still traceable afterwards, which
+ * is exactly what the tutorial teaches a player to look for — and is
+ * nonetheless a proven dead end.
+ *
+ * Measured over 72 dates: 2 poisoned (2.8%) at the old 16-attempt / 0.6
+ * forgiveness shop, 0 at the 24-attempt / 0.85 one. Raising the bar removed
+ * them, which is what you would expect — 0.85 forgiveness means most clear
+ * orders succeed — but nothing was ASSERTING it, so this pins the property
+ * rather than the parameter.
+ */
+function hasPoisonedTopOpening(grid: Grid, words: string[]): boolean {
+  const scored: { word: string; survivors: number; after: Grid }[] = [];
+  let best = -1;
+  for (const word of words) {
+    const occ = findWordInGrid(grid, word, 1);
+    if (occ.length === 0) continue;
+    const after = removeCellsAndApplyGravity(grid, occ[0]);
+    const survivors = words
+      .filter((w) => w !== word)
+      .filter((w) => findWordInGrid(after, w, 1).length > 0).length;
+    scored.push({ word, survivors, after });
+    if (survivors > best) best = survivors;
+  }
+  return scored
+    .filter((s) => s.survivors === best)
+    .some((s) => isDeadEnd(s.after, words.filter((w) => w !== s.word)));
+}
+
+describe('shared boards do not punish the obvious opening', () => {
+  it('no daily has a top-scoring opening that is a proven dead end', () => {
+    const poisoned: string[] = [];
+    let checked = 0;
+    for (let m = 1; m <= 12; m++) {
+      for (const d of [2, 6, 11, 16, 21, 26]) {
+        const date = `2026-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        let board;
+        try { board = generateDailyBoard(date); } catch { continue; }
+        checked++;
+        if (hasPoisonedTopOpening(board.grid, board.words.map((w) => w.word))) poisoned.push(date);
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.log(`\ndaily: ${poisoned.length}/${checked} with a poisoned top opening${poisoned.length ? ' — ' + poisoned.join(', ') : ''}`);
+    expect(checked).toBeGreaterThan(50);
+    expect(poisoned).toEqual([]);
+  }, 900_000);
+
+  it('no weekly has one either', () => {
+    const poisoned: string[] = [];
+    let checked = 0;
+    for (let w = 1; w <= 52; w += 2) {
+      const id = `2026_W${String(w).padStart(2, '0')}`;
+      let board;
+      try { board = generateWeeklyBoard(id); } catch { continue; }
+      checked++;
+      if (hasPoisonedTopOpening(board.grid, board.words.map((x) => x.word))) poisoned.push(id);
+    }
+    // eslint-disable-next-line no-console
+    console.log(`weekly: ${poisoned.length}/${checked} with a poisoned top opening`);
+    expect(checked).toBeGreaterThan(20);
+    expect(poisoned).toEqual([]);
+  }, 900_000);
 });
