@@ -1296,7 +1296,8 @@ function GameScreenWrapper({ route, navigation }: any) {
   );
 }
 
-// Home main screen wrapper - uses PlayerContext instead of legacy useStorage
+// Home main screen wrapper — reads PlayerContext (the legacy useStorage hook
+// this replaced is deleted; it wrote currentLevel with no star-gate check)
 function HomeMainScreen({ route, navigation }: any) {
   const { user } = useAuth();
   const player = usePlayer();

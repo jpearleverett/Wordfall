@@ -125,8 +125,26 @@ export function ModeTutorialOverlay({ steps, onComplete, visible }: ModeTutorial
   const isLastStep = currentStep === steps.length - 1;
 
   return (
-    <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
-      <Animated.View style={[styles.cardContainer, { transform: [{ translateY: slideAnim }] }]}>
+    <Animated.View
+      style={[styles.backdrop, { opacity: fadeAnim }]}
+      // The backdrop is opaque to touch and covers the whole board, so
+      // anything that fails to find the buttons is trapped behind it with no
+      // way out — for a mode with no timer (perfectSolve) that is a screen
+      // that never resolves. The buttons are the intended exit and a human
+      // finds them; this is the floor. It also makes the overlay behave like
+      // the rest of the app's modals, which all dismiss on backdrop press.
+      accessibilityViewIsModal
+    >
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={dismissWithFade}
+        accessibilityRole="button"
+        accessibilityLabel="Close mode tutorial"
+      />
+      <Animated.View
+        pointerEvents="box-none"
+        style={[styles.cardContainer, { transform: [{ translateY: slideAnim }] }]}
+      >
         <LinearGradient
           colors={GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]}
           style={styles.card}
