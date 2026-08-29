@@ -128,7 +128,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 6,
     difficulty: 'easy',
-    themeWords: ['pine', 'oak', 'elm', 'fox', 'deer', 'owl', 'nest', 'bush', 'glen', 'dale', 'hare', 'crow'],
+    themeWords: [
+      'pine', 'oak', 'elm', 'fox', 'deer', 'owl', 'nest', 'bush', 'glen', 'dale', 'hare', 'crow',
+      'twig', 'fir', 'ivy', 'jay', 'moth', 'wren', 'stag', 'fawn', 'lynx', 'mole', 'trunk', 'acorn',
+    ],
     wingId: 'nature',
     icon: '🌲',
     profile: {
@@ -147,7 +150,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 12,
     difficulty: 'easy',
-    themeWords: ['rose', 'lily', 'tulip', 'daisy', 'petal', 'bloom', 'bud', 'herb', 'sage', 'mint', 'plot', 'gate'],
+    themeWords: [
+      'rose', 'lily', 'tulip', 'daisy', 'petal', 'bloom', 'bud', 'herb', 'sage', 'mint', 'plot', 'gate',
+      'iris', 'poppy', 'thyme', 'basil', 'pansy', 'shrub', 'hedge', 'spade', 'weed', 'lawn', 'stalk', 'trowel',
+    ],
     wingId: 'nature',
     icon: '🌷',
     profile: {
@@ -166,7 +172,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 18,
     difficulty: 'medium',
-    themeWords: ['field', 'grass', 'creek', 'pond', 'ridge', 'trail', 'grove', 'marsh', 'brook', 'cliff', 'bluff', 'vale'],
+    themeWords: [
+      'field', 'grass', 'creek', 'pond', 'ridge', 'trail', 'grove', 'marsh', 'brook', 'cliff', 'bluff', 'vale',
+      'clover', 'reed', 'heath', 'moor', 'dell', 'hill', 'plain', 'stream', 'willow', 'gully', 'thorn', 'fence',
+    ],
     wingId: 'nature',
     icon: '🌾',
     profile: {
@@ -185,7 +194,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 24,
     difficulty: 'medium',
-    themeWords: ['peak', 'stone', 'cloud', 'wind', 'storm', 'snow', 'frost', 'eagle', 'crest', 'slope', 'ledge', 'range'],
+    themeWords: [
+      'peak', 'stone', 'cloud', 'wind', 'storm', 'snow', 'frost', 'eagle', 'crest', 'slope', 'ledge', 'range',
+      'summit', 'gorge', 'basin', 'cairn', 'valley', 'chasm', 'goat', 'haze', 'pass', 'climb', 'flint', 'alpine',
+    ],
     wingId: 'nature',
     icon: '🏔️',
     profile: {
@@ -206,7 +218,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 30,
     difficulty: 'easy',
-    themeWords: ['atom', 'cell', 'gene', 'mass', 'wave', 'lens', 'core', 'volt', 'tube', 'beam', 'data', 'test'],
+    themeWords: [
+      'atom', 'cell', 'gene', 'mass', 'wave', 'lens', 'core', 'volt', 'tube', 'beam', 'data', 'test',
+      'flask', 'dish', 'vial', 'jar', 'pump', 'unit', 'germ', 'mold', 'fuel', 'probe', 'graph', 'meter',
+    ],
     wingId: 'science',
     icon: '🧪',
     profile: {
@@ -225,7 +240,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 36,
     difficulty: 'medium',
-    themeWords: ['acid', 'base', 'bond', 'salt', 'iron', 'zinc', 'gold', 'lead', 'neon', 'oxide', 'ionic', 'mole'],
+    themeWords: [
+      'acid', 'base', 'bond', 'salt', 'iron', 'zinc', 'gold', 'lead', 'neon', 'oxide', 'ionic', 'mole',
+      'argon', 'boron', 'xenon', 'radon', 'metal', 'alkali', 'anion', 'ester', 'ether', 'liquid', 'solute', 'vapor',
+    ],
     wingId: 'science',
     icon: '⚗️',
     profile: {
@@ -244,7 +262,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 42,
     difficulty: 'medium',
-    themeWords: ['organ', 'nerve', 'spine', 'brain', 'heart', 'lung', 'bone', 'skin', 'vein', 'blood', 'limb', 'joint'],
+    themeWords: [
+      'organ', 'nerve', 'spine', 'brain', 'heart', 'lung', 'bone', 'skin', 'vein', 'blood', 'limb', 'joint',
+      'liver', 'pulse', 'gland', 'nasal', 'sinew', 'throat', 'marrow', 'tissue', 'rib', 'gut', 'jaw', 'hip',
+    ],
     wingId: 'science',
     icon: '🔬',
     profile: {
@@ -262,7 +283,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 48,
     difficulty: 'hard',
-    themeWords: ['force', 'speed', 'light', 'sound', 'heat', 'power', 'orbit', 'field', 'pulse', 'spark', 'quark', 'flux'],
+    themeWords: [
+      'force', 'speed', 'light', 'sound', 'heat', 'power', 'orbit', 'field', 'pulse', 'spark', 'quark', 'flux',
+      'mass', 'wave', 'laser', 'prism', 'torque', 'motion', 'energy', 'charge', 'magnet', 'lever', 'axis', 'weight',
+    ],
     wingId: 'science',
     icon: '⚡',
     profile: {
@@ -281,7 +305,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 54,
     difficulty: 'hard',
-    themeWords: ['prism', 'laser', 'radar', 'sonar', 'phase', 'probe', 'clone', 'surge', 'fuse', 'alloy', 'dense', 'vapor'],
+    themeWords: [
+      'prism', 'laser', 'radar', 'sonar', 'phase', 'probe', 'clone', 'surge', 'fuse', 'alloy', 'dense', 'vapor',
+      'sensor', 'beam', 'optic', 'scan', 'trace', 'gauge', 'relay', 'unit', 'lens', 'ray', 'sample', 'method',
+    ],
     wingId: 'science',
     icon: '🔭',
     profile: {
@@ -301,7 +328,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 60,
     difficulty: 'medium',
-    themeWords: ['myth', 'hero', 'sage', 'fate', 'lore', 'epic', 'bard', 'rune', 'omen', 'tome', 'ward', 'oath'],
+    themeWords: [
+      'myth', 'hero', 'sage', 'fate', 'lore', 'epic', 'bard', 'rune', 'omen', 'tome', 'ward', 'oath',
+      'quest', 'relic', 'crown', 'sword', 'elder', 'tale', 'idol', 'seer', 'clan', 'gift', 'sign', 'wise',
+    ],
     wingId: 'mythology',
     icon: '📜',
     profile: {
@@ -320,7 +350,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 66,
     difficulty: 'medium',
-    themeWords: ['titan', 'hydra', 'muse', 'oracle', 'helm', 'bolt', 'aegis', 'forge', 'lyre', 'styx', 'chaos', 'atlas'],
+    themeWords: [
+      'titan', 'hydra', 'muse', 'oracle', 'helm', 'bolt', 'aegis', 'forge', 'lyre', 'styx', 'chaos', 'atlas',
+      'nectar', 'laurel', 'pillar', 'temple', 'mortal', 'siren', 'feast', 'wreath', 'toga', 'urn', 'olive', 'marble',
+    ],
     wingId: 'mythology',
     icon: '🏛️',
     profile: {
@@ -338,7 +371,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 72,
     difficulty: 'hard',
-    themeWords: ['rune', 'thor', 'odin', 'frost', 'wolf', 'raven', 'axe', 'mead', 'hall', 'shield', 'forge', 'fjord'],
+    themeWords: [
+      'rune', 'thor', 'odin', 'frost', 'wolf', 'raven', 'axe', 'mead', 'hall', 'shield', 'forge', 'fjord',
+      'saga', 'ship', 'oar', 'sled', 'ice', 'pelt', 'horn', 'blade', 'north', 'raid', 'boast', 'winter',
+    ],
     wingId: 'mythology',
     icon: '⚔️',
     profile: {
@@ -357,7 +393,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 78,
     difficulty: 'hard',
-    themeWords: ['jade', 'silk', 'lotus', 'crane', 'pearl', 'tiger', 'scroll', 'honor', 'fate', 'spirit', 'dawn', 'moon'],
+    themeWords: [
+      'jade', 'silk', 'lotus', 'crane', 'pearl', 'tiger', 'scroll', 'honor', 'fate', 'spirit', 'dawn', 'moon',
+      'bamboo', 'koi', 'fan', 'ink', 'rice', 'monk', 'peony', 'river', 'mist', 'bell', 'garden', 'ivory',
+    ],
     wingId: 'mythology',
     icon: '🐉',
     profile: {
@@ -376,7 +415,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 84,
     difficulty: 'hard',
-    themeWords: ['drake', 'harpy', 'pixie', 'troll', 'ghoul', 'ogre', 'dwarf', 'sprite', 'golem', 'wraith', 'fiend', 'beast'],
+    themeWords: [
+      'drake', 'harpy', 'pixie', 'troll', 'ghoul', 'ogre', 'dwarf', 'sprite', 'golem', 'wraith', 'fiend', 'beast',
+      'giant', 'witch', 'demon', 'talon', 'fang', 'claw', 'horn', 'scale', 'lair', 'curse', 'spell', 'brute',
+    ],
     wingId: 'mythology',
     icon: '🦄',
     profile: {
@@ -396,7 +438,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 90,
     difficulty: 'medium',
-    themeWords: ['tide', 'sand', 'shell', 'wave', 'reef', 'surf', 'cove', 'bay', 'kelp', 'clam', 'crab', 'foam'],
+    themeWords: [
+      'tide', 'sand', 'shell', 'wave', 'reef', 'surf', 'cove', 'bay', 'kelp', 'clam', 'crab', 'foam',
+      'pool', 'rock', 'pier', 'salt', 'spray', 'snail', 'algae', 'drift', 'inlet', 'shore', 'pebble', 'brine',
+    ],
     wingId: 'ocean',
     icon: '🐚',
     profile: {
@@ -415,7 +460,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 96,
     difficulty: 'medium',
-    themeWords: ['sail', 'hull', 'mast', 'helm', 'port', 'keel', 'deck', 'bow', 'stern', 'rig', 'crew', 'knot'],
+    themeWords: [
+      'sail', 'hull', 'mast', 'helm', 'port', 'keel', 'deck', 'bow', 'stern', 'rig', 'crew', 'knot',
+      'chart', 'rope', 'wheel', 'cabin', 'flag', 'gale', 'swell', 'buoy', 'wake', 'net', 'spar', 'stow',
+    ],
     wingId: 'ocean',
     icon: '⛵',
     profile: {
@@ -433,7 +481,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 102,
     difficulty: 'hard',
-    themeWords: ['depth', 'abyss', 'coral', 'squid', 'shark', 'whale', 'eel', 'drift', 'chasm', 'murky', 'brine', 'dive'],
+    themeWords: [
+      'depth', 'abyss', 'coral', 'squid', 'shark', 'whale', 'eel', 'drift', 'chasm', 'murky', 'brine', 'dive',
+      'trawl', 'gloom', 'krill', 'ray', 'fish', 'cold', 'dark', 'silt', 'swim', 'scale', 'inky', 'pale',
+    ],
     wingId: 'ocean',
     icon: '🐋',
     profile: {
@@ -451,7 +502,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 108,
     difficulty: 'hard',
-    themeWords: ['coral', 'fish', 'sponge', 'seal', 'otter', 'pearl', 'bloom', 'reef', 'prawn', 'gull', 'heron', 'shore'],
+    themeWords: [
+      'coral', 'fish', 'sponge', 'seal', 'otter', 'pearl', 'bloom', 'reef', 'prawn', 'gull', 'heron', 'shore',
+      'clam', 'crab', 'kelp', 'turtle', 'shoal', 'polyp', 'lagoon', 'tidal', 'shell', 'coast', 'marine', 'ripple',
+    ],
     wingId: 'ocean',
     icon: '🐠',
     profile: {
@@ -470,7 +524,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 114,
     difficulty: 'expert',
-    themeWords: ['kraken', 'siren', 'spear', 'anchor', 'squall', 'voyage', 'pirate', 'plank', 'fleet', 'harbor', 'storm', 'wreck'],
+    themeWords: [
+      'kraken', 'siren', 'spear', 'anchor', 'squall', 'voyage', 'pirate', 'plank', 'fleet', 'harbor', 'storm', 'wreck',
+      'ink', 'arm', 'grip', 'deep', 'sunken', 'cursed', 'chain', 'crush', 'lurk', 'coil', 'roar', 'dread',
+    ],
     wingId: 'ocean',
     icon: '🦑',
     profile: {
@@ -491,7 +548,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 120,
     difficulty: 'medium',
-    themeWords: ['line', 'shade', 'tone', 'form', 'hue', 'ink', 'pen', 'brush', 'clay', 'mold', 'frame', 'draft'],
+    themeWords: [
+      'line', 'shade', 'tone', 'form', 'hue', 'ink', 'pen', 'brush', 'clay', 'mold', 'frame', 'draft',
+      'paper', 'chalk', 'eraser', 'sketch', 'curve', 'angle', 'grid', 'edge', 'dot', 'arc', 'stencil', 'shape',
+    ],
     wingId: 'arts',
     icon: '✏️',
     profile: {
@@ -510,7 +570,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 126,
     difficulty: 'medium',
-    themeWords: ['paint', 'color', 'blend', 'style', 'mural', 'easel', 'sepia', 'vivid', 'bold', 'tint', 'oil', 'wash'],
+    themeWords: [
+      'paint', 'color', 'blend', 'style', 'mural', 'easel', 'sepia', 'vivid', 'bold', 'tint', 'oil', 'wash',
+      'art', 'glaze', 'print', 'stand', 'label', 'room', 'wall', 'light', 'white', 'ochre', 'matte', 'still',
+    ],
     wingId: 'arts',
     icon: '🎨',
     profile: {
@@ -528,7 +591,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 132,
     difficulty: 'hard',
-    themeWords: ['note', 'chord', 'beat', 'tempo', 'bass', 'drum', 'flute', 'harp', 'tune', 'song', 'hymn', 'jazz'],
+    themeWords: [
+      'note', 'chord', 'beat', 'tempo', 'bass', 'drum', 'flute', 'harp', 'tune', 'song', 'hymn', 'jazz',
+      'solo', 'duet', 'loud', 'soft', 'oboe', 'reed', 'piano', 'cello', 'scale', 'choir', 'brass', 'violin',
+    ],
     wingId: 'arts',
     icon: '🎵',
     profile: {
@@ -546,7 +612,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 138,
     difficulty: 'hard',
-    themeWords: ['stage', 'scene', 'act', 'role', 'plot', 'drama', 'mask', 'mime', 'cast', 'prop', 'cue', 'bow'],
+    themeWords: [
+      'stage', 'scene', 'act', 'role', 'plot', 'drama', 'mask', 'mime', 'cast', 'prop', 'cue', 'bow',
+      'show', 'lead', 'seat', 'text', 'tour', 'wing', 'exit', 'set', 'script', 'curtain', 'encore', 'comedy',
+    ],
     wingId: 'arts',
     icon: '🎭',
     profile: {
@@ -564,7 +633,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 144,
     difficulty: 'expert',
-    themeWords: ['craft', 'vision', 'motif', 'genre', 'medium', 'opus', 'avant', 'etch', 'carve', 'sculpt', 'fresco', 'muse'],
+    themeWords: [
+      'craft', 'vision', 'motif', 'genre', 'medium', 'opus', 'avant', 'etch', 'carve', 'sculpt', 'fresco', 'muse',
+      'canvas', 'gallery', 'bronze', 'chisel', 'relief', 'study', 'salon', 'patron', 'legacy', 'icon', 'proof', 'nuance',
+    ],
     wingId: 'arts',
     icon: '🖼️',
     profile: {
@@ -584,7 +656,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 150,
     difficulty: 'medium',
-    themeWords: ['star', 'moon', 'sky', 'night', 'glow', 'dawn', 'dusk', 'beam', 'ray', 'haze', 'mist', 'void'],
+    themeWords: [
+      'star', 'moon', 'sky', 'night', 'glow', 'dawn', 'dusk', 'beam', 'ray', 'haze', 'mist', 'void',
+      'nova', 'halo', 'orb', 'gaze', 'wish', 'comet', 'planet', 'meteor', 'cosmos', 'lunar', 'solar', 'galaxy',
+    ],
     wingId: 'space',
     icon: '⭐',
     profile: {
@@ -603,7 +678,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 156,
     difficulty: 'hard',
-    themeWords: ['lunar', 'crater', 'orbit', 'phase', 'eclipse', 'tide', 'rock', 'dust', 'land', 'base', 'module', 'suit'],
+    themeWords: [
+      'lunar', 'crater', 'orbit', 'phase', 'eclipse', 'tide', 'rock', 'dust', 'land', 'base', 'module', 'suit',
+      'capsule', 'rover', 'hatch', 'visor', 'boots', 'flag', 'gray', 'ascent', 'gravity', 'silence', 'descent', 'shadow',
+    ],
     wingId: 'space',
     icon: '🌙',
     profile: {
@@ -621,7 +699,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 162,
     difficulty: 'hard',
-    themeWords: ['mars', 'venus', 'earth', 'ring', 'core', 'giant', 'dwarf', 'comet', 'belt', 'solar', 'flare', 'probe'],
+    themeWords: [
+      'mars', 'venus', 'earth', 'ring', 'core', 'giant', 'dwarf', 'comet', 'belt', 'solar', 'flare', 'probe',
+      'gas', 'tilt', 'spin', 'year', 'path', 'aurora', 'plasma', 'corona', 'orbit', 'cluster', 'vacuum', 'eclipse',
+    ],
     wingId: 'space',
     icon: '🪐',
     profile: {
@@ -639,7 +720,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 168,
     difficulty: 'expert',
-    themeWords: ['nova', 'nebula', 'quasar', 'pulsar', 'cosmic', 'gamma', 'warp', 'rift', 'void', 'black', 'hole', 'dark'],
+    themeWords: [
+      'nova', 'nebula', 'quasar', 'pulsar', 'cosmic', 'gamma', 'warp', 'rift', 'void', 'black', 'hole', 'dark',
+      'photon', 'stellar', 'matter', 'frozen', 'hollow', 'orbit', 'echo', 'deep', 'vast', 'gulf', 'cold', 'dim',
+    ],
     wingId: 'space',
     icon: '🌌',
     profile: {
@@ -658,7 +742,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 174,
     difficulty: 'expert',
-    themeWords: ['rocket', 'launch', 'thrust', 'fuel', 'dock', 'relay', 'signal', 'array', 'escape', 'crew', 'cargo', 'titan'],
+    themeWords: [
+      'rocket', 'launch', 'thrust', 'fuel', 'dock', 'relay', 'signal', 'array', 'escape', 'crew', 'cargo', 'titan',
+      'engine', 'radio', 'beacon', 'ignite', 'ascend', 'depart', 'colony', 'pilot', 'burn', 'glide', 'tether', 'vector',
+    ],
     wingId: 'space',
     icon: '🚀',
     profile: {
@@ -679,7 +766,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 180,
     difficulty: 'hard',
-    themeWords: ['king', 'queen', 'crown', 'reign', 'throne', 'court', 'noble', 'lord', 'dame', 'knight', 'serf', 'realm'],
+    themeWords: [
+      'king', 'queen', 'crown', 'reign', 'throne', 'court', 'noble', 'lord', 'dame', 'knight', 'serf', 'realm',
+      'scribe', 'quill', 'tablet', 'glyph', 'seal', 'edict', 'ring', 'robe', 'duke', 'earl', 'page', 'heir',
+    ],
     wingId: 'history',
     icon: '🏺',
     profile: {
@@ -698,7 +788,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 186,
     difficulty: 'hard',
-    themeWords: ['castle', 'moat', 'tower', 'gate', 'wall', 'siege', 'sword', 'armor', 'lance', 'steed', 'banner', 'herald'],
+    themeWords: [
+      'castle', 'moat', 'tower', 'gate', 'wall', 'siege', 'sword', 'armor', 'lance', 'steed', 'banner', 'herald',
+      'joust', 'squire', 'shield', 'anvil', 'keep', 'guard', 'archer', 'quiver', 'jester', 'abbey', 'turret', 'portal',
+    ],
     wingId: 'history',
     icon: '🏰',
     profile: {
@@ -716,7 +809,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 192,
     difficulty: 'expert',
-    themeWords: ['trade', 'route', 'spice', 'silk', 'port', 'chart', 'compass', 'voyage', 'colony', 'fleet', 'cargo', 'fort'],
+    themeWords: [
+      'trade', 'route', 'spice', 'silk', 'port', 'chart', 'compass', 'voyage', 'colony', 'fleet', 'cargo', 'fort',
+      'map', 'east', 'west', 'crate', 'wharf', 'sailor', 'barrel', 'mutiny', 'ledger', 'tariff', 'galleon', 'bounty',
+    ],
     wingId: 'history',
     icon: '🗺️',
     profile: {
@@ -734,7 +830,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 198,
     difficulty: 'expert',
-    themeWords: ['revolt', 'reform', 'rebel', 'rights', 'vote', 'press', 'union', 'treaty', 'peace', 'law', 'code', 'pact'],
+    themeWords: [
+      'revolt', 'reform', 'rebel', 'rights', 'vote', 'press', 'union', 'treaty', 'peace', 'law', 'code', 'pact',
+      'march', 'rally', 'speech', 'crowd', 'strike', 'debate', 'reason', 'equal', 'free', 'riot', 'creed', 'forum',
+    ],
     wingId: 'history',
     icon: '⚖️',
     profile: {
@@ -752,7 +851,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 204,
     difficulty: 'expert',
-    themeWords: ['radio', 'film', 'media', 'press', 'globe', 'urban', 'steel', 'rail', 'bridge', 'motor', 'flight', 'wire'],
+    themeWords: [
+      'radio', 'film', 'media', 'press', 'globe', 'urban', 'steel', 'rail', 'bridge', 'motor', 'flight', 'wire',
+      'cable', 'camera', 'switch', 'metro', 'screen', 'plant', 'crane', 'diesel', 'street', 'ticket', 'studio', 'market',
+    ],
     wingId: 'history',
     icon: '🏙️',
     profile: {
@@ -772,7 +874,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 210,
     difficulty: 'hard',
-    themeWords: ['fire', 'flame', 'blaze', 'ember', 'spark', 'ash', 'smoke', 'coal', 'burn', 'heat', 'torch', 'glow'],
+    themeWords: [
+      'fire', 'flame', 'blaze', 'ember', 'spark', 'ash', 'smoke', 'coal', 'burn', 'heat', 'torch', 'glow',
+      'log', 'pyre', 'sear', 'warm', 'soot', 'char', 'wick', 'cinder', 'kindle', 'scorch', 'hearth', 'furnace',
+    ],
     wingId: 'elements',
     icon: '🔥',
     profile: {
@@ -791,7 +896,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 216,
     difficulty: 'hard',
-    themeWords: ['water', 'river', 'lake', 'rain', 'flood', 'steam', 'ice', 'snow', 'mist', 'pool', 'dam', 'falls'],
+    themeWords: [
+      'water', 'river', 'lake', 'rain', 'flood', 'steam', 'ice', 'snow', 'mist', 'pool', 'dam', 'falls',
+      'flow', 'drip', 'gush', 'well', 'wave', 'delta', 'churn', 'rapids', 'geyser', 'cascade', 'spout', 'wash',
+    ],
     wingId: 'elements',
     icon: '💧',
     profile: {
@@ -809,7 +917,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 222,
     difficulty: 'expert',
-    themeWords: ['wind', 'gust', 'gale', 'breeze', 'draft', 'storm', 'cloud', 'sky', 'air', 'blow', 'whirl', 'swirl'],
+    themeWords: [
+      'wind', 'gust', 'gale', 'breeze', 'draft', 'storm', 'cloud', 'sky', 'air', 'blow', 'whirl', 'swirl',
+      'chill', 'howl', 'vane', 'kite', 'sway', 'zephyr', 'flurry', 'twist', 'rustle', 'billow', 'blast', 'wisp',
+    ],
     wingId: 'elements',
     icon: '💨',
     profile: {
@@ -828,7 +939,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 228,
     difficulty: 'expert',
-    themeWords: ['stone', 'rock', 'sand', 'clay', 'iron', 'mineral', 'geode', 'quartz', 'slate', 'flint', 'dust', 'soil'],
+    themeWords: [
+      'stone', 'rock', 'sand', 'clay', 'iron', 'mineral', 'geode', 'quartz', 'slate', 'flint', 'dust', 'soil',
+      'seam', 'lava', 'grit', 'mica', 'shale', 'crust', 'magma', 'basalt', 'gravel', 'fossil', 'strata', 'granite',
+    ],
     wingId: 'elements',
     icon: '⛰️',
     profile: {
@@ -846,7 +960,10 @@ export const CHAPTERS: Chapter[] = [
     puzzleCount: 15,
     requiredStars: 234,
     difficulty: 'expert',
-    themeWords: ['primal', 'force', 'energy', 'spirit', 'chaos', 'order', 'cycle', 'balance', 'surge', 'calm', 'apex', 'prime'],
+    themeWords: [
+      'primal', 'force', 'energy', 'spirit', 'chaos', 'order', 'cycle', 'balance', 'surge', 'calm', 'apex', 'prime',
+      'unity', 'fusion', 'origin', 'zenith', 'harmony', 'essence', 'nexus', 'whole', 'final', 'unite', 'source', 'triumph',
+    ],
     wingId: 'elements',
     icon: '✨',
     profile: {

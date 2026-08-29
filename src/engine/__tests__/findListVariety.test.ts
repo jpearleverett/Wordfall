@@ -15,27 +15,27 @@
  * ask mostly for 3-4 letter words, and a first pass that added 5-6 letter
  * ones moved their numbers by nothing at all.
  *
- * WHERE THIS STANDS. Chapter 1 is fixed: its list went from twelve words to
- * twenty-two (it had to, to stop levels 1-2 serving PHI and TUX), and its
- * carry-over fell from 30% to 22% while its distinct count went 14 -> 21.
- * Chapters 2-7 are NOT fixed, and their numbers below are the status quo
- * rather than a target.
+ * WHERE THIS STANDS. Every chapter now carries 22-24 theme words instead of
+ * 12, and carry-over roughly halves across the game: Forest Walk 49% -> 25%,
+ * Garden Bloom 65% -> 34%, Open Seas 68% -> 31%, Bedrock 71% -> 41%. The
+ * distinct words a chapter's fifteen levels use went from twelve to
+ * twenty-plus.
  *
- * That is deliberate, because widening a list is not free. Measured over
- * levels 1-105, ten to twelve extra on-theme words per chapter take carry-over
- * from 53% to 31% — and take the RANDOM-player dead-end rate up with it, by
- * five to ten points a chapter (L46-60: 63% -> 73%). A player who plans one
- * move ahead does not feel it at all (mid-game one-ply dead-ends measured 5.3%
- * before and 4.0% after, 720 boards each), so the cost falls entirely on the
- * player who has not learned the ordering rule. Chapter 1 is the exception
- * that proves the rule is not universal: its widening moved BOTH numbers the
- * right way (7.2% -> 3.9% naive dead-ends), because its added words are short
- * and its boards are small.
+ * Two things had to be true for that to be shippable, and both were measured
+ * rather than assumed:
  *
- * `stuckRate.test.ts` calls the naive number a floor that must not get worse,
- * so widening chapters 2-7 is a design call with a real cost and belongs to
- * whoever owns the difficulty curve, not to a passing fix. The bounds here
- * pin today's behaviour so it cannot silently get worse in the meantime.
+ *  - The added words have to sit in the LENGTH DISTRIBUTION the chapter's
+ *    levels actually ask for. A first pass gave Ancient Tales and Stargazer
+ *    five- and six-letter words when their levels ask for three and four, and
+ *    their numbers barely moved (Stargazer 64% -> 63%). Rebalancing eleven
+ *    chapters toward their real distribution is what turned those into
+ *    37% and 45%.
+ *  - Widening a list makes boards LESS forgiving on its own, by five to ten
+ *    points a chapter, because a bigger pool lets the generator pick word sets
+ *    that interlock more. That is why this shipped together with the
+ *    forgiveness fix in `boardGenerator`/`solver` and not before it: the
+ *    generator now gives back six to ten points, so the pair is a net
+ *    improvement on both axes rather than a trade. See stuckRate.test.ts.
  */
 import { CHAPTERS } from '../../data/chapters';
 import { generateLevelBoard } from '../boardGenerator';
@@ -80,15 +80,19 @@ function variety(chIdx: number, sessions = 3) {
 }
 
 // [chapter index, max share carried over from the previous level, min distinct
-//  words across the chapter's fifteen levels]
+//  words across the chapter's fifteen levels]. Bounds sit a little above what
+//  each chapter measures today, so ordinary generator drift does not trip them
+//  but a regression to twelve-word lists does.
 const BOUNDS: [number, number, number][] = [
-  [0, 0.28, 18],  // First Sprout  — FIXED, measured 21% / 21
-  [1, 0.55, 11],  // Forest Walk   — status quo, measured 49% / 12
-  [2, 0.71, 11],  // Garden Bloom  — status quo, measured 65% / 12
-  [3, 0.66, 11],  // Wild Meadow   — status quo, measured 60% / 13
-  [4, 0.65, 11],  // Mountain Peak — status quo, measured 59% / 19
-  [5, 0.55, 11],  // Lab Basics    — status quo, measured 49% / 12
-  [6, 0.65, 11],  // Chemistry Set — status quo, measured 59% / 12
+  [0, 0.28, 18],   // First Sprout    — measured 21% / 21
+  [1, 0.33, 18],   // Forest Walk     — measured 25% / 21
+  [2, 0.42, 19],   // Garden Bloom    — measured 34% / 22
+  [3, 0.40, 21],   // Wild Meadow     — measured 32% / 24
+  [4, 0.40, 21],   // Mountain Peak   — measured 32% / 24
+  [5, 0.37, 17],   // Lab Basics      — measured 29% / 20
+  [6, 0.39, 18],   // Chemistry Set   — measured 31% / 21
+  [10, 0.45, 18],  // Ancient Tales   — measured 37% / 21, after rebalancing
+  [25, 0.53, 15],  // Stargazer       — measured 45% / 17, the weakest chapter
 ];
 
 describe('find-list variety across a chapter', () => {
@@ -99,28 +103,27 @@ describe('find-list variety across a chapter', () => {
       expect(distinct).toBeGreaterThanOrEqual(minDistinct);
     }, 120000);
 
-  it('chapter 1 is measurably better than the twelve-word list it replaced', () => {
-    // Guard the guard: chapter 1's bound above only means something if the
-    // list it replaced would actually miss it.
-    const ch = CHAPTERS[0];
+  it.each([0, 3, 25])('chapter %i is measurably better than the twelve-word list it replaced', (chIdx) => {
+    // Guard the guard: the bounds above only mean something if the lists they
+    // replaced would actually miss them.
+    const ch = CHAPTERS[chIdx];
     const full = ch.themeWords;
     try {
       (ch as { themeWords: string[] }).themeWords = full.slice(0, 12);
-      const before = variety(0);
+      const before = variety(chIdx);
       (ch as { themeWords: string[] }).themeWords = full;
-      const after = variety(0);
-      // The twelve-word list misses chapter 1's DISTINCT bound outright (it
-      // cannot reach 18 distinct words across fifteen levels when it only
-      // contains twelve), and is beaten on both axes by the list that
-      // replaced it. Carry-over is deliberately NOT the guard here: the
-      // generator's forgiveness fix moved the twelve-word list's carry-over
-      // to 27%, inside chapter 1's bound, so asserting on it would pin
-      // nothing.
-      expect(before.distinct).toBeLessThan(18);
+      const after = variety(chIdx);
+      // A twelve-word list misses the DISTINCT bound outright — it cannot
+      // reach 15+ distinct words across fifteen levels when it only contains
+      // twelve — and is beaten on both axes by the list that replaced it.
+      // Carry-over alone is deliberately NOT the guard: the generator's
+      // forgiveness fix moved chapter 1's twelve-word carry-over to 27%,
+      // inside its own bound, so asserting on it would pin nothing there.
+      expect(before.distinct).toBeLessThan(15);
       expect(after.carryOver).toBeLessThan(before.carryOver);
       expect(after.distinct).toBeGreaterThan(before.distinct);
     } finally {
       (ch as { themeWords: string[] }).themeWords = full;
     }
-  }, 120000);
+  }, 240000);
 });
