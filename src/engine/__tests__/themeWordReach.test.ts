@@ -18,6 +18,8 @@
  * pin both, and pin the opening of the game, which is where the same class of
  * bug was most visible.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { CHAPTERS } from '../../data/chapters';
 import { generateBoard, generateLevelBoard } from '../boardGenerator';
 import { getLevelConfigExtended } from '../puzzleGenerator';
@@ -97,5 +99,42 @@ describe('chapter theme words can reach a board', () => {
         }
       }
     }
+  });
+
+  it('alternate modes get the chapter theme too, not the raw dictionary', () => {
+    // Relax, No Gravity, Expert and the rest used to resolve their chapter as
+    // `mode === 'classic' ? getChapterForLevel(level) : undefined`, so every
+    // alt-mode board drew straight from the generic dictionary. Played boards:
+    // WAXY/GIRL/SLAG, IRKS/PAX/SUP, PRIG/BAT/FEW, HELM/DREG/FAX.
+    const ch = CHAPTERS[0];
+    const theme = new Set(ch.themeWords.map(w => w.toUpperCase()));
+    for (const mode of ['relax', 'noGravity', 'expert'] as const) {
+      let themed = 0;
+      let total = 0;
+      for (let level = 1; level <= 10; level++) {
+        const board = generateLevelBoard(
+          level, getLevelConfigExtended(level), level * 1337 + 90210, mode, undefined, ch.themeWords,
+        );
+        for (const wp of board.words) {
+          total++;
+          if (theme.has(wp.word.toUpperCase())) themed++;
+        }
+      }
+      // Not 100%: the mode pool filters (timePressure narrows to <= 4 letters)
+      // and the variety guards can still reach past the theme. A clear
+      // majority is the property that matters.
+      expect(themed / total).toBeGreaterThan(0.6);
+    }
+  }, 120000);
+
+  it('no board-generation call site gates the chapter on classic mode', () => {
+    // The bug was one ternary, repeated at four call sites. A behavioural test
+    // cannot see App.tsx's wiring, so pin the shape: resolving the chapter is
+    // unconditional, and only the PROFILE (difficulty: length clamps,
+    // dictionaryTier, emptyCellDensity, mechanics) stays classic-only.
+    const app = fs.readFileSync(path.join(__dirname, '../../../App.tsx'), 'utf8');
+    expect(app).not.toMatch(/mode === 'classic' \? getChapterForLevel/);
+    expect(app.match(/= getChapterForLevel\(/g) ?? []).toHaveLength(4);
+    expect(app.match(/mode === 'classic' \? chapter\?\.profile : undefined/g) ?? []).toHaveLength(3);
   });
 });

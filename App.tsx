@@ -280,7 +280,10 @@ function EventScreenWrapperNav({ navigation }: any) {
       }
 
       const seed = Date.now() + modeLevel * 1337;
-      const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
+      // `modeLevel` is the player's classic level here for every event mode,
+      // so the chapter matches the config built from it. The event's own
+      // authored themeWords still win below.
+      const chapter = getChapterForLevel(modeLevel);
       let board = generateBoard(
         config,
         seed,
@@ -695,8 +698,24 @@ function ModesScreenWrapper({ navigation, route }: any) {
       }
 
       const seed = Date.now() + modeLevel * 1337;
-      const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
-      board = generateLevelBoard(modeLevel, config, seed, mode, chapter?.profile, chapter?.themeWords);
+      // A chapter theme for EVERY mode, not just classic.
+      //
+      // The alternate modes drew their find-lists straight from the generic
+      // dictionary, so Relax served WAXY / GIRL / SLAG and Shrinking Board
+      // served HELM / DREG / FAX — every one a real word, and every one
+      // reading like a Scrabble hand next to the themed ladder.
+      //
+      // Only `themeWords` crosses over. The chapter PROFILE stays
+      // classic-only: it carries length clamps, dictionaryTier,
+      // emptyCellDensity and introduced mechanics — difficulty, in other
+      // words, which each mode's benchmarks are pinned against. Theme words
+      // change which words are OFFERED, not how hard the board is, and they
+      // are resolved from the chapter matching THIS mode's own level, so the
+      // authored words fall inside the same length window `config` was built
+      // from.
+      const chapter = getChapterForLevel(modeLevel);
+      const profile = mode === 'classic' ? chapter?.profile : undefined;
+      board = generateLevelBoard(modeLevel, config, seed, mode, profile, chapter?.themeWords);
 
       const modeConfig = MODE_CONFIGS[mode];
       navigation.navigate('Game', {
@@ -918,8 +937,12 @@ function GameScreenWrapper({ route, navigation }: any) {
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
     }
-    const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
-    return { mode, modeLevel, config, chapter, key: `${mode}:${modeLevel}:${JSON.stringify(config)}` };
+    // Theme words for every mode, profile for classic only — see the note in
+    // handleSelectMode. `key` needs no new component: mode + modeLevel already
+    // determine the chapter, so the prefetch cache stays correct.
+    const chapter = getChapterForLevel(modeLevel);
+    const profile = mode === 'classic' ? chapter?.profile : undefined;
+    return { mode, modeLevel, config, chapter, profile, key: `${mode}:${modeLevel}:${JSON.stringify(config)}` };
     // `player` is a stable facade (call-time reads) — not a dependency.
   }, [params]);
 
@@ -956,7 +979,7 @@ function GameScreenWrapper({ route, navigation }: any) {
             target.config,
             target.modeLevel * 1337 + Date.now(),
             target.mode,
-            target.chapter?.profile,
+            target.profile,
             target.chapter?.themeWords,
           );
           prefetchedNext.current = { key: target.key, board };
@@ -974,7 +997,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       player.useEnergy(mode);
 
       const target = computeNextTarget();
-      const { modeLevel, config, chapter } = target;
+      const { modeLevel, config, chapter, profile } = target;
 
       // Reuse the board pre-generated during the victory screen when the
       // target still matches; otherwise generate now (original behavior).
@@ -982,7 +1005,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       prefetchedNext.current = null;
       const board = cached && cached.key === target.key
         ? cached.board
-        : generateLevelBoard(modeLevel, config, modeLevel * 1337 + Date.now(), mode, chapter?.profile, chapter?.themeWords);
+        : generateLevelBoard(modeLevel, config, modeLevel * 1337 + Date.now(), mode, profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -1060,8 +1083,9 @@ function GameScreenWrapper({ route, navigation }: any) {
 
       const config = getLevelConfigExtended(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
-      const chapter = mode === 'classic' ? getChapterForLevel(nextModeLevel) : undefined;
-      let board = generateLevelBoard(nextModeLevel, config, seed, mode, chapter?.profile, chapter?.themeWords);
+      const chapter = getChapterForLevel(nextModeLevel);
+      const skipProfile = mode === 'classic' ? chapter?.profile : undefined;
+      let board = generateLevelBoard(nextModeLevel, config, seed, mode, skipProfile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
