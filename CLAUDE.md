@@ -1,6 +1,6 @@
 # Wordfall — Agent Context
 
-**Word search with gravity** (React Native + Expo). Each puzzle has a pre-authored list of words to find on a letter grid. The player traces letters with their finger — when the trace matches a list word it auto-resolves (no submit button), those cells clear, and remaining letters fall via gravity into the empty spaces. 10 modes, 40 hand-curated chapters covering levels 1–600 (names, themes, 12-word theme lists, star gates, per-chapter difficulty profile), then unbounded procedural chapters past level 600 via `generateProceduralChapter()`. Every board is procedurally generated from a seed — there are no hand-placed grids in the repo. Clubs, VIP, prestige.
+**Word search with gravity** (React Native + Expo). Each puzzle has a pre-authored list of words to find on a letter grid. The player traces letters with their finger — when the trace matches a list word it auto-resolves (no submit button), those cells clear, and remaining letters fall via gravity into the empty spaces. 10 modes, 40 hand-curated chapters covering levels 1–600 (names, themes, 22–24-word theme lists, non-binding star gates, per-chapter difficulty profile), then unbounded procedural chapters past level 600 via `generateProceduralChapter()`. Every board is procedurally generated from a seed — there are no hand-placed grids in the repo. Clubs, VIP, prestige.
 
 **Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**137+ suites / ~2050 tests**).
 
@@ -50,24 +50,45 @@ reward tables — all support a `*_VERBOSE=1` env var to print full profiles.
 
 | Suite | Guards | Current |
 |---|---|---|
-| `engine/__tests__/boardGen.perf` | Level load is synchronous on the JS thread, so slow generation is a frozen screen | p50 44ms, p95 <900ms, max <1.5s |
-| `engine/__tests__/stuckRate` | Dead-end rate for a player choosing **at random** — the floor, not the difficulty | 12% levels 1-30, 57% levels 31-120 |
-| `engine/__tests__/skilledPlay` | Same boards, **one-ply lookahead** — what a player who learned the rule sees | 0.0% early, 0.0% mid |
+| `engine/__tests__/boardGen.perf` | Level load is synchronous on the JS thread, so slow generation is a frozen screen | p50 ~67ms, p95 <900ms, max <1.5s |
+| `engine/__tests__/stuckRate` | Dead-end rate for a player choosing **at random** — the floor, not the difficulty | 14.4% levels 1-30, 53.2% levels 31-120 (bounds 0.18 / 0.58) |
+| `engine/__tests__/skilledPlay` | Same boards, **one-ply lookahead** — what a player who learned the rule sees | ~4% mid over many seeds (its own single-seed draw reads 0.0%) |
 | `engine/__tests__/hintPerf` | Hints run synchronously on tap, so a slow one is a frozen board | classic p95 33ms, noGravity p95 1ms, gravityFlip p95 49ms |
 | `engine/__tests__/modeSolvability` | Every generated board is solvable under **its own mode's** clear rule | 0 unsolvable across 8 modes |
 | `__tests__/rewardCadence` | No long stretch of levels without a scheduled payoff | ≤5 dry levels to L60, ≤9 to L150 |
 | `__tests__/curveProfile` + `spikeLevels` | Early levels never repeat a board or go backwards | monotonic through L14 |
 | `__tests__/defectLedger` | Every defect fixed in the Aug 2026 sweeps stays fixed AND the ledger stays honest (an "open" entry whose checks pass must be flipped) — one machine-checked entry per defect in `defectLedger.json`, spanning perf/animation classes (F1–F7, P1–P9) and correctness classes (C1–C8: money, server, gameplay contract, time, input, progression, persistence, telemetry); `node scripts/defect-scorecard.js` prints % done by severity/class | 100+ fixed |
 | `__tests__/animationReachability` | 22 dead animation components (zero importers, several with infinite loops) stay deleted; re-adding one requires a consumer + delisting | 0 resurrected |
+| `engine/__tests__/findListVariety` | How much of a level's find-list is carried over from the previous level. 12-word chapters repeated ~60%; lists are now 22–24 words | 21–45% carry-over, 17–24 distinct words per chapter |
+| `engine/__tests__/themeWordReach` | Every authored theme word can actually be drawn (44 of 480 could not), and alt modes get the chapter theme rather than the raw dictionary | 0 unreachable |
+| `__tests__/moduleReachability` | Modules nothing imports. Six deleted, two ledgered with reasons | 0 unexplained |
+| `__tests__/propReachability` | Props declared and never passed — the class that hid TRY IT NOW, the equipped theme, the library banner and club invites | 5 wirings pinned |
+| `data/__tests__/shopLadderCoverage` | Every consumable SKU reaches a shelf, and no rendered ladder contains a rung beaten by a cheaper one | 0 dark, 0 dominated |
+| `data/__tests__/chapterGates` | Star gates stay a guard rail, never a wall — raising one taxes assist buyers | requiredStars ≤ 15×(N−1) |
 
-**Read those two stuck numbers together.** The 57% was treated for a while as
-the game's mid-game difficulty. It isn't — it is what a player who has not
+**Read those two stuck numbers together.** The mid-game number was treated for
+a while as the game's difficulty. It isn't — it is what a player who has not
 noticed that clearing order reshapes the board experiences. Run the identical
-boards with a single move of forethought and every one of them solves. The
+boards with a single move of forethought and nearly all of them solve. The
 gap is skill, not unfairness, so the lever that moves it is **teaching**
 (tutorial board D, and the dead-end banner naming the buried word) rather than
 the generator. Keep `stuckRate` as a floor that must not get worse; do not
 try to close it by making boards easier.
+
+**It moved once, in Aug 2026, and not by making boards easier** (62% → 53%
+mid, 16% → 14% early). The forgiveness gate had been measuring the wrong fail
+state: `estimateForgiveness` scored a board by how often a random order ran
+out of FINDABLE WORDS, while the game declares a board stuck via `isDeadEnd`,
+which fires while words are still traceable. So boards that scored as
+forgiving lost players anyway, and the medium tier could nominally demand 85%
+forgiveness beside a measured ~62% failure rate with no contradiction. Worse,
+the threshold was applied inside the solvability check, so a candidate that
+missed it was DISCARDED — and at 6-8 words almost every candidate misses, so
+the normal path was: measure twelve boards, rank them by nothing, throw all
+twelve away, ship an unmeasured thirteenth. Now the sample ends when the board
+stops being easily solvable, and `generateBoard` keeps the most forgiving
+candidate it measured. Same configs, same word lists, better chosen. Costs
+~1.5x generation time, still inside `boardGen.perf`.
 
 Key mechanics behind those numbers:
 
