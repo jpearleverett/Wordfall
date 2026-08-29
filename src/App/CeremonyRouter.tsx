@@ -20,9 +20,16 @@ import { COLORS } from '../constants';
 interface CeremonyRouterProps {
   activeCeremony: CeremonyItem | null;
   onDismiss: () => void;
+  /**
+   * Open a just-unlocked mode. Without it ModeUnlockCeremony hides its
+   * "TRY IT NOW" button (`onTryNow` is optional and gates the CTA), which is
+   * how a player could unlock a mode and be given no way into it — while
+   * `ceremony.tryItNow` sat translated in all six locales.
+   */
+  onTryMode?: (modeId: string) => void;
 }
 
-export function CeremonyRouter({ activeCeremony, onDismiss }: CeremonyRouterProps) {
+export function CeremonyRouter({ activeCeremony, onDismiss, onTryMode }: CeremonyRouterProps) {
   return (
     <LocalErrorBoundary
       scope="ceremony"
@@ -46,6 +53,11 @@ export function CeremonyRouter({ activeCeremony, onDismiss }: CeremonyRouterProp
           modeDescription={activeCeremony.data.modeDescription}
           modeColor={activeCeremony.data.modeColor}
           onDismiss={onDismiss}
+          onTryNow={
+            onTryMode && activeCeremony.data.modeId
+              ? () => onTryMode(activeCeremony.data.modeId as string)
+              : undefined
+          }
         />
       )}
       {activeCeremony?.type === 'achievement' && (

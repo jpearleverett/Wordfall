@@ -2997,6 +2997,20 @@ function GameScreenImpl({
         onHint={handleHint}
         onUndo={handleUndo}
         onBack={onHome}
+        // The equipped cosmetic theme, finally reaching gameplay. It was
+        // resolved here into a `useMemo` that nothing read, so a purchased
+        // theme showed up on Profile, EditProfile and the cosmetic store —
+        // every surface except the one the player spends their time on.
+        themeColors={
+          equippedTheme
+            ? {
+                bg: equippedTheme.colors.bg,
+                surface: equippedTheme.colors.surface,
+                accent: equippedTheme.colors.accent,
+                cellSelected: equippedTheme.colors.cellSelected,
+              }
+            : undefined
+        }
       />
 
       {/* Timer/move bars — extracted to a memoized sub-component so they only

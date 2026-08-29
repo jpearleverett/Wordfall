@@ -2063,6 +2063,10 @@ function HomeMainScreen({ route, navigation }: any) {
           color: e.type === 'weekend_blitz' ? COLORS.orange : e.type === 'mini' ? COLORS.teal : COLORS.accent,
         }))}
         onOpenEvents={() => navigation.navigate('Play', { screen: 'Event' })}
+        // The level-9 "EXPLORE the Grand Library" onboarding banner calls
+        // this. Without it the banner rendered, the button took the press,
+        // and nothing happened.
+        onOpenLibrary={() => navigation.navigate('Library', { screen: 'LibraryMain' })}
         claimedLoginToday={claimedLoginToday}
         onClaimLoginReward={handleClaimLoginReward}
       />
@@ -2436,6 +2440,14 @@ function AppContent() {
       <CeremonyRouter
         activeCeremony={activeCeremony}
         onDismiss={handleDismissCeremony}
+        onTryMode={(modeId) => {
+          // Same route the Home "try a mode" card uses — land IN the mode,
+          // not on the grid hunting for the one we just unlocked.
+          (navigationRef.current as NavigationContainerRef<any> | null)?.navigate('Play', {
+            screen: 'Modes',
+            params: { autoStartMode: modeId },
+          });
+        }}
       />
       <BoardGenBanner />
       <NotSyncedBanner />

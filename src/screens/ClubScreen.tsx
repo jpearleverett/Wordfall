@@ -12,8 +12,10 @@ import {
   Alert,
   Animated,
   Easing,
+  Share,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { buildClubInviteLink } from '../utils/deepLinking';
 import { useIsFocused } from '@react-navigation/native';
 import Svg, {
   ClipPath,
@@ -1917,6 +1919,29 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           )}
         </View>
 
+        {/* Invite friends.
+            The receiving half of this shipped a long time ago — parseDeepLink
+            handles `club/<id>`, the router routes it, and this screen runs a
+            confirm-before-join prompt. Nothing generated the link, so the club
+            growth loop had no outbound edge at all: invites could be accepted
+            and never sent. */}
+        <Pressable
+          style={({ pressed }) => [styles.inviteButton, pressed && styles.chipPressed]}
+          onPress={() => {
+            const id = clubId ?? (data as { id?: string }).id;
+            if (!id) return;
+            Share.share({
+              message: `Join my Wordfall club "${data.name}"! ${buildClubInviteLink(id)}`,
+            }).catch(() => {
+              // Share sheet dismissed or unavailable — nothing to recover.
+            });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Invite friends to ${data.name}`}
+        >
+          <Text style={styles.inviteButtonText}>INVITE FRIENDS</Text>
+        </Pressable>
+
         {/* Leave Club */}
         <Pressable
           style={({ pressed }) => [styles.leaveButton, pressed && styles.chipPressed]}
@@ -2521,6 +2546,21 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
+  },
+  inviteButton: {
+    borderWidth: 1,
+    borderColor: COLORS.accent + '55',
+    borderRadius: RADIUS.xl,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 16,
+    backgroundColor: COLORS.accent + '12',
+  },
+  inviteButtonText: {
+    fontSize: 15,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
+    letterSpacing: 1,
   },
   leaveButton: {
     borderWidth: 1,
