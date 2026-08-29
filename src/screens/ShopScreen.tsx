@@ -1012,16 +1012,27 @@ interface ShopItem {
   iapProductId?: string;
 }
 
+// The COMPLETE hint ladder. The $9.99 tier existed in the catalog and was
+// never rendered — the same dark-SKU bug already found and fixed twice on
+// this screen, for gems and for boosters. That top tier is the whole whale
+// segment of the consumable ladder.
+//
+// Six other hint/undo SKUs were dark AND strictly dominated (hint_master
+// sold 30 hints for $4.99 beside 50 for $2.99); they are deleted from the
+// catalog rather than rendered, because there is no price at which showing
+// a dominated tier helps anyone. shopLadderCoverage.test.ts pins both halves.
 const HINT_BUNDLES: ShopItem[] = [
   { id: 'hints_10', name: '10 Hints', icon: '\u{1F4A1}', iconName: 'hintBulbReward', price: '$0.99', quantity: 10, iapProductId: 'hint_bundle_10' },
   { id: 'hints_25', name: '25 Hints', icon: '\u{1F4A1}', iconName: 'hintBulbReward', price: '$1.99', quantity: 25, iapProductId: 'hint_bundle_25' },
   { id: 'hints_50', name: '50 Hints', icon: '\u{1F4A1}', iconName: 'hintBulbTrio', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'hint_bundle_50' },
+  { id: 'hints_75', name: '75 Hints', icon: '\u{1F4A1}', iconName: 'hintBulbTrio', price: '$9.99', quantity: 75, iapProductId: 'hint_legend' },
 ];
 
 const UNDO_BUNDLES: ShopItem[] = [
   { id: 'undos_10', name: '10 Undos', icon: '\u21A9\uFE0F', price: '$0.99', quantity: 10, iapProductId: 'undo_bundle_10' },
   { id: 'undos_25', name: '25 Undos', icon: '\u21A9\uFE0F', price: '$1.99', quantity: 25, iapProductId: 'undo_bundle_25' },
   { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'undo_bundle_50' },
+  { id: 'undos_75', name: '75 Undos', icon: '\u21A9\uFE0F', price: '$9.99', quantity: 75, iapProductId: 'undo_legend' },
 ];
 
 // The COMPLETE coin ladder \u2014 every coins_* SKU in SHOP_PRODUCTS. The old
