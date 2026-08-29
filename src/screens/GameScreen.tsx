@@ -138,6 +138,11 @@ interface GameScreenProps {
   ) => void;
   onNextLevel: () => void;
   onHome: () => void;
+  /**
+   * Pay coins to leave a level that cannot be beaten. Optional so the offer
+   * simply never surfaces when the host does not provide it.
+   */
+  onSkipLevel?: () => void;
   // Completion data (passed from App.tsx wrapper after handleComplete)
   isFirstWin?: boolean;
   leveledUp?: boolean;
@@ -657,6 +662,7 @@ function GameScreenImpl({
   onComplete,
   onNextLevel,
   onHome,
+  onSkipLevel,
   isFirstWin = false,
   leveledUp = false,
   newLevel = 0,
@@ -1206,6 +1212,7 @@ function GameScreenImpl({
     }
   }, [isStuck, status, hintTokens, mode, activeOffer, showOfferIfAllowed]);
 
+
   // post_puzzle (restock): show when hint tokens reach 0 mid-gameplay after using a hint
   useEffect(() => {
     if (
@@ -1262,6 +1269,16 @@ function GameScreenImpl({
     // the MiniPackSheet for the missing currency instead.
     let sheetNeed: MiniPackNeed | null = null;
     switch (activeOffer) {
+      case 'level_skip':
+        // Deliberately NO spendCoins here. `handleSkipLevel` in App.tsx does
+        // the charge, and it does it AFTER the replacement board generates —
+        // so a generation failure cannot take the player's coins. Charging in
+        // both places would take 400 for one skip.
+        if (onSkipLevel) {
+          onSkipLevel();
+          accepted = true;
+        }
+        break;
       case 'hint_rescue':
         if (spendCoins(price.amount)) {
           addHintTokens(OFFER_HINT_GRANTS.hint_rescue);
@@ -2477,6 +2494,29 @@ function GameScreenImpl({
       void analytics.logEvent('free_stuck_rescue_granted', { level, mode });
     }
   }, [isStuck, status, mode, undosLeft, undoTokens, history.length, grantUndo, level]);
+
+  // level_skip: the last valve before the player quits.
+  //
+  // Only once the free ladder is spent — the stuck banner's step-back, then
+  // its retry — because a skip should never be the FIRST thing offered on a
+  // dead board. Classic only: the mode ladders are short and a paid skip
+  // through one is a different product decision. Ships behind
+  // `levelSkipEnabled`, default off.
+  useEffect(() => {
+    if (
+      !isStuck ||
+      status !== 'playing' ||
+      mode !== 'classic' ||
+      !onSkipLevel ||
+      undosAvailable > 0 ||
+      !freeRescueUsedRef.current ||
+      activeOffer ||
+      !getRemoteBoolean('levelSkipEnabled')
+    ) {
+      return;
+    }
+    showOfferIfAllowed('level_skip');
+  }, [isStuck, status, mode, onSkipLevel, undosAvailable, activeOffer, showOfferIfAllowed]);
 
   // Show post-loss modal first (if applicable), then failed modal.
   // Tier 6 B1 — if the player qualifies for the fail-breather offer,

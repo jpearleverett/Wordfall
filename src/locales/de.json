@@ -111,6 +111,13 @@
       "description": "Hol dir Scheinwerfer + Joker + Mischen für dieses {{difficulty}}-Rätsel!",
       "button": "3 BOOSTER HOLEN",
       "price": "{{amount}} Juwelen"
+    },
+    "levelSkip": {
+      "ribbon": "FESTGEFAHREN?",
+      "title": "Level überspringen",
+      "description": "Auf diesem Feld geht nichts mehr. Spring zum nächsten und behalte deine Serie.",
+      "button": "LEVEL ÜBERSPRINGEN",
+      "price": "{{amount}} Münzen"
     }
   },
   "home": {

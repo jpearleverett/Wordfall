@@ -146,6 +146,7 @@ describe('offer price locale strings', () => {
     booster_pack: 'boosterPack',
     life_refill: 'lifeRefill',
     streak_shield: 'streakShield',
+    level_skip: 'levelSkip',
   };
 
   for (const [locale, { bundle, coins, gems }] of Object.entries(LOCALES)) {

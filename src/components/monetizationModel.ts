@@ -30,7 +30,8 @@ export type PricedOfferType =
   | 'post_puzzle'
   | 'booster_pack'
   | 'life_refill'
-  | 'streak_shield';
+  | 'streak_shield'
+  | 'level_skip';
 
 export type OfferCurrency = 'coins' | 'gems';
 
@@ -103,6 +104,12 @@ const OFFER_BASE_PRICES: Record<
   streak_shield: { currency: 'gems', base: 30 },
   // Remote-Config-priced escalation; `base` is only the RC fallback shape.
   close_finish_premium: { currency: 'gems', base: 9 },
+  // The churn valve: pay to leave a level you cannot beat. Flat, and
+  // deliberately NOT difficulty-scaled — a player who is stuck is the last
+  // person to charge more. 200 coins is roughly two puzzles' earnings, which
+  // is the point: cheap enough to take instead of quitting, expensive enough
+  // that it is not the default way to play.
+  level_skip: { currency: 'coins', base: 200 },
 };
 
 /** Round to the nearest 5, never below 5. */
@@ -129,6 +136,9 @@ export function getOfferPrice(type: PricedOfferType, difficulty?: string, level?
   }
   return { currency: def.currency, amount: def.base };
 }
+
+/** Coin cost of the level skip. Shared so display and charge cannot drift. */
+export const LEVEL_SKIP_COST_COINS = OFFER_BASE_PRICES.level_skip.base;
 
 // ── Post-loss hint pack ─────────────────────────────────────────────────────
 

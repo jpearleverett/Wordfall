@@ -111,6 +111,13 @@
       "description": "Get Spotlight + Wildcard + Shuffle for this {{difficulty}} puzzle!",
       "button": "GET 3 BOOSTERS",
       "price": "{{amount}} gems"
+    },
+    "levelSkip": {
+      "ribbon": "STUCK?",
+      "title": "Skip This Level",
+      "description": "This board is out of moves. Jump to the next one and keep your streak.",
+      "button": "SKIP LEVEL",
+      "price": "{{amount}} coins"
     }
   },
   "home": {

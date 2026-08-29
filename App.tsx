@@ -104,6 +104,7 @@ installGlobalFontScaleClamp();
 // device languages. Fire-and-forget: errors land in the crash reporter.
 void initI18n().catch(() => { /* fallback EN is already active */ });
 import { CeremonyRouter } from './src/App/CeremonyRouter';
+import { LEVEL_SKIP_COST_COINS } from './src/components/monetizationModel';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { MysteryWheel } from './src/components/MysteryWheel';
 import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT, checkDailyFreeSpin } from './src/data/mysteryWheel';
@@ -1061,25 +1062,41 @@ function GameScreenWrapper({ route, navigation }: any) {
     // `player` is a stable facade (call-time reads) — not a dependency.
   }, [params, navigation, computeNextTarget]);
 
+  /**
+   * Pay coins to leave a level that cannot be beaten — the churn valve for a
+   * player staring at a dead board with undo and retry already spent.
+   *
+   * Four things about the order here are load-bearing:
+   *
+   *  - GENERATE, THEN CHARGE. The original took the coins first, so a board
+   *    generation that threw left the player poorer and still on the dead
+   *    board. Nothing is spent until there is a replacement board in hand.
+   *  - ADVANCE LAST. `recordPuzzleComplete` moves the ladder; running it
+   *    before generation meant a failure advanced progression past a level
+   *    the player never received.
+   *  - ONE STAR, NOT ZERO. The original recorded 0 stars. Every real win pays
+   *    at least 1 (`computeStars` floors there), and the chapter star gate is
+   *    non-binding *because* of that floor — a player who skipped enough
+   *    levels at 0 stars could fall below a gate and be clamped, i.e. pay to
+   *    get stuck. A skip is the ultimate assist, so it pays the
+   *    heaviest-assist tier: one star.
+   *  - CLASSIC, AT THE FRONTIER, ONE AT A TIME. Skipping a replay of an old
+   *    level would advance the ladder for a level already beaten; the
+   *    in-flight ref stops a double tap buying two skips.
+   */
+  const skipInFlight = useRef(false);
   const handleSkipLevel = useCallback(() => {
-    const SKIP_COST = 200;
-    if (!economy.spendCoins(SKIP_COST)) return;
+    const mode = (params.mode || 'classic') as GameMode;
+    const currentLevel = params.level || 1;
+    if (mode !== 'classic') return;
+    if (skipInFlight.current) return;
+    if (currentLevel !== player.currentLevel) return;
+    if (economy.coins < LEVEL_SKIP_COST_COINS) return;
+    skipInFlight.current = true;
     // Hoisted so the timeout-fallback catch can reuse the same target level.
     let nextModeLevel = 0;
     try {
-      const mode = (params.mode || 'classic') as GameMode;
-      const currentLevel = params.level || 1;
-
-      // Advance past the current level (recordPuzzleComplete sets currentLevel = level + 1)
-      if (mode === 'classic') {
-        player.recordPuzzleComplete(currentLevel, 0, 0, false);
-      } else {
-        player.advanceModeLevel(mode);
-      }
-
-      nextModeLevel = mode === 'classic'
-        ? currentLevel + 1
-        : player.getModeLevel(mode);
+      nextModeLevel = currentLevel + 1;
 
       const config = getLevelConfigExtended(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
@@ -1087,6 +1104,13 @@ function GameScreenWrapper({ route, navigation }: any) {
       const skipProfile = mode === 'classic' ? chapter?.profile : undefined;
       let board = generateLevelBoard(nextModeLevel, config, seed, mode, skipProfile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
+
+      // Board in hand — now it is safe to take the money and move the ladder.
+      if (!economy.spendCoins(LEVEL_SKIP_COST_COINS)) {
+        skipInFlight.current = false;
+        return;
+      }
+      player.recordPuzzleComplete(currentLevel, 0, 1, false);
 
       navigation.replace('Game', {
         board,
@@ -1097,7 +1121,9 @@ function GameScreenWrapper({ route, navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
+      skipInFlight.current = false;
     } catch (e: any) {
+      skipInFlight.current = false;
       const fallbackMode = (params.mode || 'classic') as GameMode;
       if (e?.message?.includes('timed out')) {
         crashReporter.captureMessage(
@@ -1227,6 +1253,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         timeLimit={params.timeLimit || 0}
         onComplete={handleComplete}
         onNextLevel={handleNextWithPrompt}
+        onSkipLevel={handleSkipLevel}
         onHome={handleHomeWithPrompt}
         isFirstWin={completionData.isFirstWin}
         leveledUp={completionData.leveledUp}

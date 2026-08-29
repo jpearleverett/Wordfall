@@ -111,6 +111,13 @@
       "description": "Ganhe Holofote + Coringa + Embaralhar para este desafio {{difficulty}}!",
       "button": "QUERO 3 BOOSTERS",
       "price": "{{amount}} gemas"
+    },
+    "levelSkip": {
+      "ribbon": "TRAVADO?",
+      "title": "Pular este nível",
+      "description": "Este tabuleiro não tem mais jogadas. Vá para o próximo e mantenha sua sequência.",
+      "button": "PULAR NÍVEL",
+      "price": "{{amount}} moedas"
     }
   },
   "home": {

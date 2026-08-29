@@ -32,7 +32,8 @@ export type OfferType =
   | 'close_finish'   // Offered when 1 word away with no hints (coin tier)
   | 'close_finish_premium' // Escalation after 'close_finish' declined: gem-priced, auto-solves the last word
   | 'post_puzzle'    // Soft hint upsell after completing with 0 hints left
-  | 'booster_pack';  // Offered when entering a hard/expert level
+  | 'booster_pack'   // Offered when entering a hard/expert level
+  | 'level_skip';    // Offered on a dead board once undo and retry are spent
 
 interface ContextualOfferProps {
   type: OfferType;
@@ -65,6 +66,7 @@ const OFFER_VISUAL: Record<OfferType, { icon: string; accentColor: string; i18nK
   close_finish_premium: { icon: '\u{1F48E}', accentColor: COLORS.accent, i18nKey: 'closeFinishPremium' },
   post_puzzle: { icon: '\u{1F4A1}', accentColor: COLORS.accent, i18nKey: 'postPuzzle' },
   booster_pack: { icon: '\u{26A1}', accentColor: COLORS.purple, i18nKey: 'boosterPack' },
+  level_skip: { icon: '\u{23ED}\u{FE0F}', accentColor: COLORS.teal, i18nKey: 'levelSkip' },
 };
 
 export function ContextualOffer({

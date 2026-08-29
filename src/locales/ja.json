@@ -111,6 +111,13 @@
       "description": "この{{difficulty}}パズルに、スポットライト＋ワイルドカード＋シャッフルをセットで！",
       "button": "ブースター3個をゲット",
       "price": "ジェム{{amount}}個"
+    },
+    "levelSkip": {
+      "ribbon": "行き詰まった？",
+      "title": "このレベルをスキップ",
+      "description": "この盤面はもう進めません。次に進んで連続記録を守りましょう。",
+      "button": "レベルをスキップ",
+      "price": "{{amount}} コイン"
     }
   },
   "home": {

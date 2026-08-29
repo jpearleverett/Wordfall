@@ -111,6 +111,13 @@
       "description": "¡Consigue Reflector + Comodín + Mezcla para este nivel {{difficulty}}!",
       "button": "OBTENER 3 POTENCIADORES",
       "price": "{{amount}} gemas"
+    },
+    "levelSkip": {
+      "ribbon": "¿ATASCADO?",
+      "title": "Saltar este nivel",
+      "description": "Este tablero ya no tiene jugadas. Pasa al siguiente y conserva tu racha.",
+      "button": "SALTAR NIVEL",
+      "price": "{{amount}} monedas"
     }
   },
   "home": {

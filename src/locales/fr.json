@@ -111,6 +111,13 @@
       "description": "Obtiens Projecteur + Joker + Mélange pour ce puzzle {{difficulty}} !",
       "button": "OBTENIR 3 BOOSTERS",
       "price": "{{amount}} gemmes"
+    },
+    "levelSkip": {
+      "ribbon": "BLOQUÉ ?",
+      "title": "Passer ce niveau",
+      "description": "Cette grille n'a plus de coups possibles. Passe à la suivante et garde ta série.",
+      "button": "PASSER LE NIVEAU",
+      "price": "{{amount}} pièces"
     }
   },
   "home": {

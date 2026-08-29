@@ -77,6 +77,14 @@ export interface RemoteConfigValues {
   /** Tier 6 B1 — surface a free-hint breather modal after 2 consecutive fails. */
   failBreatherEnabled: boolean;
   /**
+   * The 200-coin level skip, offered on a dead board once undo and retry are
+   * spent. Ships OFF: it is a new paid flow on the highest-frustration moment
+   * in the game, and that wants a device pass and a cohort before it is on
+   * for everyone. `handleSkipLevel` was fully written and had zero call sites
+   * for months, so the code path is not new — only its reachability is.
+   */
+  levelSkipEnabled: boolean;
+  /**
    * Remove-Ads auto-grant scope: 'legacy' keeps consumable auto-grants at
    * the watch-path caps; 'scoped' tightens them to 3/day (double_reward and
    * time_continue unaffected). See services/ads.ts autoGrantScope().
@@ -366,6 +374,7 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Tier 6 B1 — breather modal after two fails; kill-switch to false if
   // cohort data shows it hurts whale grind retention.
   failBreatherEnabled: true,
+  levelSkipEnabled: false,
   // Paid-product behavior flips only by explicit experiment, never silently.
   removeAdsAutoGrantScope: 'legacy',
   // Zero-tap auto-advance never ambushes an interstitial by default.
