@@ -93,18 +93,35 @@ const shot = (name) => page.screenshot({ path: `${SHOT_DIR}/${name}.png` }).catc
  * react-navigation hides them.
  */
 async function tapAria(re, settle = 1300) {
-  const found = await page.evaluate((src) => {
+  // A match below the fold is SCROLLED TO, not skipped. Profile's "Open
+  // Clubs" and "Open Mastery Pass" sit far down a long screen, so a
+  // viewport-only search reports them as missing and the runner concludes
+  // Clubs is unreachable — which is a harness bug that reads exactly like a
+  // product bug.
+  const found = await page.evaluate(async (src) => {
     const rx = new RegExp(src);
+    const visible = (el) => el.offsetParent || getComputedStyle(el).position === 'fixed';
+    const box = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.width >= 4 && r.height >= 4 ? r : null;
+    };
+    let offscreen = null;
     for (const el of document.querySelectorAll('[aria-label]')) {
       const label = el.getAttribute('aria-label') || '';
-      if (!rx.test(label)) continue;
-      if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
-      const r = el.getBoundingClientRect();
-      if (r.width < 4 || r.height < 4) continue;
-      if (r.bottom < 0 || r.top > window.innerHeight) continue;
-      return { label, x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      if (!rx.test(label) || !visible(el)) continue;
+      const r = box(el);
+      if (!r) continue;
+      if (r.bottom >= 0 && r.top <= window.innerHeight) {
+        return { label, x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      }
+      offscreen = offscreen || { el, label };
     }
-    return null;
+    if (!offscreen) return null;
+    offscreen.el.scrollIntoView({ block: 'center' });
+    await new Promise((done) => setTimeout(done, 350));
+    const r = box(offscreen.el);
+    if (!r || r.bottom < 0 || r.top > window.innerHeight) return null;
+    return { label: offscreen.label, x: r.x + r.width / 2, y: r.y + r.height / 2, scrolled: true };
   }, re.source);
   if (!found) return null;
   await tapAt(found.x, found.y, settle);
@@ -879,13 +896,38 @@ async function screenReport(name) {
   return rec;
 }
 
+/**
+ * Reach the Modes screen and PROVE it, rather than tapping once and hoping.
+ *
+ * Tapping the Play tab is not reliable on its own: an overlay that opens on a
+ * timer after the last clearOverlays pass (the login calendar auto-opens 900ms
+ * after a cold load) swallows the touch silently, and the runner then reports
+ * every mode as missing from a screen it never reached. Retry, clearing
+ * overlays between attempts, and only return once a mode card is actually on
+ * screen.
+ */
+async function gotoModes(attempts = 5) {
+  for (let a = 0; a < attempts; a++) {
+    if (await isVisible(/ mode(, locked)?:/)) return true;
+    await clearOverlays(`to-modes-${a}`);
+    await tapTab('Play');
+    await page.waitForTimeout(2200);
+    if (await isVisible(/ mode(, locked)?:/)) return true;
+    if (a === attempts - 2) {
+      await page.goto(`${URL_BASE}/?e2e=1`, { waitUntil: 'load', timeout: 60000 });
+      await page.waitForTimeout(9500);
+    }
+  }
+  return false;
+}
+
 async function deepTour() {
   log.tour = log.tour || [];
   await goHome();
   await screenReport('home');
 
   // ── Every unlocked mode, actually played ────────────────────────────────
-  await tapTab('Play');
+  if (!(await gotoModes())) log.tour.push({ screen: 'modes', problem: 'could not reach the Modes screen' });
   const modesScreen = await screenReport('play-modes');
   const modeLabels = modesScreen.labels.filter((l) => / mode(, locked)?:/.test(l));
   const unlocked = modeLabels.filter((l) => !/ mode, locked:/.test(l));
@@ -894,8 +936,18 @@ async function deepTour() {
 
   for (const label of unlocked) {
     const name = label.split(' mode')[0];
-    await tapTab('Play');
-    await page.waitForTimeout(900);
+    // Reload first. The Play stack is Modes -> Game, so after playing one
+    // mode the tab is still showing the finished GAME screen; tapping "Play"
+    // focuses the stack but does not pop it, the mode cards are not mounted,
+    // and every subsequent mode reports "could not open". That is what
+    // happened on the first tour: one mode played, nine phantom failures.
+    await page.goto(`${URL_BASE}/?e2e=1`, { waitUntil: 'load', timeout: 60000 });
+    await page.waitForTimeout(9000);
+    await clearOverlays(`mode-entry-${name}`);
+    if (!(await gotoModes())) {
+      log.tour.push({ screen: `mode:${name}`, problem: 'could not reach the Modes screen' });
+      continue;
+    }
     if (!(await tapAria(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} mode`), 2500))) {
       log.tour.push({ screen: `mode:${name}`, problem: 'could not open' });
       continue;
@@ -920,18 +972,23 @@ async function deepTour() {
   }
 
   // ── The screens that live two taps deep ─────────────────────────────────
-  await tapTab('Play');
+  await page.goto(`${URL_BASE}/?e2e=1`, { waitUntil: 'load', timeout: 60000 });
+  await page.waitForTimeout(9000);
+  await clearOverlays('tour-deep');
+  await gotoModes();
   if (await tapAria(/^Open leaderboard$/, 2500)) await screenReport('leaderboard');
   else log.tour.push({ screen: 'leaderboard', problem: 'no entry point on the Play tab' });
   await goHome();
 
   await tapTab('Profile');
+  await page.waitForTimeout(1500);
   await screenReport('profile');
   if (await tapAria(/^Open Clubs$/, 2500)) await screenReport('clubs');
   else log.tour.push({ screen: 'clubs', problem: 'no entry point on the Profile tab' });
   await goHome();
 
   await tapTab('Profile');
+  await page.waitForTimeout(1500);
   if (await tapAria(/^Open Mastery Pass$/, 2500)) await screenReport('mastery');
   else log.tour.push({ screen: 'mastery', problem: 'no entry point on the Profile tab' });
   await goHome();
@@ -946,7 +1003,7 @@ async function deepTour() {
 
   // ── Home-screen surfaces the activity round only glances at ─────────────
   for (const [name, re] of [
-    ['login-calendar', /^Daily login|calendar/i],
+    ['login-calendar', /^Login Calendar$/],
     ['season-pass', /^Season pass tier/],
     ['shop', /^Open shop$/],
     ['settings', /^Open settings$/],
