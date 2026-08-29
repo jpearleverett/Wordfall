@@ -418,6 +418,13 @@ async function clearOverlays(tag) {
   let lastSig = '';
   for (let i = 0; i < 12; i++) {
     if (await handleEnergyWall(tag)) continue;
+    // The per-mode tutorial. Its backdrop is opaque to touch, so until it is
+    // dismissed every trace lands on the backdrop instead of the board — a
+    // mode with no timer then sits at status 'playing' forever. Four modes
+    // have one (perfectSolve, gravityFlip, shrinkingBoard, timePressure) and
+    // it shows once per mode per player.
+    const tut = await tapAria(/^(Skip mode tutorial|Got it, close tutorial|Next step, \d+ of \d+)$/, 900);
+    if (tut) { log.ceremonies.push({ tag, via: tut }); continue; }
     const sig = (await visibleText()).join('|');
     // If the previous tap changed nothing on screen, we are hammering a
     // permanent control rather than dismissing an overlay. Stop.
