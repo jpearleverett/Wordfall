@@ -289,6 +289,24 @@ export function countSolutions(
  * Cheap by design (samples x words word-searches, no backtracking) so it
  * can run on every candidate board during generation.
  */
+/**
+ * Can the remaining board still be finished by one of the cheap heuristic
+ * orderings? The same three `isDeadEnd` tries before it reaches for the
+ * backtracker.
+ */
+function easilySolvable(grid: Grid, remainingWords: string[]): boolean {
+  const shortFirst = [...remainingWords].sort((a, b) => a.length - b.length);
+  const orderings = [remainingWords, shortFirst, [...shortFirst].reverse()];
+  for (const ordering of orderings) {
+    // No cloneGrid: trySolveWithOrder never mutates its argument
+    // (removeCellsAndApplyGravity returns a new grid). isDeadEnd clones
+    // defensively and this runs on every step of every forgiveness sample,
+    // so the clone was the single most expensive thing in the measurement.
+    if (trySolveWithOrder(grid, ordering) !== null) return true;
+  }
+  return false;
+}
+
 export function estimateForgiveness(
   grid: Grid,
   words: string[],
@@ -302,6 +320,29 @@ export function estimateForgiveness(
    * between a cheap filter and a multi-second stall.
    */
   minRate?: number,
+  /**
+   * Count a sample as lost the moment the board stops being EASILY solvable,
+   * not merely when no word is findable.
+   *
+   * Without this the metric measures the wrong fail state. The game declares a
+   * board stuck via `isDeadEnd`, which fires while words are still traceable —
+   * you can be holding three findable words and have no order that clears all
+   * three. The loop below only noticed the much later "nothing is findable at
+   * all", so it scored boards as forgiving that a player loses on. That gap is
+   * why the medium tier nominally asks for 85% forgiveness while the measured
+   * naive dead-end rate in its levels sat around 60%.
+   *
+   * The check is the cheap first stage of `isDeadEnd` — three heuristic
+   * orderings — rather than isDeadEnd itself, deliberately. isDeadEnd falls
+   * back to a budgeted backtracker and returns "not dead" when the budget runs
+   * out, so under a generation-sized budget it would answer "fine" almost
+   * always and the metric would go back to measuring nothing. Heuristics-only
+   * is STRICTER than the real check: it can call a board lost that a
+   * backtracker could still finish. For choosing between candidate boards that
+   * is the right direction to err — it prefers boards that stay obviously
+   * winnable — and it never affects play, only which board gets generated.
+   */
+  strict: boolean = false,
 ): number {
   if (words.length <= 1) return 1;
 
@@ -327,10 +368,27 @@ export function estimateForgiveness(
         ok = false;
         break;
       }
+      // Deliberately checked on EVERY step, not only when a word has gone
+      // untraceable. Deferring it to that cheaper signal was measured and is
+      // a bad trade: it saved almost nothing (levels 46-60 generated in 64ms
+      // instead of 70ms) because the cost here is dominated by generating more
+      // candidates, not by this call — while giving back a third of the
+      // benefit (levels 76-90 went from 47.7% naive dead-ends back to 54.0%).
       const pick = findable[Math.floor(rng() * findable.length)];
       const occurrences = findWordInGrid(current, pick, 1);
       current = removeCellsAndApplyGravity(current, occurrences[0]);
       remaining = remaining.filter((w) => w !== pick);
+
+      // Deliberately checked on EVERY step, not only when a word has gone
+      // untraceable. Deferring it to that cheaper signal was measured and is
+      // a bad trade: it saved almost nothing (levels 46-60 generated in 64ms
+      // instead of 70ms) because the cost here is dominated by generating more
+      // candidates, not by this call — while giving back a third of the
+      // benefit (levels 76-90 went from 47.7% naive dead-ends back to 54.0%).
+      if (strict && remaining.length > 1 && !easilySolvable(current, remaining)) {
+        ok = false;
+        break;
+      }
     }
 
     if (ok) completed++;

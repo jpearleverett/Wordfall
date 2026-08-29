@@ -149,19 +149,32 @@ describe('stuck rate (player forgiveness)', () => {
   // aspirations. Baseline before the generator's forgiveness gate existed:
   // 53% early / 80% mid, with several levels unwinnable by natural play.
   // See the note at the bottom of this file for why mid-game is still high.
+  //
+  // Both numbers dropped again in Aug 2026 when the gate stopped measuring
+  // the wrong thing. It scored a board by how often a random order ran out of
+  // FINDABLE WORDS, but the game declares a board stuck via `isDeadEnd`, which
+  // fires much earlier — you can hold three traceable words and have no order
+  // that clears all three. So boards scored as forgiving lost players anyway,
+  // and the medium tier's nominal 85% bar sat next to a measured ~62% failure
+  // rate without contradiction. `estimateForgiveness(..., strict)` now ends a
+  // sample when the board stops being easily solvable, and `generateBoard`
+  // keeps the most forgiving candidate it measured instead of discarding all
+  // twelve and shipping an unmeasured thirteenth. Neither change makes boards
+  // easier — the same configs and the same word lists — only better chosen.
   it('early game (levels 1-30) is forgiving', () => {
     const levels = Array.from({ length: 30 }, (_, i) => i + 1);
     const rate = measure(levels);
-    expect(rate).toBeLessThan(0.20); // measured ~0.16 across 5 seeds/level
-    // (the ~0.12 previously recorded here was the same single-seed draw)
+    expect(rate).toBeLessThan(0.18); // measured ~0.144 across 5 seeds/level
+    // (was ~0.16 before the gate was aligned; ~0.12 before that was a
+    // single-seed draw)
   }, 180_000);
 
   it('mid game (levels 31-120) is not a coin flip', () => {
     const levels = Array.from({ length: 30 }, (_, i) => 31 + i * 3);
     const rate = measure(levels);
-    expect(rate).toBeLessThan(0.68); // measured ~0.62 across 5 seeds/level (the
-    // old ~0.57 was a single-seed draw; bound moved 0.65 -> 0.68 to keep the
-    // same headroom over the real number, NOT to accommodate a regression)
+    expect(rate).toBeLessThan(0.58); // measured ~0.532 across 5 seeds/level
+    // (was ~0.62 before the gate was aligned; the old ~0.57 was a single-seed
+    // draw). Bound tightened 0.68 -> 0.58 so the gain cannot silently erode.
   }, 180_000);
 });
 

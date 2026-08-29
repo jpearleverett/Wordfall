@@ -483,10 +483,10 @@ function checkSolvability(
    * the two populations DIFFERENT boards for the same leaderboard.
    */
   deterministic?: boolean
-): boolean {
+): number | null {
   // noGravity: just check all words are independently findable
   if (mode === 'noGravity') {
-    return areAllWordsIndependentlyFindable(grid, words);
+    return areAllWordsIndependentlyFindable(grid, words) ? 1 : null;
   }
 
   // gravityFlip: use rotating gravity solver
@@ -495,10 +495,10 @@ function checkSolvability(
     const orderings = getOrderingHeuristics(words, wordPositions, rng);
     for (const ordering of orderings) {
       if (trySolveWithOrderRotating(grid, ordering, 'down') !== null) {
-        return true;
+        return 1;
       }
     }
-    return isSolvableGravityFlip(grid, words, 'down');
+    return isSolvableGravityFlip(grid, words, 'down') ? 1 : null;
   }
 
   // shrinkingBoard: simulate the full shrink sequence to verify solvability
@@ -509,7 +509,9 @@ function checkSolvability(
       words,
       2,
       deterministic ? Number.POSITIVE_INFINITY : GEN_SOLVE_BUDGET_MS,
-    );
+    )
+      ? 1
+      : null;
   }
 
   // classic / timePressure / perfectSolve / etc: standard solvability with gravity
@@ -532,7 +534,7 @@ function checkSolvability(
       deterministic ? undefined : GEN_SOLVE_BUDGET_MS,
     );
   }
-  if (!solvable) return false;
+  if (!solvable) return null;
 
   // Solvable is not the same as FAIR. "Stuck" is a real fail state, and
   // nothing on screen tells the player which word must be cleared first, so
@@ -545,25 +547,53 @@ function checkSolvability(
   // Require a minimum share of natural playthroughs to succeed, scaled by
   // difficulty so late game keeps its planning demands while the early game
   // is genuinely forgiving.
+  //
+  // This function MEASURES; `generateBoard` decides. That split is the whole
+  // point: the threshold used to be applied here, and a candidate that missed
+  // it was thrown away — so when a whole tranche missed (which is the normal
+  // case once a level asks for 6-8 words), generation fell through to the
+  // first solvable board it could find WITHOUT measuring it at all. Twelve
+  // boards were measured, ranked by nothing, and discarded in favour of an
+  // unmeasured thirteenth. Returning the number instead lets the caller keep
+  // the best of what it already paid to measure.
   const minForgiveness = difficulty ? MIN_FORGIVENESS_BY_DIFFICULTY[difficulty] : 0;
-  if (minForgiveness <= 0) return true;
-  const forgiveness = estimateForgiveness(grid, words, FORGIVENESS_SAMPLES, rng, minForgiveness);
-  return forgiveness >= minForgiveness;
+  if (minForgiveness <= 0) return 1;
+  // NOTE: `minForgiveness` is passed as the early-exit threshold, so a board
+  // that cannot reach the bar returns a LOWER BOUND rather than its exact
+  // rate (the unrun samples count as failures). That is fine for ranking —
+  // the bound tracks the true rate — and it keeps the measurement cheap
+  // enough to run on every candidate, which is what makes this affordable.
+  return estimateForgiveness(grid, words, FORGIVENESS_SAMPLES, rng, minForgiveness, true);
 }
 
 /**
  * Attempt to generate a board with the given config.
  * Returns null if generation fails.
  */
+interface Candidate {
+  board: Board;
+  /**
+   * Measured share of random ("play it naturally") orders that win, or 1 when
+   * this candidate was not measured — modes with their own solvability rule,
+   * and tranches generating past the measurement budget.
+   */
+  forgiveness: number;
+}
+
 function attemptGenerate(
   config: BoardConfig,
   rng: () => number,
   mode?: GameMode,
   profile?: GenerationProfile,
   themeWords?: string[],
-  requireForgiving: boolean = true,
+  /**
+   * Measure how forgiving the candidate is. Does NOT reject it — the caller
+   * applies the threshold, so a candidate that misses the bar is still
+   * returned and can be kept as the best-so-far.
+   */
+  measureForgiveness: boolean = true,
   deterministic: boolean = false,
-): Board | null {
+): Candidate | null {
   const words = selectWords(config, rng, mode, profile, themeWords);
   if (words.length < config.wordCount) return null;
 
@@ -695,17 +725,16 @@ function attemptGenerate(
 
   // Verify solvability using fast heuristics + budgeted fallback
   const wordStrings = placements.map(p => p.word);
-  if (
-    !checkSolvability(
-      grid,
-      wordStrings,
-      wordPositions,
-      rng,
-      mode,
-      requireForgiving ? config.difficulty : undefined,
-      deterministic,
-    )
-  ) {
+  const forgiveness = checkSolvability(
+    grid,
+    wordStrings,
+    wordPositions,
+    rng,
+    mode,
+    measureForgiveness ? config.difficulty : undefined,
+    deterministic,
+  );
+  if (forgiveness === null) {
     return null;
   }
 
@@ -756,23 +785,22 @@ function attemptGenerate(
     }
     // Mutations can only remove accidental copies, but the solvability
     // proof ran on the pre-mutation grid — re-verify once when any landed.
-    if (
-      mutations > 0 &&
-      !checkSolvability(
+    if (mutations > 0) {
+      const recheck = checkSolvability(
         grid,
         wordStrings,
         wordPositions,
         rng,
         mode,
-        requireForgiving ? config.difficulty : undefined,
+        measureForgiveness ? config.difficulty : undefined,
         deterministic,
-      )
-    ) {
-      return null;
+      );
+      if (recheck === null) return null;
+      return { board: { grid, words: placements, config }, forgiveness: recheck };
     }
   }
 
-  return { grid, words: placements, config };
+  return { board: { grid, words: placements, config }, forgiveness };
 }
 
 /**
@@ -1013,36 +1041,80 @@ export function generateBoard(
     effectiveConfig = clampedConfig;
   }
 
-  // Primary attempts with full config.
+  // The forgiveness bar this board's difficulty asks for. `attemptGenerate`
+  // measures; the tranches below decide.
+  const minForgiveness = effectiveConfig.difficulty
+    ? MIN_FORGIVENESS_BY_DIFFICULTY[effectiveConfig.difficulty]
+    : 0;
+
+  /**
+   * Run one tranche of attempts and return the best board it can.
+   *
+   * "Best" is the point. Forgiveness is a PREFERENCE, not a hard requirement:
+   * boards where most natural clear orders win are structurally rare once a
+   * level asks for 6-8 words, so demanding one unconditionally made the
+   * generator hunt until it blew its whole time budget.
+   *
+   * The old shape was to insist on the bar for a tranche and then take the
+   * first solvable board without measuring it. That threw the measurements
+   * away exactly when they mattered. At 7-8 words a tranche almost never
+   * clears the bar, so almost every mid-game board a player saw was an
+   * UNMEASURED thirteenth candidate — which is why the naive dead-end rate
+   * sat around 60% while the medium tier nominally asks for 85% forgiveness.
+   *
+   * Now the tranche keeps the most forgiving candidate it measured and
+   * returns that when nothing clears the bar. Same number of generations,
+   * same measurements, strictly better board — and one generation cheaper,
+   * because the unmeasured extra candidate is no longer needed.
+   */
+  const runTranche = (
+    cfg: BoardConfig,
+    seedBase: number,
+    attempts: number,
+    measure: boolean,
+    words: string[] | undefined,
+    prof: GenerationProfile | undefined,
+  ): Board | null => {
+    let best: Candidate | null = null;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      checkTimeout();
+      const rng = createRng(seedBase + attempt * 7919);
+      const candidate = attemptGenerate(cfg, rng, mode, prof, words, measure, deterministic);
+      if (!candidate) continue;
+      if (!measure || candidate.forgiveness >= minForgiveness) return candidate.board;
+      if (!best || candidate.forgiveness > best.forgiveness) best = candidate;
+    }
+    return best ? best.board : null;
+  };
+
+  // Primary attempts with full config, measured.
   //
-  // Forgiveness is a PREFERENCE, not a hard requirement. Boards where most
-  // natural clear orders succeed are structurally rare once a level asks for
-  // 6-8 words, so demanding one unconditionally made the generator hunt until
-  // it blew its whole time budget. Instead: spend the first tranche of
-  // attempts insisting on a fair board, then fall back to any solvable board
-  // rather than stalling the level load. Bounded cost, most of the benefit.
-  for (let attempt = 0; attempt < 80; attempt++) {
-    checkTimeout();
-    const rng = createRng(baseSeed + attempt * 7919);
-    const board = attemptGenerate(
-      effectiveConfig,
-      rng,
-      mode,
-      profile,
-      themeWords,
-      // Shared boards (deterministic) skip the inner forgiveness tranche:
-      // shopFairestBoard is ALREADY shopping for forgiveness and SCORES every
-      // candidate it receives. Hunting for a forgiving board in here as well
-      // meant up to FORGIVENESS_ATTEMPT_BUDGET boards were generated, measured
-      // against MIN_FORGIVENESS_BY_DIFFICULTY and THROWN AWAY for each single
-      // candidate the shop got to look at — 16x13 = 208 generations to choose
-      // among 16, which is where the daily's multi-second worst case came
-      // from. Level loads keep the tranche: they have no outer shop.
-      deterministic ? false : attempt < FORGIVENESS_ATTEMPT_BUDGET,
-      deterministic,
-    );
-    if (board) return board;
+  // Shared boards (deterministic) skip the measurement: shopFairestBoard is
+  // ALREADY shopping for forgiveness and SCORES every candidate it receives.
+  // Hunting for a forgiving board in here as well meant up to
+  // FORGIVENESS_ATTEMPT_BUDGET boards were generated, measured against
+  // MIN_FORGIVENESS_BY_DIFFICULTY and THROWN AWAY for each single candidate
+  // the shop got to look at — 16x13 = 208 generations to choose among 16,
+  // which is where the daily's multi-second worst case came from. Level loads
+  // keep the tranche: they have no outer shop.
+  const measuredBudget = deterministic ? 0 : FORGIVENESS_ATTEMPT_BUDGET;
+  if (measuredBudget > 0) {
+    const measured = runTranche(effectiveConfig, baseSeed, measuredBudget, true, themeWords, profile);
+    if (measured) return measured;
   }
+
+  // Anything solvable at the full config, unmeasured. Seeds continue the
+  // original sequence so a board that used to come back for a given seed
+  // still can.
+  const anySolvable = runTranche(
+    effectiveConfig,
+    baseSeed + measuredBudget * 7919,
+    80 - measuredBudget,
+    false,
+    themeWords,
+    profile,
+  );
+  if (anySolvable) return anySolvable;
 
   // Fallback: slightly simpler board (1 fewer word, cap word length)
   const fallbackConfig: BoardConfig = {
@@ -1050,13 +1122,8 @@ export function generateBoard(
     wordCount: Math.max(2, effectiveConfig.wordCount - 1),
     maxWordLength: Math.min(effectiveConfig.maxWordLength, 5),
   };
-
-  for (let attempt = 0; attempt < 60; attempt++) {
-    checkTimeout();
-    const rng = createRng(baseSeed + 1000 + attempt * 7919);
-    const board = attemptGenerate(fallbackConfig, rng, mode, profile, themeWords, true, deterministic);
-    if (board) return board;
-  }
+  const fallbackBoard = runTranche(fallbackConfig, baseSeed + 1000, 60, true, themeWords, profile);
+  if (fallbackBoard) return fallbackBoard;
 
   // Second fallback: even simpler
   const fallback2Config: BoardConfig = {
@@ -1064,13 +1131,8 @@ export function generateBoard(
     wordCount: Math.max(2, effectiveConfig.wordCount - 2),
     maxWordLength: Math.min(effectiveConfig.maxWordLength, 4),
   };
-
-  for (let attempt = 0; attempt < 60; attempt++) {
-    checkTimeout();
-    const rng = createRng(baseSeed + 2000 + attempt * 7919);
-    const board = attemptGenerate(fallback2Config, rng, mode, profile, undefined, true, deterministic);
-    if (board) return board;
-  }
+  const fallback2Board = runTranche(fallback2Config, baseSeed + 2000, 60, true, undefined, profile);
+  if (fallback2Board) return fallback2Board;
 
   // Last resort: generate a minimal 2-word board (always attempted even after timeout).
   // Profile is NOT applied here — this is a true emergency fallback.
@@ -1083,12 +1145,8 @@ export function generateBoard(
     difficulty: 'easy',
   };
 
-  for (let attempt = 0; attempt < 100; attempt++) {
-    checkTimeout();
-    const rng = createRng(baseSeed + 3000 + attempt * 7919);
-    const board = attemptGenerate(minimalConfig, rng, mode, undefined, undefined, true, deterministic);
-    if (board) return board;
-  }
+  const minimalBoard = runTranche(minimalConfig, baseSeed + 3000, 100, true, undefined, undefined);
+  if (minimalBoard) return minimalBoard;
 
   // Should never reach here, but just in case
   throw new Error('Failed to generate board after all attempts');
@@ -1135,9 +1193,14 @@ export function generatePinchBoard(
   for (let attempt = 0; attempt < PINCH_SHOP_ATTEMPTS; attempt++) {
     if (Date.now() - startTime > PINCH_SHOP_BUDGET_MS) break;
     const rng = createRng(baseSeed + attempt * 104729);
-    // requireForgiving=false: any SOLVABLE candidate qualifies for scoring.
-    const board = attemptGenerate(config, rng, mode, profile, themeWords, false, false);
-    if (!board) continue;
+    // measureForgiveness=false: any SOLVABLE candidate qualifies for scoring,
+    // and the shop scores it itself below at PINCH_FORGIVENESS_SAMPLES — more
+    // samples than generation's cheap filter, and with no early-exit
+    // threshold, because a pinch board is chosen by WHERE it sits in the
+    // window rather than by clearing a bar.
+    const candidate = attemptGenerate(config, rng, mode, profile, themeWords, false, false);
+    if (!candidate) continue;
+    const board = candidate.board;
     const forgiveness = estimateForgiveness(
       board.grid,
       board.words.map((w) => w.word),
