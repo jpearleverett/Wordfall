@@ -1,16 +1,19 @@
 /**
  * R6 (fun backlog): the single "almost done" meta goal for the Home screen.
  *
- * A level-50 player has plenty left (chapter gates, wing restorations,
- * mastery tiers) but none of it was visible from the screen they open — the
- * only long-arc goal on Home was the season pass, which resets monthly, so
- * felt progression read as a treadmill. This picks ONE concrete goal with a
- * progress bar, in priority order:
+ * A level-50 player has plenty left (wing restorations, mastery tiers) but
+ * none of it was visible from the screen they open — the only long-arc goal
+ * on Home was the season pass, which resets monthly, so felt progression read
+ * as a treadmill. This picks ONE concrete goal with a progress bar, in
+ * priority order:
  *
  *   1. Wing restoration — when the player is within 2 chapters of finishing
  *      a Grand Library wing, the long-arc story goal wins the slot.
- *   2. The next chapter star gate the player hasn't cleared.
- *   3. Mastery of the current chapter (when every nearby gate is met).
+ *   2. Mastery of the current chapter.
+ *
+ * There used to be a chapter-star-gate goal between those two. It is gone:
+ * chapter gates cannot bind (see the note at the branch site), so it promised
+ * a lock that does not exist and was unreachable past chapter 2 regardless.
  *
  * Pure function of already-loaded state; no I/O.
  */
@@ -19,7 +22,7 @@ import { getWing } from './library';
 import { GameIconName } from '../components/icons/GameIcon';
 
 export interface NextGoal {
-  kind: 'wing' | 'chapter_gate' | 'chapter_mastery';
+  kind: 'wing' | 'chapter_mastery';
   /** Emoji glyph (chapter icon) — legacy path, resolved via GameIcon glyph. */
   icon: string;
   /** Direct GameIcon name — set for wing goals (the wing's emblem). */
@@ -77,26 +80,17 @@ export function getNextGoal(
     }
   }
 
-  // The next unmet star gate within the next three chapters — close enough
-  // to feel reachable, far enough to be worth a bar.
-  const upcomingGate = chapters.find(
-    (c) =>
-      c.id > current.id &&
-      c.id <= current.id + 3 &&
-      c.requiredStars > totalStars,
-  );
-  if (upcomingGate) {
-    const remaining = upcomingGate.requiredStars - totalStars;
-    return {
-      kind: 'chapter_gate',
-      icon: upcomingGate.icon,
-      title: `Unlock Chapter ${upcomingGate.id}: ${upcomingGate.name}`,
-      detail: `${remaining} star${remaining === 1 ? '' : 's'} to go`,
-      progress: Math.min(1, totalStars / upcomingGate.requiredStars),
-    };
-  }
-
-  // Every nearby gate already met — offer mastery of the current chapter
+  // NO chapter-gate goal. `requiredStars` is 6 x (id - 1) while reaching
+  // chapter id costs 15 x (id - 1) levels at a one-star minimum, so a gate is
+  // satisfied 2.5x over at every boundary and can never be the thing standing
+  // between a player and the next chapter. This branch used to promise
+  // "Unlock Chapter 3: N stars to go" and was reachable only for chapters 1
+  // and 2 — worst case a player holds level-1 stars, so it needed
+  // 6(c + 2) > 15(c - 1), i.e. c < 3 — after which it silently fell through
+  // to chapter_mastery anyway. Mastery is star-denominated, true at every
+  // depth, and actually drives the replay the gate was pretending to.
+  //
+  // Offer mastery of the current chapter
   // (3-starring its 15 levels) instead of showing nothing.
   const firstLevel = (current.id - 1) * PUZZLES_PER_CHAPTER + 1;
   let chapterStars = 0;

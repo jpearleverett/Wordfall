@@ -212,9 +212,16 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       );
       const highestCompletedLevel = Math.max(prev.highestLevel, level);
       const uncappedNextLevel = Math.max(prev.currentLevel, level + 1);
-      // Enforce chapter star gate: if the player would cross into a chapter
-      // whose requiredStars exceeds their total, clamp them to the last level
-      // of the previously-unlocked chapter so they can replay for more stars.
+      // Chapter star gate. This is an INVARIANT GUARD, not a wall the authored
+      // ladder can put in front of anyone: `requiredStars` is 6 x (id - 1)
+      // while reaching chapter id costs 15 x (id - 1) wins at a one-star
+      // minimum (stars are an assist tier — 3 clean, 2 one assist, 1 more), so
+      // it is satisfied 2.5x over at every boundary. Kept, and pinned by
+      // data/__tests__/chapterGates.test.ts, because ops CAN publish a chapter
+      // with a real gate through chapterOverrideJson for ids 41+, and because
+      // a rolled-back or corrupted save should not be able to skip a chapter.
+      // Read that test before raising any gate: making one bind would wall off
+      // exactly the players who buy hints.
       const targetChapter =
         getChapterForLevel(uncappedNextLevel) ?? CHAPTERS[CHAPTERS.length - 1];
       const currentUnlockedChapter =

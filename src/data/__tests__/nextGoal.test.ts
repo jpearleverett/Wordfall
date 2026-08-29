@@ -1,29 +1,27 @@
 /**
  * R6: Home's single "almost done" meta goal. The picker must always find
- * something concrete for an active player (an unmet nearby chapter gate,
- * else mastery of the current chapter) and its numbers must agree with the
+ * something concrete for an active player — a nearby wing restoration, else
+ * mastery of the current chapter — and its numbers must agree with the
  * chapter data it reads.
+ *
+ * The chapter-star-gate goal it used to offer is gone. Gates cannot bind
+ * (6 x (id - 1) required against 15 x (id - 1) levels earned at a one-star
+ * minimum), so it promised a lock the game does not have.
  */
 import { getNextGoal } from '../nextGoal';
 import { getAllChapters, getChapterForLevel } from '../chapters';
 
 describe('getNextGoal', () => {
-  it('points at the next unmet chapter gate within 3 chapters', () => {
-    // Level 5 = chapter 1; find the first gate above 0 stars.
-    const goal = getNextGoal(0, 5, {});
-    expect(goal).not.toBeNull();
-    const gate = getAllChapters().find((c) => c.id > 1 && c.requiredStars > 0);
-    expect(goal!.title).toContain(`Chapter ${gate!.id}`);
-    expect(goal!.detail).toBe(`${gate!.requiredStars} stars to go`);
-    expect(goal!.progress).toBe(0);
-  });
-
-  it('progress approaches 1 as stars approach the gate', () => {
-    const gate = getAllChapters().find((c) => c.id > 1 && c.requiredStars > 0)!;
-    const goal = getNextGoal(gate.requiredStars - 1, 5, {});
-    expect(goal!.detail).toBe('1 star to go');
-    expect(goal!.progress).toBeGreaterThan(0.8);
-    expect(goal!.progress).toBeLessThan(1);
+  it('never offers a chapter star gate, because none can bind', () => {
+    // A player at level 5 with zero stars is the most gate-eligible state
+    // there is, and even they must not be shown one.
+    for (const [stars, level] of [[0, 5], [3, 12], [40, 40], [200, 200]] as const) {
+      const goal = getNextGoal(stars, level, {});
+      expect(goal).not.toBeNull();
+      expect(goal!.kind).not.toBe('chapter_gate');
+      expect(goal!.title).not.toMatch(/^Unlock Chapter/);
+      expect(goal!.detail).not.toMatch(/stars? to go$/);
+    }
   });
 
   it('falls back to current-chapter mastery when nearby gates are met', () => {

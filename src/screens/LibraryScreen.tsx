@@ -450,7 +450,22 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const selectedProgress = getWingProgress(selectedWingData.chapters);
   const selectedWingState = getWingState(selectedWingData);
   const nextWingToRestore = wings.find((wing) => !restoredWings.includes(wing.def.id));
-  const nextMilestoneStars = CHAPTERS.find((chapter) => chapter.id === currentChapter + 1)?.requiredStars;
+  /**
+   * Stars the player has actually earned inside a chapter, out of the 45 its
+   * fifteen levels can pay. This replaced `requiredStars` on every surface
+   * here: a chapter's gate is 6 x (id - 1) while reaching it costs 15 x
+   * (id - 1) levels at a one-star minimum, so the gate is satisfied 2.5x over
+   * at every boundary and can never actually lock anything. Telling a player
+   * holding 150 stars that they "need 66" was simply false; their own
+   * chapter mastery is both true and the number that drives a replay.
+   */
+  const chapterStars = (chapterId: number): number => {
+    let earned = 0;
+    for (let level = (chapterId - 1) * 15 + 1; level <= chapterId * 15; level++) {
+      earned += starsByLevel[level] ?? 0;
+    }
+    return earned;
+  };
 
   const sceneWings: SceneWing[] = wings.map((wing) => ({
     def: wing.def,
@@ -693,7 +708,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 </Text>
               </View>
               <Text style={styles.nextGoalMeta}>
-                {nextMilestoneStars ? `Need ${nextMilestoneStars} total stars to unlock the next chapter gate.` : 'You have reached the end of the current chapter map.'}
+                {chaptersToNextWing
+                  ? `${chaptersToNextWing} chapter${chaptersToNextWing === 1 ? '' : 's'} to go — ${totalLibraryStars} stars collected so far.`
+                  : 'You have reached the end of the current chapter map.'}
               </Text>
             </View>
           </View>
@@ -936,8 +953,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
                 />
-                <Text style={styles.infoCardLabel}>Required stars</Text>
-                <Text style={styles.infoCardValue}>{selectedWingData.chapters[selectedWingData.chapters.length - 1]?.requiredStars ?? 0}</Text>
+                <Text style={styles.infoCardLabel}>Stars earned</Text>
+                <Text style={styles.infoCardValue}>
+                  {selectedWingData.chapters.reduce((sum, chapter) => sum + chapterStars(chapter.id), 0)}
+                  <Text style={styles.infoCardValueMuted}>{`/${selectedWingData.chapters.length * 45}`}</Text>
+                </Text>
               </View>
             </View>
 
@@ -1033,7 +1053,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     <Text style={styles.chapterDescription}>{chapter.description}</Text>
                     <View style={styles.chapterMetaRow}>
                       <Text style={styles.chapterMeta}>{chapter.puzzleCount} puzzles</Text>
-                      <Text style={styles.chapterMeta}>Gate: {chapter.requiredStars}{'★'}</Text>
+                      <Text style={styles.chapterMeta}>{chapterStars(chapter.id)}/45{'★'}</Text>
                       <Text style={styles.chapterMeta}>{chapter.difficulty.toUpperCase()}</Text>
                     </View>
                     <Text style={styles.chapterThemeWords}>
@@ -1657,6 +1677,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
+  },
+  infoCardValueMuted: {
+    fontSize: 13,
+    fontFamily: FONTS.bodyRegular,
+    color: COLORS.textSecondary,
   },
   loreQuote: {
     borderRadius: RADIUS.lg,
